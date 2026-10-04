@@ -33,15 +33,8 @@ MainView {
         if (typeof appController !== "undefined") {
             appController.initialize()
         }
-        // Start the server from persisted settings.
-        if (typeof serverController !== "undefined" && typeof settingsController !== "undefined") {
-            serverController.start(
-                settingsController.alias,
-                settingsController.port,
-                settingsController.https,
-                settingsController.receivePin
-            )
-        }
+        // Server startup now happens in Rust before QML loads.
+        // The timer below only polls for events.
     }
 
     // Drains server events on the Qt thread.

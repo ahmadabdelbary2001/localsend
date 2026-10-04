@@ -5,8 +5,6 @@
 // Stored at ~/.config/localsend/{certificate,private_key,public_key}.pem
 // and fingerprint.txt.
 
-use std::path::PathBuf;
-
 use anyhow::{anyhow, Context, Result};
 
 use crate::platform::filesystem;

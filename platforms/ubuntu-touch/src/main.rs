@@ -41,12 +41,36 @@ fn main() -> ExitCode {
         }
     };
 
+    if std::env::var("LOCALSEND_HEADLESS").is_ok() {
+        // Skip QML entirely; run the server forever.
+        log::info!("HEADLESS mode: server running. Ctrl+C to stop.");
+        std::thread::park();
+        return ExitCode::SUCCESS;
+    }
+   
     resources::register();
 
     let translator = RefCell::new(Translator::new());
     let app_controller = RefCell::new(AppController::new());
     let home_controller = RefCell::new(HomeController::new());
+    // Load a snapshot of settings to seed the server.
+    let settings_snapshot = {
+        // We still hold `settings` (the Arc<SettingsService>). Use it.
+        settings.snapshot()
+    };
+
     let server_controller = RefCell::new(ServerController::new(identity));
+
+    // Start the server from Rust, so it runs even if QML fails.
+    {
+        let mut sc = server_controller.borrow_mut();
+        sc.start_now(
+            settings_snapshot.alias.clone(),
+            settings_snapshot.port,
+            settings_snapshot.https,
+            settings_snapshot.receive_pin.clone(),
+        );
+    }
     let settings_controller = RefCell::new(SettingsController::new(settings));
     let local_ips_model = RefCell::new(LocalIpsModel::new());
 

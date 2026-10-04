@@ -54,6 +54,21 @@ impl ServerController {
         }
     }
 
+    /// Rust-only method: start the server immediately, bypassing QML.
+    /// Called from `main.rs` before `engine.exec()` so the server runs
+    /// even when QML fails to load (desktop testing, headless, etc.).
+    pub fn start_now(&mut self, alias: String, port: u16, https: bool, pin: Option<String>) {
+        if let Some(h) = &self.handle {
+            h.send(ServerCommand::Start {
+                alias,
+                port,
+                https,
+                pin,
+                verify_checksums: false,
+            });
+        }
+    }
+
     fn start(&mut self, alias: QString, port: u32, https: bool, pin: QString) {
         let pin_s = pin.to_string();
         let pin_opt = if pin_s.is_empty() { None } else { Some(pin_s) };
