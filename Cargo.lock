@@ -2389,6 +2389,7 @@ dependencies = [
 name = "localsend-ubuntu-touch"
 version = "0.1.0"
 dependencies = [
+ "anyhow",
  "env_logger",
  "if-addrs",
  "localsend",
@@ -2397,6 +2398,8 @@ dependencies = [
  "serde",
  "serde_json",
  "tokio",
+ "tracing",
+ "tracing-log",
 ]
 
 [[package]]

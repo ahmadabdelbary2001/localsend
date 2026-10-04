@@ -6,6 +6,7 @@ use localsend_ubuntu_touch::{application, bridge, model, platform, resources};
 use std::cell::RefCell;
 use std::process::ExitCode;
 use std::sync::Arc;
+use std::time::Duration;
 
 use qmetaobject::prelude::*;
 use qmetaobject::QObjectPinned;
@@ -20,10 +21,13 @@ use crate::bridge::translator::Translator;
 use crate::model::local_ips_model::LocalIpsModel;
 
 fn main() -> ExitCode {
+    // env_logger reads `log::*` records; tracing-log forwards `tracing::*`
+    // records from `localsend` core into the same logger.
     env_logger::Builder::from_env(
         env_logger::Env::default().default_filter_or("info"),
     )
     .init();
+    let _ = tracing_log::LogTracer::init();
 
     let settings = match SettingsService::load_or_default() {
         Ok(s) => Arc::new(s),
@@ -41,27 +45,19 @@ fn main() -> ExitCode {
         }
     };
 
-    if std::env::var("LOCALSEND_HEADLESS").is_ok() {
-        // Skip QML entirely; run the server forever.
-        log::info!("HEADLESS mode: server running. Ctrl+C to stop.");
-        std::thread::park();
-        return ExitCode::SUCCESS;
-    }
-   
+    let settings_snapshot = settings.snapshot();
+
     resources::register();
 
     let translator = RefCell::new(Translator::new());
     let app_controller = RefCell::new(AppController::new());
     let home_controller = RefCell::new(HomeController::new());
-    // Load a snapshot of settings to seed the server.
-    let settings_snapshot = {
-        // We still hold `settings` (the Arc<SettingsService>). Use it.
-        settings.snapshot()
-    };
-
     let server_controller = RefCell::new(ServerController::new(identity));
+    let settings_controller = RefCell::new(SettingsController::new(settings));
+    let local_ips_model = RefCell::new(LocalIpsModel::new());
 
-    // Start the server from Rust, so it runs even if QML fails.
+    // Start the server before any QML work, so a QML failure
+    // does not prevent the server from running.
     {
         let mut sc = server_controller.borrow_mut();
         sc.start_now(
@@ -71,8 +67,19 @@ fn main() -> ExitCode {
             settings_snapshot.receive_pin.clone(),
         );
     }
-    let settings_controller = RefCell::new(SettingsController::new(settings));
-    let local_ips_model = RefCell::new(LocalIpsModel::new());
+
+    // ---------- HEADLESS MODE ----------
+    if std::env::var("LOCALSEND_HEADLESS").is_ok() {
+        log::info!("HEADLESS mode: server starting, Ctrl+C to stop.");
+        // Drain server events forever, so log/errors are visible.
+        loop {
+            {
+                let mut sc = server_controller.borrow_mut();
+                sc.poll();
+            }
+            std::thread::sleep(Duration::from_millis(200));
+        }
+    }
 
     let mut engine = QmlEngine::new();
 
