@@ -17,9 +17,7 @@ Page {
 
         Label {
             Layout.alignment: Qt.AlignHCenter
-            text: typeof translator !== "undefined"
-                  ? translator.tr("sendTab.selection.title")
-                  : "Select files"
+            text: translator.tr("sendTab.selection.title")
             fontSize: "large"
         }
 

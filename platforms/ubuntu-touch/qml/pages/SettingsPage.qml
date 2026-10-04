@@ -13,9 +13,7 @@ Page {
 
         Label {
             Layout.alignment: Qt.AlignHCenter
-            text: typeof translator !== "undefined"
-                  ? translator.tr("settingsTab.title")
-                  : "Settings"
+            text: translator.tr("settingsTab.title")
             fontSize: "large"
         }
 

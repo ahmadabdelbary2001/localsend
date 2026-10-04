@@ -77,8 +77,8 @@ Page {
             Label {
                 Layout.alignment: Qt.AlignHCenter
                 text: serverController.running
-                      ? serverController.localIpsLabel
-                      : (typeof translator !== "undefined" ? translator.tr("general.offline") : "Offline")
+                    ? serverController.localIpsLabel
+                    : translator.tr("general.offline")
                 fontSize: "large"
                 opacity: 0.8
                 horizontalAlignment: Text.AlignHCenter
@@ -89,9 +89,7 @@ Page {
 
             Button {
                 Layout.alignment: Qt.AlignHCenter
-                text: (typeof translator !== "undefined")
-                      ? translator.tr("receiveTab.link")
-                      : "Link"
+                text: translator.tr("receiveTab.link")
                 onClicked: {
                     // TODO(nav): push WebSharePage once the Rust bridge exposes it.
                 }

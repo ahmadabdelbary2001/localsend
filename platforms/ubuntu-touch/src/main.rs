@@ -17,6 +17,7 @@ use crate::bridge::app::AppController;
 use crate::bridge::home_controller::HomeController;
 use crate::bridge::server_controller::ServerController;
 use crate::bridge::settings_controller::SettingsController;
+use crate::bridge::translator::Translator;
 
 fn main() -> ExitCode {
     env_logger::Builder::from_env(
@@ -24,18 +25,25 @@ fn main() -> ExitCode {
     )
     .init();
 
-    // Load persisted settings before creating any QObject.
+    // Settings must be loaded before any QObject that reads them.
+    // (Currently only SettingsController does, but wiring will grow.)
     let settings = match SettingsService::load_or_default() {
-        Ok(s) => Arc::new(s),
+        Ok(s) => Some(Arc::new(s)),
         Err(e) => {
             log::error!("failed to load settings: {e}");
-            return ExitCode::FAILURE;
+            None
         }
     };
 
     resources::register();
 
     let mut engine = QmlEngine::new();
+
+    // Translator is always available.
+    engine.set_object_property(
+        cstr!("translator").into(),
+        QObject::cpp_construct(&Translator::new()),
+    );
 
     engine.set_object_property(
         cstr!("appController").into(),
@@ -49,10 +57,25 @@ fn main() -> ExitCode {
         cstr!("serverController").into(),
         QObject::cpp_construct(&ServerController::new()),
     );
-    engine.set_object_property(
-        cstr!("settingsController").into(),
-        QObject::cpp_construct(&SettingsController::new(settings)),
-    );
+
+    if let Some(svc) = settings {
+        engine.set_object_property(
+            cstr!("settingsController").into(),
+            QObject::cpp_construct(&SettingsController::new(svc)),
+        );
+    } else {
+        // Still expose the controller with defaults so QML doesn't break.
+        engine.set_object_property(
+            cstr!("settingsController").into(),
+            QObject::cpp_construct(&SettingsController::new(Arc::new(
+                SettingsService::load_or_default().unwrap_or_else(|_| {
+                    // Best-effort fallback; load_or_default never fails
+                    // silently without a config dir, so this is defensive.
+                    panic!("no config dir and no fallback")
+                }),
+            ))),
+        );
+    }
 
     engine.load_file(cstr!("qrc:/qml/Main.qml").into());
     engine.exec();

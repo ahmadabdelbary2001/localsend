@@ -52,9 +52,7 @@ Item {
 
                     Label {
                         anchors.horizontalCenter: parent.horizontalCenter
-                        text: (typeof translator !== "undefined")
-                              ? translator.tr(modelData.labelKey)
-                              : modelData.labelKey
+                        text: translator.tr(modelData.labelKey)
                         fontSize: "x-small"
                         color: index === nav.currentIndex
                                ? (theme ? theme.colors.primary : "#00695c")
