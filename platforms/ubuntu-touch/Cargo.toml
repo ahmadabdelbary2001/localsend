@@ -13,7 +13,6 @@ path = "src/main.rs"
 
 [dependencies]
 qmetaobject = "0.2"
-cstr = "0.2"
 
 tokio = { version = "1", features = ["rt-multi-thread", "sync", "macros", "time"] }
 

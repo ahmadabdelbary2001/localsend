@@ -3,7 +3,6 @@
 // QAbstractListModel for nearby devices.
 // QML binds to this; it never parses JSON or talks to the network.
 
-use cstr::cstr;
 use qmetaobject::prelude::*;
 
 #[derive(Clone, Debug, Default)]
@@ -63,17 +62,14 @@ impl QAbstractListModel for DeviceModel {
         let Some(d) = self.items.get(i) else {
             return QVariant::default();
         };
-        // Role integers are declared in QML via `roleNames`.
-        // For the initial skeleton we return the most common ones.
-        // A full role map will be added once QML binds to specific names.
         match role {
-            0 => QVariant::from(d.id.clone()),
-            1 => QVariant::from(d.alias.clone()),
-            2 => QVariant::from(d.device_type.clone()),
-            3 => QVariant::from(d.model.clone()),
-            4 => QVariant::from(d.ip.clone()),
-            5 => QVariant::from(d.favorite),
-            6 => QVariant::from(d.status.clone()),
+            0 => QString::from(d.id.clone()).into(),
+            1 => QString::from(d.alias.clone()).into(),
+            2 => QString::from(d.device_type.clone()).into(),
+            3 => QString::from(d.model.clone()).into(),
+            4 => QString::from(d.ip.clone()).into(),
+            5 => d.favorite.into(),
+            6 => QString::from(d.status.clone()).into(),
             _ => QVariant::default(),
         }
     }
@@ -89,9 +85,4 @@ impl QAbstractListModel for DeviceModel {
         m.insert(6, QByteArray::from("status"));
         m
     }
-}
-
-#[allow(dead_code)]
-fn _assert_cstr_used() {
-    let _ = cstr!("noop");
 }

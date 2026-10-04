@@ -6,11 +6,12 @@ mod model;
 mod platform;
 mod resources;
 
+use std::cell::RefCell;
 use std::process::ExitCode;
 use std::sync::Arc;
 
-use cstr::cstr;
 use qmetaobject::prelude::*;
+use qmetaobject::QObjectPinned;
 
 use crate::application::settings_service::SettingsService;
 use crate::bridge::app::AppController;
@@ -25,59 +26,51 @@ fn main() -> ExitCode {
     )
     .init();
 
-    // Settings must be loaded before any QObject that reads them.
-    // (Currently only SettingsController does, but wiring will grow.)
     let settings = match SettingsService::load_or_default() {
-        Ok(s) => Some(Arc::new(s)),
+        Ok(s) => Arc::new(s),
         Err(e) => {
             log::error!("failed to load settings: {e}");
-            None
+            return ExitCode::FAILURE;
         }
     };
 
     resources::register();
 
+    // QObjectPinned::new is unsafe because the underlying RefCell must
+    // outlive any QML reference to the object. All RefCells below live
+    // until `main` returns (after engine.exec()), so this invariant holds.
+    let translator = RefCell::new(Translator::new());
+    let app_controller = RefCell::new(AppController::new());
+    let home_controller = RefCell::new(HomeController::new());
+    let server_controller = RefCell::new(ServerController::new());
+    let settings_controller = RefCell::new(SettingsController::new(settings));
+
     let mut engine = QmlEngine::new();
 
-    // Translator is always available.
-    engine.set_object_property(
-        cstr!("translator").into(),
-        QObject::cpp_construct(&Translator::new()),
-    );
-
-    engine.set_object_property(
-        cstr!("appController").into(),
-        QObject::cpp_construct(&AppController::new()),
-    );
-    engine.set_object_property(
-        cstr!("homeController").into(),
-        QObject::cpp_construct(&HomeController::new()),
-    );
-    engine.set_object_property(
-        cstr!("serverController").into(),
-        QObject::cpp_construct(&ServerController::new()),
-    );
-
-    if let Some(svc) = settings {
+    unsafe {
         engine.set_object_property(
-            cstr!("settingsController").into(),
-            QObject::cpp_construct(&SettingsController::new(svc)),
+            "translator".into(),
+            QObjectPinned::new(&translator),
         );
-    } else {
-        // Still expose the controller with defaults so QML doesn't break.
         engine.set_object_property(
-            cstr!("settingsController").into(),
-            QObject::cpp_construct(&SettingsController::new(Arc::new(
-                SettingsService::load_or_default().unwrap_or_else(|_| {
-                    // Best-effort fallback; load_or_default never fails
-                    // silently without a config dir, so this is defensive.
-                    panic!("no config dir and no fallback")
-                }),
-            ))),
+            "appController".into(),
+            QObjectPinned::new(&app_controller),
+        );
+        engine.set_object_property(
+            "homeController".into(),
+            QObjectPinned::new(&home_controller),
+        );
+        engine.set_object_property(
+            "serverController".into(),
+            QObjectPinned::new(&server_controller),
+        );
+        engine.set_object_property(
+            "settingsController".into(),
+            QObjectPinned::new(&settings_controller),
         );
     }
 
-    engine.load_file(cstr!("qrc:/qml/Main.qml").into());
+    engine.load_file("qrc:/qml/Main.qml".into());
     engine.exec();
 
     ExitCode::SUCCESS

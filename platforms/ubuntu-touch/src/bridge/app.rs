@@ -6,7 +6,6 @@
 
 use std::sync::Arc;
 
-use cstr::cstr;
 use qmetaobject::prelude::*;
 
 use crate::application::app_controller as app;

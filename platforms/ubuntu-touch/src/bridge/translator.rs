@@ -14,7 +14,6 @@
 
 use std::collections::HashMap;
 
-use cstr::cstr;
 use qmetaobject::prelude::*;
 use serde_json::Value;
 
@@ -171,12 +170,6 @@ fn flatten(v: &Value, prefix: &str, out: &mut HashMap<String, String>) {
         }
         _ => {}
     }
-}
-
-// silence the unused-import warning if cstr isn't needed
-#[allow(dead_code)]
-fn _use_cstr() {
-    let _ = cstr!("noop");
 }
 
 #[cfg(test)]
