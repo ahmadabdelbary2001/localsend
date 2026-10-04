@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: Apache-2.0
 //
-// QObject wrapper around application::settings_service::SettingsService.
-// Every property is read from the in-memory snapshot on construction
-// and updated via the set_* slots (which also persist to disk).
+// QObject wrapper around SettingsService.
+// Every property is initialized from the persisted snapshot and updated
+// via set_* slots (which also persist to disk).
 
 use std::sync::Arc;
 
@@ -14,13 +14,14 @@ use crate::application::settings_service::SettingsService;
 pub struct SettingsController {
     base: qt_base_class!(trait QObject),
 
+    /// Not exposed to QML.
     service: Arc<SettingsService>,
 
-    // ---------- properties exposed to QML ----------
+    // ---------- properties ----------
     alias: qt_property!(QString; NOTIFY changed),
-    theme: qt_property!(QString; NOTIFY changed),        // "system" | "light" | "dark"
-    color_mode: qt_property!(QString; NOTIFY changed),   // "system" | "localsend" | "oled" | "yaru" | "custom"
-    custom_color: qt_property!(QString; NOTIFY changed), // "#RRGGBB"
+    theme: qt_property!(QString; NOTIFY changed),
+    color_mode: qt_property!(QString; NOTIFY changed),
+    custom_color: qt_property!(QString; NOTIFY changed),
     enable_animations: qt_property!(bool; NOTIFY changed),
     advanced_settings: qt_property!(bool; NOTIFY changed),
     locale: qt_property!(QString; NOTIFY changed),
@@ -29,10 +30,15 @@ pub struct SettingsController {
     send_mode: qt_property!(QString; NOTIFY changed),
     device_type: qt_property!(QString; NOTIFY changed),
     device_model: qt_property!(QString; NOTIFY changed),
+    quick_save: qt_property!(bool; NOTIFY changed),
+    quick_save_from_favorites: qt_property!(bool; NOTIFY changed),
+    receive_pin: qt_property!(QString; NOTIFY changed),
+    auto_finish: qt_property!(bool; NOTIFY changed),
+    save_to_history: qt_property!(bool; NOTIFY changed),
 
     changed: qt_signal!(),
 
-    // ---------- slots callable from QML ----------
+    // ---------- slots ----------
     set_alias: qt_method!(fn(&mut self, v: QString)),
     set_theme: qt_method!(fn(&mut self, v: QString)),
     set_color_mode: qt_method!(fn(&mut self, v: QString)),
@@ -45,6 +51,11 @@ pub struct SettingsController {
     set_send_mode: qt_method!(fn(&mut self, v: QString)),
     set_device_type: qt_method!(fn(&mut self, v: QString)),
     set_device_model: qt_method!(fn(&mut self, v: QString)),
+    set_quick_save: qt_method!(fn(&mut self, v: bool)),
+    set_quick_save_from_favorites: qt_method!(fn(&mut self, v: bool)),
+    set_receive_pin: qt_method!(fn(&mut self, v: QString)),
+    set_auto_finish: qt_method!(fn(&mut self, v: bool)),
+    set_save_to_history: qt_method!(fn(&mut self, v: bool)),
 }
 
 impl SettingsController {
@@ -54,18 +65,23 @@ impl SettingsController {
         let mut this = Self {
             base: Default::default(),
             service,
-            alias: Default::default(),
-            theme: Default::default(),
-            color_mode: Default::default(),
-            custom_color: Default::default(),
-            enable_animations: Default::default(),
-            advanced_settings: Default::default(),
-            locale: Default::default(),
-            port: Default::default(),
-            https: Default::default(),
-            send_mode: Default::default(),
-            device_type: Default::default(),
-            device_model: Default::default(),
+            alias: QString::from(s.alias),
+            theme: QString::from(s.theme),
+            color_mode: QString::from(s.color_mode),
+            custom_color: QString::from(s.custom_color),
+            enable_animations: s.enable_animations,
+            advanced_settings: s.advanced_settings,
+            locale: QString::from(s.locale.unwrap_or_default()),
+            port: s.port as u32,
+            https: s.https,
+            send_mode: QString::from(s.send_mode),
+            device_type: QString::from(s.device_type.unwrap_or_default()),
+            device_model: QString::from(s.device_model.unwrap_or_default()),
+            quick_save: s.quick_save,
+            quick_save_from_favorites: s.quick_save_from_favorites,
+            receive_pin: QString::from(s.receive_pin.unwrap_or_default()),
+            auto_finish: s.auto_finish,
+            save_to_history: s.save_to_history,
             changed: Default::default(),
             set_alias: Default::default(),
             set_theme: Default::default(),
@@ -79,24 +95,16 @@ impl SettingsController {
             set_send_mode: Default::default(),
             set_device_type: Default::default(),
             set_device_model: Default::default(),
+            set_quick_save: Default::default(),
+            set_quick_save_from_favorites: Default::default(),
+            set_receive_pin: Default::default(),
+            set_auto_finish: Default::default(),
+            set_save_to_history: Default::default(),
         };
-
-        this.alias = QString::from(s.alias);
-        this.theme = QString::from(s.theme);
-        this.color_mode = QString::from(s.color_mode);
-        this.custom_color = QString::from(s.custom_color);
-        this.enable_animations = s.enable_animations;
-        this.advanced_settings = s.advanced_settings;
-        this.locale = QString::from(s.locale.unwrap_or_default());
-        this.port = s.port as u32;
-        this.https = s.https;
-        this.send_mode = QString::from(s.send_mode);
-        this.device_type = QString::from(s.device_type.unwrap_or_default());
-        this.device_model = QString::from(s.device_model.unwrap_or_default());
+        // silence: use once so field never flagged
+        this.changed = Default::default();
         this
     }
-
-    // ---- setter implementations ----
 
     fn set_alias(&mut self, v: QString) {
         let s = v.to_string();
@@ -129,8 +137,8 @@ impl SettingsController {
 
     fn set_custom_color(&mut self, v: QString) {
         let s = v.to_string();
-        if !s.starts_with('#') || !matches!(s.len(), 7 | 9) {
-            log::warn!("set_custom_color: invalid '#RRGGBB' value '{s}'");
+        if !s.starts_with('#') || !(s.len() == 7 || s.len() == 9) {
+            log::warn!("set_custom_color: invalid value '{s}'");
             return;
         }
         self.service.update(|st| st.custom_color = s.clone());
@@ -152,8 +160,8 @@ impl SettingsController {
 
     fn set_locale(&mut self, v: QString) {
         let s = v.to_string();
-        let s_opt = if s.is_empty() { None } else { Some(s.clone()) };
-        self.service.update(|st| st.locale = s_opt);
+        let opt = if s.is_empty() { None } else { Some(s.clone()) };
+        self.service.update(|st| st.locale = opt);
         self.locale = QString::from(s);
         self.changed();
     }
@@ -199,6 +207,54 @@ impl SettingsController {
         let opt = if s.is_empty() { None } else { Some(s.clone()) };
         self.service.update(|st| st.device_model = opt);
         self.device_model = QString::from(s);
+        self.changed();
+    }
+
+    // quick-save cross logic mirrors settings_provider.dart:
+    // turning one on turns the other off.
+    fn set_quick_save(&mut self, v: bool) {
+        self.service.update(|st| {
+            st.quick_save = v;
+            if v {
+                st.quick_save_from_favorites = false;
+            }
+        });
+        let snap = self.service.snapshot();
+        self.quick_save = snap.quick_save;
+        self.quick_save_from_favorites = snap.quick_save_from_favorites;
+        self.changed();
+    }
+
+    fn set_quick_save_from_favorites(&mut self, v: bool) {
+        self.service.update(|st| {
+            st.quick_save_from_favorites = v;
+            if v {
+                st.quick_save = false;
+            }
+        });
+        let snap = self.service.snapshot();
+        self.quick_save = snap.quick_save;
+        self.quick_save_from_favorites = snap.quick_save_from_favorites;
+        self.changed();
+    }
+
+    fn set_receive_pin(&mut self, v: QString) {
+        let s = v.to_string();
+        let opt = if s.is_empty() { None } else { Some(s.clone()) };
+        self.service.update(|st| st.receive_pin = opt);
+        self.receive_pin = QString::from(s);
+        self.changed();
+    }
+
+    fn set_auto_finish(&mut self, v: bool) {
+        self.service.update(|st| st.auto_finish = v);
+        self.auto_finish = v;
+        self.changed();
+    }
+
+    fn set_save_to_history(&mut self, v: bool) {
+        self.service.update(|st| st.save_to_history = v);
+        self.save_to_history = v;
         self.changed();
     }
 }

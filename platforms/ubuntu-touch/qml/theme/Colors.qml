@@ -7,17 +7,8 @@ QtObject {
     property string colorMode: "localsend"
     property color  customColor: "#009688"
 
-    // ---------- base palette ----------
-    // Flutter's theme.dart uses ColorScheme.fromSeed(teal). We approximate
-    // with a fixed teal palette. When colorMode === "custom" we build a
-    // minimal palette from the user color.
-    //
-    // TODO(theme): port a Material-3 seed→palette generator to QML or Rust
-    // for accuracy. For now we do a lightweight derivation.
-
-    readonly property color _seed: colorMode === "custom" ? customColor : "#009688"
-
-    // Blend helpers
+    // Lightweight seed -> palette derivation.
+    // TODO: replace with proper Material-3 generation.
     function _mix(a, b, t) {
         return Qt.rgba(
             a.r * (1 - t) + b.r * t,
@@ -27,13 +18,13 @@ QtObject {
         )
     }
 
+    readonly property color _seed: colorMode === "custom" ? customColor : "#009688"
     readonly property color _primaryDark:  _mix(_seed, "#000000", 0.20)
     readonly property color _primaryLight: _mix(_seed, "#FFFFFF", 0.30)
 
-    // ---------- resolved ----------
-    readonly property color background:     colorMode === "oled" && dark ? "#000000"
+    readonly property color background:     (colorMode === "oled" && dark) ? "#000000"
                                             : (dark ? "#111214" : "#F6F6F6")
-    readonly property color surface:        colorMode === "oled" && dark ? "#000000"
+    readonly property color surface:        (colorMode === "oled" && dark) ? "#000000"
                                             : (dark ? "#1B1D21" : "#FFFFFF")
     readonly property color surfaceTint:    dark ? "#23262B" : "#ECEFF1"
     readonly property color primary:        dark ? _primaryLight : _primaryDark

@@ -12,7 +12,6 @@ MainView {
     width: units.gu(50)
     height: units.gu(90)
 
-    // Theme now reads directly from persisted settings.
     Theme {
         id: theme
         mode: settingsController.theme
@@ -33,8 +32,6 @@ MainView {
     Component.onCompleted: {
         if (typeof appController !== "undefined") {
             appController.initialize()
-        } else {
-            console.warn("appController not exposed to QML")
         }
     }
 }

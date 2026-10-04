@@ -1,13 +1,12 @@
 // SPDX-License-Identifier: Apache-2.0
 //
-// Persisted settings for the Ubuntu Touch frontend.
-// Stored as JSON at ~/.config/localsend/settings.json.
+// Persisted settings for Ubuntu Touch.
+// Stored at ~/.config/localsend/settings.json.
 //
-// Rules:
-//  - No Qt types.
-//  - Synchronous API is deliberate: settings writes are ~1 KB and happen
-//    only on user interaction. If this ever becomes hot, move the disk
-//    write to a background task.
+// Fields mirror app/lib/model/state/settings_state.dart, but only the
+// subset that applies on Ubuntu Touch. Desktop-only fields
+// (alwaysOnTop, saveWindowPlacement, minimizeToTray, showToken)
+// and mobile-only fields (saveToGallery) are intentionally omitted.
 
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
@@ -96,10 +95,9 @@ impl Default for SettingsState {
     }
 }
 
-/// TODO: use the same generator as app/lib/util/alias_generator.dart.
-/// The Flutter frontend produces two-word aliases like "Cute Tomato".
+/// TODO: port app/lib/util/alias_generator.dart to Rust and use the
+/// same "Adjective Fruit" combination. For now we use a fixed default.
 fn default_alias() -> String {
-    // Placeholder until we port alias_generator.dart.
     "LocalSend".to_string()
 }
 
@@ -135,7 +133,6 @@ impl SettingsService {
             state: Arc::new(Mutex::new(state)),
             path,
         };
-        // Persist defaults on first launch so the file exists.
         if let Err(e) = svc.save() {
             log::warn!("initial settings save failed: {e}");
         }
@@ -146,7 +143,6 @@ impl SettingsService {
         self.state.lock().map(|g| g.clone()).unwrap_or_default()
     }
 
-    /// Update the state and persist.
     pub fn update<F>(&self, f: F)
     where
         F: FnOnce(&mut SettingsState),
@@ -170,7 +166,7 @@ impl SettingsService {
                 Err(p) => p.into_inner(),
             };
             serde_json::to_string_pretty(&*guard)
-                .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e))?
+                .map_err(|e| std::io::Error::other(e))?
         };
         std::fs::write(&self.path, data)
     }
@@ -189,6 +185,7 @@ mod tests {
         assert_eq!(d.color_mode, "localsend");
         assert!(d.enable_animations);
         assert!(!d.advanced_settings);
+        assert!(d.save_to_history);
     }
 
     #[test]
@@ -205,6 +202,7 @@ mod tests {
         let json = r#"{"alias":"Cute Tomato"}"#;
         let s: SettingsState = serde_json::from_str(json).unwrap();
         assert_eq!(s.alias, "Cute Tomato");
-        assert_eq!(s.port, 53317); // default preserved
+        assert_eq!(s.port, 53317);
+        assert_eq!(s.theme, "system");
     }
 }
