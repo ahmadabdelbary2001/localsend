@@ -69,7 +69,7 @@ impl ServerController {
         }
     }
 
-    fn start(&mut self, alias: QString, port: u32, https: bool, pin: QString) {
+    pub fn start(&mut self, alias: QString, port: u32, https: bool, pin: QString) {
         let pin_s = pin.to_string();
         let pin_opt = if pin_s.is_empty() { None } else { Some(pin_s) };
 
@@ -84,13 +84,13 @@ impl ServerController {
         }
     }
 
-    fn stop(&mut self) {
+    pub fn stop(&mut self) {
         if let Some(h) = &self.handle {
             h.send(ServerCommand::Stop);
         }
     }
 
-    fn poll(&mut self) {
+    pub fn poll(&mut self) {
         let Some(h) = &self.handle else { return };
 
         loop {
