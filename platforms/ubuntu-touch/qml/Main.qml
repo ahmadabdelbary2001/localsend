@@ -1,5 +1,4 @@
 import QtQuick 2.15
-import QtQuick.Controls 2.15
 import Lomiri.Components 1.3
 
 import "shell"
@@ -10,11 +9,16 @@ MainView {
     objectName: "localsendMain"
     applicationName: "localsend.ahmadabdelbary"
 
-    // Width/height reference for phones; page contents use units.gu().
     width: units.gu(50)
     height: units.gu(90)
 
-    Theme { id: theme }
+    // Theme now reads directly from persisted settings.
+    Theme {
+        id: theme
+        mode: settingsController.theme
+        colorMode: settingsController.colorMode
+        customColor: settingsController.customColor
+    }
 
     PageStack {
         id: mainStack
@@ -32,11 +36,5 @@ MainView {
         } else {
             console.warn("appController not exposed to QML")
         }
-    }
-
-    Connections {
-        target: (typeof Qt !== "undefined" && Qt.application) ? Qt.application : null
-        // Placeholder for lifecycle hooks; Lomiri forwards these differently.
-        // See application::AppControllerHandle::on_resumed for the Rust side.
     }
 }

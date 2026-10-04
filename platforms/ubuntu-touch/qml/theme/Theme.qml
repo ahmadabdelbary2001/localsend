@@ -3,29 +3,24 @@ import QtQuick 2.15
 QtObject {
     id: theme
 
-    // Mirrors Flutter's settingsProvider.theme + colorMode.
-    // Values: "system" | "light" | "dark"
-    property string mode: "system"
+    // Bound from Main.qml to settingsController.{theme, colorMode, customColor}.
+    property string mode: "system"        // "system" | "light" | "dark"
+    property string colorMode: "localsend" // "system" | "localsend" | "oled" | "yaru" | "custom"
+    property color  customColor: "#009688"
 
-    // Values: "localsend" | "oled" | "custom" | "yaru"
-    // (dynamic is Android-only; yaru is a desktop variant, kept for parity)
-    property string colorMode: "localsend"
-
-    // Hex string, used when colorMode === "custom"
-    property color customColor: "#009688"
-
-    // Resolved by Rust once settings load. Defaults to light.
-    property bool dark: false
-
-    property Colors  colors:  Colors  { dark: theme.dark; colorMode: theme.colorMode; customColor: theme.customColor }
-    property Metrics metrics: Metrics {}
-
-    onModeChanged: _recompute()
-    Component.onCompleted: _recompute()
-
-    function _recompute() {
-        if (mode === "dark")      dark = true
-        else if (mode === "light") dark = false
-        // "system": leave dark as-is; Rust updates it when the platform reports a change.
+    // Resolved dark flag.
+    // For "system" we default to light until Lomiri system theme
+    // detection is wired (TODO: read from Ubuntu.SystemSettings).
+    readonly property bool dark: {
+        if (mode === "dark") return true
+        if (mode === "light") return false
+        return false // "system" fallback
     }
+
+    readonly property Colors  colors:  Colors {
+        dark: theme.dark
+        colorMode: theme.colorMode
+        customColor: theme.customColor
+    }
+    readonly property Metrics metrics: Metrics {}
 }

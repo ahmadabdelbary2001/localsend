@@ -7,10 +7,12 @@ mod platform;
 mod resources;
 
 use std::process::ExitCode;
+use std::sync::Arc;
 
 use cstr::cstr;
 use qmetaobject::prelude::*;
 
+use crate::application::settings_service::SettingsService;
 use crate::bridge::app::AppController;
 use crate::bridge::home_controller::HomeController;
 use crate::bridge::server_controller::ServerController;
@@ -22,11 +24,19 @@ fn main() -> ExitCode {
     )
     .init();
 
+    // Load persisted settings before creating any QObject.
+    let settings = match SettingsService::load_or_default() {
+        Ok(s) => Arc::new(s),
+        Err(e) => {
+            log::error!("failed to load settings: {e}");
+            return ExitCode::FAILURE;
+        }
+    };
+
     resources::register();
 
     let mut engine = QmlEngine::new();
 
-    // Root controllers exposed to QML as top-level names.
     engine.set_object_property(
         cstr!("appController").into(),
         QObject::cpp_construct(&AppController::new()),
@@ -41,7 +51,7 @@ fn main() -> ExitCode {
     );
     engine.set_object_property(
         cstr!("settingsController").into(),
-        QObject::cpp_construct(&SettingsController::new()),
+        QObject::cpp_construct(&SettingsController::new(settings)),
     );
 
     engine.load_file(cstr!("qrc:/qml/Main.qml").into());

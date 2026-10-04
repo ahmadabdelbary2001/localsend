@@ -31,7 +31,6 @@ pub struct AppController {
     ping: qt_method!(fn(&mut self) -> QString),
 
     /// Not exposed to QML.
-    #[qt_property(QString, NOTIFY status_changed, READ only)]
     inner: Option<Arc<app::AppControllerHandle>>,
 }
 

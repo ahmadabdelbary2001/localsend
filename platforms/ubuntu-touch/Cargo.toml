@@ -12,16 +12,13 @@ name = "localsend-ubuntu-touch"
 path = "src/main.rs"
 
 [dependencies]
-# QML/Qt bindings. qmetaobject-rs 0.26 defaults to Qt 5;
-# do NOT enable the `qt_6` feature on Ubuntu Touch.
-qmetaobject = "0.26"
-cstr = "1"
+qmetaobject = "0.2"
+cstr = "0.2"
 
 tokio = { version = "1", features = ["rt-multi-thread", "sync", "macros", "time"] }
 
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+
 log = "0.4"
 env_logger = "0.11"
-
-# TODO: connect to existing LocalSend core API.
-# Replace with the real crate name from packages/core/Cargo.toml.
-# localsend-core = { path = "../../packages/core" }
