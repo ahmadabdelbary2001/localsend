@@ -2390,6 +2390,8 @@ name = "localsend-ubuntu-touch"
 version = "0.1.0"
 dependencies = [
  "env_logger",
+ "if-addrs",
+ "localsend",
  "log",
  "qmetaobject",
  "serde",

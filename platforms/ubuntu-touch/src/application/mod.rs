@@ -1,3 +1,5 @@
 // SPDX-License-Identifier: Apache-2.0
 pub mod app_controller;
+pub mod local_ip_service;
+pub mod server_service;
 pub mod settings_service;

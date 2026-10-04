@@ -77,7 +77,7 @@ Page {
             Label {
                 Layout.alignment: Qt.AlignHCenter
                 text: serverController.running
-                    ? serverController.localIpsLabel
+                    ? _ipsLabel()
                     : translator.tr("general.offline")
                 fontSize: "large"
                 opacity: 0.8
@@ -144,7 +144,7 @@ Page {
 
             Label { text: translator.tr("receiveTab.infoBox.ip"); fontSize: "small"; opacity: 0.6 }
             Label {
-                text: serverController.localIpsLabel.length > 0 ? serverController.localIpsLabel : translator.tr("general.unknown")
+                text: localIpsModel.rowCount() > 0 ? _ipsLabel() : translator.tr("general.unknown")
                 wrapMode: Text.WrapAnywhere
                 fontSize: "small"
             }
@@ -155,5 +155,14 @@ Page {
                 fontSize: "small"
             }
         }
+    }
+
+    function _ipsLabel() {
+        var parts = []
+        for (var i = 0; i < localIpsModel.rowCount(); i++) {
+            var ip = localIpsModel.data(localIpsModel.index(i, 0), 0)
+            parts.push("· " + ip)
+        }
+        return parts.join("  ")
     }
 }

@@ -18,6 +18,7 @@ use crate::bridge::home_controller::HomeController;
 use crate::bridge::server_controller::ServerController;
 use crate::bridge::settings_controller::SettingsController;
 use crate::bridge::translator::Translator;
+use crate::model::local_ips_model::LocalIpsModel;
 
 fn main() -> ExitCode {
     env_logger::Builder::from_env(
@@ -35,14 +36,14 @@ fn main() -> ExitCode {
 
     resources::register();
 
-    // QObjectPinned::new is unsafe because the underlying RefCell must
-    // outlive any QML reference to the object. All RefCells below live
-    // until `main` returns (after engine.exec()), so this invariant holds.
+    // All RefCells live until `main` returns (after engine.exec()).
+    // This satisfies QObjectPinned::new's safety contract.
     let translator = RefCell::new(Translator::new());
     let app_controller = RefCell::new(AppController::new());
     let home_controller = RefCell::new(HomeController::new());
     let server_controller = RefCell::new(ServerController::new());
     let settings_controller = RefCell::new(SettingsController::new(settings));
+    let local_ips_model = RefCell::new(LocalIpsModel::new());
 
     let mut engine = QmlEngine::new();
 
@@ -66,6 +67,10 @@ fn main() -> ExitCode {
         engine.set_object_property(
             "settingsController".into(),
             QObjectPinned::new(&settings_controller),
+        );
+        engine.set_object_property(
+            "localIpsModel".into(),
+            QObjectPinned::new(&local_ips_model),
         );
     }
 
