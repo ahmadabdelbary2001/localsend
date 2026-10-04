@@ -17,19 +17,14 @@ path = "src/main.rs"
 
 [dependencies]
 qmetaobject = "0.2"
-
 tokio = { version = "1", features = ["rt-multi-thread", "sync", "macros", "time"] }
-
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
-
-# Network interface enumeration (also used by core, but we need it directly).
 if-addrs = "0.15"
-
 log = "0.4"
 env_logger = "0.11"
+anyhow = "1"
 
 # Shared LocalSend core.
-# Features: http (server + protocol), crypto (TLS/fingerprint).
-# `discovery`/`multicast`/`webrtc` will be enabled later as needed.
+# http brings crypto (TLS/fingerprint) transitively.
 localsend = { path = "../../packages/core", features = ["http"] }

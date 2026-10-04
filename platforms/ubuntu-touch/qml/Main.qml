@@ -33,5 +33,27 @@ MainView {
         if (typeof appController !== "undefined") {
             appController.initialize()
         }
+        // Start the server from persisted settings.
+        if (typeof serverController !== "undefined" && typeof settingsController !== "undefined") {
+            serverController.start(
+                settingsController.alias,
+                settingsController.port,
+                settingsController.https,
+                settingsController.receivePin
+            )
+        }
+    }
+
+    // Drains server events on the Qt thread.
+    Timer {
+        interval: 200
+        running: true
+        repeat: true
+        triggeredOnStart: true
+        onTriggered: {
+            if (typeof serverController !== "undefined") {
+                serverController.poll()
+            }
+        }
     }
 }
