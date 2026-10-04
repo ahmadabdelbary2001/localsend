@@ -23,3 +23,9 @@
 # Generated at build time by makepri (see support/scripts/compile_windows_msix_helper.ps1)
 /support/build/msix/content/resources.pri
 _manual_deps/
+
+# Ubuntu Touch / Clickable
+platforms/ubuntu-touch/target/
+platforms/ubuntu-touch/build/
+platforms/ubuntu-touch/.clickable/
+*.click

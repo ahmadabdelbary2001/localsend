@@ -5,6 +5,7 @@ members = [
     "packages/core",
     "packages/localsend_isolates/rust",
     "server",
+    "platforms/ubuntu-touch",
 ]
 
 # Profiles are only honored in the workspace root manifest.

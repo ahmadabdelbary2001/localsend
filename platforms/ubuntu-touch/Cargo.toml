@@ -1,0 +1,35 @@
+[package]
+name = "localsend-ubuntu-touch"
+version = "0.1.0"
+edition = "2021"
+rust-version = "1.97"
+description = "Native Ubuntu Touch frontend for LocalSend (QML + Rust)"
+license = "Apache-2.0"
+publish = false
+
+[[bin]]
+name = "localsend-ubuntu-touch"
+path = "src/main.rs"
+
+[dependencies]
+# Qt/QML bindings
+qmetaobject = "0.26"
+cstr = "1"
+
+# Async runtime (background, off the Qt thread)
+tokio = { version = "1", features = ["rt-multi-thread", "sync", "macros", "time"] }
+
+# Logging
+log = "0.4"
+env_logger = "0.11"
+
+# TODO: connect to existing LocalSend core API.
+# Replace `path`/`package` with the real crate name once confirmed
+# by inspecting packages/core/Cargo.toml.
+# The core must remain unchanged; this is just a path dependency.
+localsend-core = { path = "../../packages/core" }
+
+[build-dependencies]
+
+[features]
+default = []

@@ -1,0 +1,31 @@
+#include <templates/template>
+#include <abstractions/base>
+#include <abstractions/openssl>
+#include <abstractions/ssl_certs>
+
+# Binary
+@{APP_PKGNAME}/localsend-ubuntu-touch mr,
+
+# QML
+@{APP_PKGNAME}/qml/** r,
+
+# Assets
+@{APP_PKGNAME}/assets/** r,
+
+# LocalSend protocol port
+network inet stream,
+network inet6 stream,
+network inet dgram,
+network inet6 dgram,
+network netlink raw,
+
+# Content Hub (file picker / share)
+content_exchange,
+content_exchange_source,
+
+# Settings (persisted)
+@{HOME}/.config/localsend/** rw,
+@{HOME}/.local/share/localsend/** rw,
+
+# Logs
+@{HOME}/.cache/localsend/** rw,

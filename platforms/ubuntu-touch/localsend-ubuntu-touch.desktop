@@ -1,0 +1,12 @@
+[Desktop Entry]
+Name=LocalSend
+Comment=Share files with nearby devices
+Exec=localsend-ubuntu-touch
+Icon=assets/logo.svg
+Terminal=false
+Type=Application
+X-Ubuntu-Touch=true
+X-Ubuntu-Default-Department-ID=utils
+X-Ubuntu-Splash-Color=#4B5B8C
+X-Ubuntu-Single-Instance=true
+X-Ubuntu-Application-ID=localsend.ahmadabdelbary
