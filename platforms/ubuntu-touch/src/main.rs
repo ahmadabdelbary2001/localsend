@@ -6,31 +6,44 @@ mod model;
 mod platform;
 mod resources;
 
-use std::env;
 use std::process::ExitCode;
 
 use cstr::cstr;
 use qmetaobject::prelude::*;
 
 use crate::bridge::app::AppController;
+use crate::bridge::home_controller::HomeController;
+use crate::bridge::server_controller::ServerController;
+use crate::bridge::settings_controller::SettingsController;
 
 fn main() -> ExitCode {
-    env_logger::Builder::from_env(env_logger::Env::default().default_filter_or("info")).init();
+    env_logger::Builder::from_env(
+        env_logger::Env::default().default_filter_or("info"),
+    )
+    .init();
 
-    // QML resources are embedded in the binary.
     resources::register();
 
-    // Boot QML engine on the Qt thread.
     let mut engine = QmlEngine::new();
 
-    // Expose the application bridge to QML.
-    // QObject names below are the ones QML imports.
+    // Root controllers exposed to QML as top-level names.
     engine.set_object_property(
         cstr!("appController").into(),
         QObject::cpp_construct(&AppController::new()),
     );
+    engine.set_object_property(
+        cstr!("homeController").into(),
+        QObject::cpp_construct(&HomeController::new()),
+    );
+    engine.set_object_property(
+        cstr!("serverController").into(),
+        QObject::cpp_construct(&ServerController::new()),
+    );
+    engine.set_object_property(
+        cstr!("settingsController").into(),
+        QObject::cpp_construct(&SettingsController::new()),
+    );
 
-    // Entry QML file (see resources.rs for the qrc path).
     engine.load_file(cstr!("qrc:/qml/Main.qml").into());
     engine.exec();
 

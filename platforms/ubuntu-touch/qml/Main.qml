@@ -5,25 +5,38 @@ import Lomiri.Components 1.3
 import "shell"
 import "theme"
 
-ApplicationWindow {
+MainView {
     id: root
-    visible: true
+    objectName: "localsendMain"
+    applicationName: "localsend.ahmadabdelbary"
+
+    // Width/height reference for phones; page contents use units.gu().
     width: units.gu(50)
     height: units.gu(90)
-    title: i18n.tr("LocalSend")
 
-    // Theme is a singleton-like object shared across pages.
     Theme { id: theme }
 
-    AppShell {
-        id: shell
-        anchors.fill: parent
-        theme: theme
+    PageStack {
+        id: mainStack
+        Component.onCompleted: push(shellComponent)
+    }
+
+    Component {
+        id: shellComponent
+        AppShell { theme: theme }
     }
 
     Component.onCompleted: {
         if (typeof appController !== "undefined") {
             appController.initialize()
+        } else {
+            console.warn("appController not exposed to QML")
         }
+    }
+
+    Connections {
+        target: (typeof Qt !== "undefined" && Qt.application) ? Qt.application : null
+        // Placeholder for lifecycle hooks; Lomiri forwards these differently.
+        // See application::AppControllerHandle::on_resumed for the Rust side.
     }
 }

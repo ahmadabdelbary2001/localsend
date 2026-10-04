@@ -1,12 +1,13 @@
 // SPDX-License-Identifier: Apache-2.0
 //
-// AppController is the single QObject the QML root binds to.
-// It delegates all business work to application::AppController
-// over a channel; the Qt thread never touches Tokio directly.
+// AppController is the root QObject exposed to QML.
+// It owns the handle to the application layer (Tokio side)
+// and forwards lifecycle/state to sub-controllers.
+
+use std::sync::Arc;
 
 use cstr::cstr;
 use qmetaobject::prelude::*;
-use std::sync::Arc;
 
 use crate::application::app_controller as app;
 
@@ -14,23 +15,21 @@ use crate::application::app_controller as app;
 pub struct AppController {
     base: qt_base_class!(trait QObject),
 
-    /// Human-readable status shown on the first screen.
-    /// Real business state will move to dedicated models/controllers later.
-    status: qt_property!(QString; NOTIFY status_changed),
-    status_changed: qt_signal!(),
-
-    /// Version of the Rust core, for diagnostics.
+    /// Human-readable version string of the Rust core, for diagnostics.
     core_version: qt_property!(QString; NOTIFY core_version_changed),
     core_version_changed: qt_signal!(),
 
-    /// Called from QML after Component.onCompleted.
+    /// Short status text. Will be replaced by fine-grained models
+    /// once Server/Send/Settings controllers are fully wired.
+    status: qt_property!(QString; NOTIFY status_changed),
+    status_changed: qt_signal!(),
+
+    /// Called once from QML after Component.onCompleted.
     initialize: qt_method!(fn(&mut self)),
 
-    /// Placeholder to prove QML -> Rust -> application wiring works.
-    /// The real send flow will be added in SendController.
+    /// Placeholder slot that proves the QML -> Rust path works.
     ping: qt_method!(fn(&mut self) -> QString),
 
-    /// Background handle to the Rust application layer.
     /// Not exposed to QML.
     #[qt_property(QString, NOTIFY status_changed, READ only)]
     inner: Option<Arc<app::AppControllerHandle>>,
@@ -44,10 +43,16 @@ impl AppController {
     }
 
     fn initialize(&mut self) {
-        log::info!("AppController initialized");
+        log::info!("AppController::initialize");
+
+        if let Some(h) = &self.inner {
+            h.post_init_async();
+        }
+
         self.status = QString::from("LocalSend ready");
         self.status_changed();
-        self.core_version = QString::from("core: TODO(connect to packages/core)");
+
+        self.core_version = QString::from(env!("CARGO_PKG_VERSION"));
         self.core_version_changed();
     }
 

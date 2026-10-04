@@ -18,6 +18,7 @@ pub fn register() {
             "qml/theme/Theme.qml" as "theme/Theme.qml",
             "qml/theme/Colors.qml" as "theme/Colors.qml",
             "qml/theme/Metrics.qml" as "theme/Metrics.qml",
+            // TODO: add logo asset once copied from app/assets/images/.
         }
     );
 

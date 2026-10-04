@@ -5,26 +5,25 @@ build:
   - cargo build --release --target aarch64-unknown-linux-gnu
   - mkdir -p ${INSTALL_DIR}/bin
   - cp target/aarch64-unknown-linux-gnu/release/localsend-ubuntu-touch ${INSTALL_DIR}/bin/
-  - mkdir -p ${INSTALL_DIR}/qml
-  - cp -r qml/* ${INSTALL_DIR}/qml/ 2>/dev/null || true
 
 install_dir: ${INSTALL_DIR}
 
 kill: localsend-ubuntu-touch
 
+# Qt 5, not Qt 6.
 dependencies_host:
-  - qt6-base-dev
-  - qt6-declarative-dev
+  - qtbase5-dev
+  - qtdeclarative5-dev
 
 dependencies_target:
-  - qt6-base-dev
-  - qt6-declarative-dev
-  - qt6-declarative-dev-tools
-  - qml6-module-qtquick
-  - qml6-module-qtquick-controls
-  - qml6-module-qtquick-layouts
-  - qml6-module-qtquick-window
-  - qml6-module-qtqml-workerscript
+  - qtbase5-dev
+  - qtdeclarative5-dev
+  - qtdeclarative5-dev-tools
+  - qml-module-qtquick2
+  - qml-module-qtquick-controls2
+  - qml-module-qtquick-layouts
+  - qml-module-qtquick-window2
+  - qml-module-qtqml-workerscript2
   - liblomiri-connectivity-qt1-1
   - lomiri-components
   - lomiri-components-extras
