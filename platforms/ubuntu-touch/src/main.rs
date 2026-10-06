@@ -106,12 +106,16 @@ fn main() -> ExitCode {
     }
 
     // ---------- HEADLESS MODE ----------
-    if std::env::var("LOCALSEND_AUTO_ACCEPT").is_ok() {
-        {
+    if std::env::var("LOCALSEND_HEADLESS").is_ok() {
+        let auto_accept = std::env::var("LOCALSEND_AUTO_ACCEPT").is_ok();
+        if auto_accept {
             let mut sc = server_controller.borrow_mut();
             sc.set_auto_accept(true);
+            log::info!("auto-accept enabled");
         }
-        log::info!("auto-accept enabled");
+
+        log::info!("HEADLESS mode: server + discovery running. Ctrl+C to stop.");
+
         {
             let mut dc = discovery_controller.borrow_mut();
             dc.scan_now();
@@ -122,10 +126,6 @@ fn main() -> ExitCode {
             {
                 let mut sc = server_controller.borrow_mut();
                 sc.poll();
-            }
-            {
-                let mut im = incoming_files_model.borrow_mut();
-                im.refresh();
             }
             {
                 let mut dc = discovery_controller.borrow_mut();
@@ -140,6 +140,10 @@ fn main() -> ExitCode {
                 let dc = discovery_controller.borrow();
                 let mut dm = device_list_model.borrow_mut();
                 dm.replace_all(dc.snapshot().to_vec());
+            }
+            {
+                let mut im = incoming_files_model.borrow_mut();
+                im.refresh();
             }
             std::thread::sleep(Duration::from_millis(500));
         }
