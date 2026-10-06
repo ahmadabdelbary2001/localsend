@@ -29,5 +29,7 @@ dependencies_target:
   - lomiri-components-extras
   - qml-module-lomiri-components
   - qml-module-lomiri-components-extras
+  - qml-module-lomiri-content
+  - qml-module-lomiri-content-doc
 
 app: localsend-ubuntu-touch
