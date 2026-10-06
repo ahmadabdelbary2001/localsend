@@ -6,6 +6,7 @@ use localsend_ubuntu_touch::{application, bridge, model, platform, resources};
 use std::cell::RefCell;
 use std::process::ExitCode;
 use std::sync::Arc;
+use std::sync::RwLock;
 use std::time::Duration;
 
 use qmetaobject::prelude::*;
@@ -16,6 +17,7 @@ use crate::application::discovery_service::{
 };
 use crate::application::identity_service::DeviceIdentity;
 use crate::application::settings_service::SettingsService;
+use crate::application::server_service::IncomingFileEntry;
 use crate::bridge::app::AppController;
 use crate::bridge::discovery_controller::DiscoveryController;
 use crate::bridge::home_controller::HomeController;
@@ -24,6 +26,7 @@ use crate::bridge::settings_controller::SettingsController;
 use crate::bridge::translator::Translator;
 use crate::model::local_ips_model::LocalIpsModel;
 use crate::model::device_model::DeviceListModel;
+use crate::model::incoming_files_model::IncomingFilesModel;
 
 fn main() -> ExitCode {
     env_logger::Builder::from_env(
@@ -59,13 +62,21 @@ fn main() -> ExitCode {
     let translator = RefCell::new(Translator::new());
     let app_controller = RefCell::new(AppController::new());
     let home_controller = RefCell::new(HomeController::new());
+
+    // Shared with ServerController and IncomingFilesModel.
+    let incoming_entries: Arc<RwLock<Vec<IncomingFileEntry>>> =
+        Arc::new(RwLock::new(Vec::new()));
+
     let server_controller = RefCell::new(ServerController::new(
         identity.clone(),
         discovery_handle.clone(),
+        incoming_entries.clone(),
     ));
+
     let settings_controller = RefCell::new(SettingsController::new(settings));
     let local_ips_model = RefCell::new(LocalIpsModel::new());
     let device_list_model = RefCell::new(DeviceListModel::new());
+    let incoming_files_model = RefCell::new(IncomingFilesModel::new(incoming_entries.clone()));
     let discovery_controller = RefCell::new(DiscoveryController::new(
         discovery_handle.clone(),
     ));
@@ -113,6 +124,10 @@ fn main() -> ExitCode {
                 sc.poll();
             }
             {
+                let mut im = incoming_files_model.borrow_mut();
+                im.refresh();
+            }
+            {
                 let mut dc = discovery_controller.borrow_mut();
                 dc.poll();
                 let c = dc.device_count();
@@ -141,6 +156,7 @@ fn main() -> ExitCode {
         engine.set_object_property("localIpsModel".into(), QObjectPinned::new(&local_ips_model));
         engine.set_object_property("discoveryController".into(), QObjectPinned::new(&discovery_controller));
         engine.set_object_property("deviceListModel".into(), QObjectPinned::new(&device_list_model));
+        engine.set_object_property("incomingFilesModel".into(), QObjectPinned::new(&incoming_files_model));
     }
 
     engine.load_file("qrc:/qml/Main.qml".into());

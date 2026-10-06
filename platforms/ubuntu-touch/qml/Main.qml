@@ -22,6 +22,12 @@ MainView {
     PageStack {
         id: mainStack
         Component.onCompleted: push(shellComponent)
+        Loader {
+            anchors.fill: parent
+            active: serverController.incomingActive
+            source: "dialogs/IncomingTransferDialog.qml"
+            onLoaded: item.theme = theme
+        }
     }
 
     Component {
@@ -39,7 +45,7 @@ MainView {
 
     // Drains server events on the Qt thread.
     Timer {
-        interval: 200
+        interval: 250
         running: true
         repeat: true
         triggeredOnStart: true
@@ -49,6 +55,9 @@ MainView {
             }
             if (typeof discoveryController !== "undefined") {
                 discoveryController.poll()
+            }
+            if (typeof incomingFilesModel !== "undefined") {
+                incomingFilesModel.refresh()
             }
         }
     }

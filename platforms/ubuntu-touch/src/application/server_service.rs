@@ -63,6 +63,17 @@ pub struct IncomingSession {
     pub files: Vec<IncomingFile>,
 }
 
+#[derive(Clone, Debug)]
+pub struct IncomingFileEntry {
+    pub file_id: String,
+    pub file_name: String,
+    pub size: u64,
+    pub progress: f64,   // 0.0 .. 1.0
+    pub status: String,  // "queue" | "sending" | "finished" | "failed"
+    pub path: Option<String>,
+    pub error: Option<String>,
+}
+
 // -------------------- commands & events --------------------
 
 #[derive(Debug)]
