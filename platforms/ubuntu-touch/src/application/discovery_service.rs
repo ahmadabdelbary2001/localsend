@@ -8,6 +8,7 @@
 // registered with our HTTP server).
 
 use std::sync::{Arc, Mutex};
+use std::sync::RwLock;
 use std::thread;
 
 use anyhow::Result;
@@ -71,12 +72,14 @@ pub enum DiscoveryEvent {
 pub struct DiscoveryServiceHandle {
     cmd_tx: mpsc::UnboundedSender<DiscoveryCommand>,
     evt_rx: Mutex<Option<mpsc::UnboundedReceiver<DiscoveryEvent>>>,
+    snapshot_cache: Arc<RwLock<Vec<DeviceSnapshot>>>,
 }
 
 impl DiscoveryServiceHandle {
     pub fn spawn() -> Self {
         let (cmd_tx, mut cmd_rx) = mpsc::unbounded_channel::<DiscoveryCommand>();
         let (evt_tx, evt_rx) = mpsc::unbounded_channel::<DiscoveryEvent>();
+        let snapshot_cache = Arc::new(RwLock::new(Vec::new()));
 
         thread::Builder::new()
             .name("localsend-discovery".into())
@@ -153,6 +156,7 @@ impl DiscoveryServiceHandle {
         Self {
             cmd_tx,
             evt_rx: Mutex::new(Some(evt_rx)),
+            snapshot_cache,
         }
     }
 
@@ -163,7 +167,23 @@ impl DiscoveryServiceHandle {
     pub fn try_recv_event(&self) -> Option<DiscoveryEvent> {
         let mut guard = self.evt_rx.lock().ok()?;
         let rx = guard.as_mut()?;
-        rx.try_recv().ok()
+        let evt = rx.try_recv().ok()?;
+        // Keep the snapshot cache fresh.
+        if let DiscoveryEvent::DevicesChanged(ref snaps) = evt {
+            if let Ok(mut g) = self.snapshot_cache.write() {
+                *g = snaps.clone();
+            }
+        }
+        Some(evt)
+    }
+
+    /// Latest snapshot of discovered devices, cached from the last
+    /// DevicesChanged event that was drained via try_recv_event.
+    pub fn snapshot(&self) -> Vec<DeviceSnapshot> {
+        self.snapshot_cache
+            .read()
+            .map(|g| g.clone())
+            .unwrap_or_default()
     }
 }
 

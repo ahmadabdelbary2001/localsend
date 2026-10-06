@@ -8,41 +8,43 @@ Page {
     id: page
     property var theme
 
+    ContentHubPicker {
+        id: picker
+        onFilesPicked: function(paths) {
+            if (typeof pendingFingerprint !== "undefined" && pendingFingerprint) {
+                sendController.send_files(pendingFingerprint, JSON.stringify(paths))
+                pendingFingerprint = ""
+            }
+        }
+    }
+
+    property string pendingFingerprint: ""
+
     ColumnLayout {
         anchors {
-            top: parent.top
-            left: parent.left
-            right: parent.right
-            bottom: parent.bottom
+            top: parent.top; left: parent.left; right: parent.right; bottom: parent.bottom
             margins: units.gu(1.5)
         }
         spacing: units.gu(1)
 
-        // Header row: title + scan button
         RowLayout {
             Layout.fillWidth: true
-
             Label {
                 Layout.fillWidth: true
                 text: translator.tr("sendTab.nearbyDevices")
                 fontSize: "medium"
             }
-
             Button {
-                text: discoveryController.scanning
-                      ? "…"
-                      : translator.tr("sendTab.scan")
+                text: discoveryController.scanning ? "…" : translator.tr("sendTab.scan")
                 enabled: !discoveryController.scanning
                 onClicked: {
                     discoveryController.scan_now()
-                    // drain events right away
                     discoveryController.poll()
-                    refreshModel()
+                    page.refreshModel()
                 }
             }
         }
 
-        // Empty state
         Label {
             visible: deviceListModel.rowCount() === 0
             Layout.alignment: Qt.AlignHCenter
@@ -51,7 +53,6 @@ Page {
             opacity: 0.5
         }
 
-        // Device list
         ListView {
             id: list
             Layout.fillWidth: true
@@ -72,21 +73,18 @@ Page {
                 https: model.https
 
                 onTapped: {
-                    console.log("TODO: send files to " + model.alias)
+                    page.pendingFingerprint = model.fingerprint
+                    picker.open()
                 }
             }
         }
     }
 
     function refreshModel() {
-        var dc = discoveryController
-        // Force a re-read of the model. The actual replacement happens
-        // in Rust's headless/QML loop; here we just nudge the view.
         list.model = null
         list.model = deviceListModel
     }
 
-    // Refresh whenever discovery produces new devices.
     Connections {
         target: discoveryController
         function onStateChanged() {

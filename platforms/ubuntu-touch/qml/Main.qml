@@ -28,6 +28,12 @@ MainView {
             source: "dialogs/IncomingTransferDialog.qml"
             onLoaded: item.theme = theme
         }
+        Loader {
+            anchors.fill: parent
+            active: sendController.active
+            source: "dialogs/SendProgressDialog.qml"
+            onLoaded: item.theme = theme
+        }
     }
 
     Component {
@@ -50,15 +56,11 @@ MainView {
         repeat: true
         triggeredOnStart: true
         onTriggered: {
-            if (typeof serverController !== "undefined") {
-                serverController.poll()
-            }
-            if (typeof discoveryController !== "undefined") {
-                discoveryController.poll()
-            }
-            if (typeof incomingFilesModel !== "undefined") {
-                incomingFilesModel.refresh()
-            }
+            if (typeof serverController !== "undefined") serverController.poll()
+            if (typeof discoveryController !== "undefined") discoveryController.poll()
+            if (typeof incomingFilesModel !== "undefined") incomingFilesModel.refresh()
+            if (typeof sendController !== "undefined") sendController.poll()
+            if (typeof outgoingFilesModel !== "undefined") outgoingFilesModel.refresh()
         }
     }
 }
