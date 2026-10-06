@@ -30,4 +30,4 @@ anyhow = "1"
 tracing = "0.1"
 tracing-log = "0.2"
 
-localsend = { path = "../../packages/core", features = ["http"] }
+localsend = { path = "../../packages/core", features = ["discovery"] }

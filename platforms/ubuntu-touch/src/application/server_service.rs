@@ -48,6 +48,10 @@ pub enum ServerCommand {
 #[derive(Debug, Clone)]
 pub enum ServerEvent {
     Snapshot(ServerSnapshot),
+    Register {
+        ip: String,
+        info: localsend::http::dto_v2::RegisterDtoV2,
+    },
     Log(String),
 }
 
@@ -253,10 +257,10 @@ async fn start_one(
         while let Some(event) = core_event_rx.recv().await {
             match event {
                 ServerEventV2::Register { ip, info } => {
-                    let _ = evt_tx.send(ServerEvent::Log(format!(
-                        "register: {} @ {} ({})",
-                        info.alias, ip, info.fingerprint
-                    )));
+                    let _ = evt_tx.send(ServerEvent::Register {
+                        ip: ip.to_string(),
+                        info,
+                    });
                 }
                 ServerEventV2::PrepareUpload {
                     session_id,

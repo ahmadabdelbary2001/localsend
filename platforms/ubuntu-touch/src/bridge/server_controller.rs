@@ -12,6 +12,9 @@ use crate::application::identity_service::DeviceIdentity;
 use crate::application::server_service::{
     ServerCommand, ServerEvent, ServerHandle, ServerSnapshot,
 };
+use crate::application::discovery_service::{
+    build_discovered_device, DiscoveryCommand, DiscoveryServiceHandle,
+};
 
 #[derive(QObject)]
 pub struct ServerController {
@@ -29,14 +32,16 @@ pub struct ServerController {
     stop: qt_method!(fn(&mut self)),
     poll: qt_method!(fn(&mut self)),
 
-    /// Not exposed to QML.
     handle: Option<Arc<ServerHandle>>,
-    /// Last snapshot for change detection.
+    discovery: Option<Arc<DiscoveryServiceHandle>>,
     last_snapshot: ServerSnapshot,
 }
 
 impl ServerController {
-    pub fn new(identity: Arc<DeviceIdentity>) -> Self {
+    pub fn new(
+        identity: Arc<DeviceIdentity>,
+        discovery: Arc<DiscoveryServiceHandle>,
+    ) -> Self {
         let handle = ServerHandle::spawn(identity);
         Self {
             base: Default::default(),
@@ -50,6 +55,7 @@ impl ServerController {
             stop: Default::default(),
             poll: Default::default(),
             handle: Some(Arc::new(handle)),
+            discovery: Some(discovery),
             last_snapshot: ServerSnapshot::default(),
         }
     }
@@ -110,6 +116,22 @@ impl ServerController {
 
                     if changed {
                         self.state_changed();
+                    }
+                }
+                ServerEvent::Register { ip, info } => {
+                    if let Some(dh) = &self.discovery {
+                        let device = build_discovered_device(
+                            info.alias,
+                            info.version,
+                            info.device_model,
+                            info.device_type,
+                            info.fingerprint,
+                            ip,
+                            info.port,
+                            info.protocol,
+                            info.download,
+                        );
+                        dh.send(DiscoveryCommand::AddDevice(device));
                     }
                 }
                 ServerEvent::Log(msg) => {

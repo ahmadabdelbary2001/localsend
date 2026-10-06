@@ -11,9 +11,13 @@ use std::time::Duration;
 use qmetaobject::prelude::*;
 use qmetaobject::QObjectPinned;
 
+use crate::application::discovery_service::{
+    DiscoveryParams, DiscoveryServiceHandle,
+};
 use crate::application::identity_service::DeviceIdentity;
 use crate::application::settings_service::SettingsService;
 use crate::bridge::app::AppController;
+use crate::bridge::discovery_controller::DiscoveryController;
 use crate::bridge::home_controller::HomeController;
 use crate::bridge::server_controller::ServerController;
 use crate::bridge::settings_controller::SettingsController;
@@ -21,8 +25,6 @@ use crate::bridge::translator::Translator;
 use crate::model::local_ips_model::LocalIpsModel;
 
 fn main() -> ExitCode {
-    // env_logger reads `log::*` records; tracing-log forwards `tracing::*`
-    // records from `localsend` core into the same logger.
     env_logger::Builder::from_env(
         env_logger::Env::default().default_filter_or("info"),
     )
@@ -47,17 +49,26 @@ fn main() -> ExitCode {
 
     let settings_snapshot = settings.snapshot();
 
+    // Shared discovery service. Both ServerController (to feed peers that
+    // register with us) and DiscoveryController (to expose to QML) hold it.
+    let discovery_handle = Arc::new(DiscoveryServiceHandle::spawn());
+
     resources::register();
 
     let translator = RefCell::new(Translator::new());
     let app_controller = RefCell::new(AppController::new());
     let home_controller = RefCell::new(HomeController::new());
-    let server_controller = RefCell::new(ServerController::new(identity));
+    let server_controller = RefCell::new(ServerController::new(
+        identity.clone(),
+        discovery_handle.clone(),
+    ));
     let settings_controller = RefCell::new(SettingsController::new(settings));
     let local_ips_model = RefCell::new(LocalIpsModel::new());
+    let discovery_controller = RefCell::new(DiscoveryController::new(
+        discovery_handle.clone(),
+    ));
 
-    // Start the server before any QML work, so a QML failure
-    // does not prevent the server from running.
+    // Start server first.
     {
         let mut sc = server_controller.borrow_mut();
         sc.start_now(
@@ -68,16 +79,43 @@ fn main() -> ExitCode {
         );
     }
 
+    // Start discovery.
+    {
+        let mut dc = discovery_controller.borrow_mut();
+        dc.start_now(DiscoveryParams {
+            alias: settings_snapshot.alias.clone(),
+            port: settings_snapshot.port,
+            https: settings_snapshot.https,
+            fingerprint: identity.fingerprint.clone(),
+            cert_pem: identity.certificate_pem.clone(),
+            private_key_pem: identity.private_key_pem.clone(),
+        });
+    }
+
     // ---------- HEADLESS MODE ----------
     if std::env::var("LOCALSEND_HEADLESS").is_ok() {
-        log::info!("HEADLESS mode: server starting, Ctrl+C to stop.");
-        // Drain server events forever, so log/errors are visible.
+        log::info!("HEADLESS mode: server + discovery running. Ctrl+C to stop.");
+        // Kick off one scan so devices respond.
+        {
+            let mut dc = discovery_controller.borrow_mut();
+            dc.scan_now();
+        }
+        let mut last_count: i32 = -1;
         loop {
             {
                 let mut sc = server_controller.borrow_mut();
                 sc.poll();
             }
-            std::thread::sleep(Duration::from_millis(200));
+            {
+                let mut dc = discovery_controller.borrow_mut();
+                dc.poll();
+                let c = dc.device_count();
+                if c != last_count {
+                    log::info!("devices: {}", c);
+                    last_count = c;
+                }
+            }
+            std::thread::sleep(Duration::from_millis(500));
         }
     }
 
@@ -90,6 +128,7 @@ fn main() -> ExitCode {
         engine.set_object_property("serverController".into(), QObjectPinned::new(&server_controller));
         engine.set_object_property("settingsController".into(), QObjectPinned::new(&settings_controller));
         engine.set_object_property("localIpsModel".into(), QObjectPinned::new(&local_ips_model));
+        engine.set_object_property("discoveryController".into(), QObjectPinned::new(&discovery_controller));
     }
 
     engine.load_file("qrc:/qml/Main.qml".into());
