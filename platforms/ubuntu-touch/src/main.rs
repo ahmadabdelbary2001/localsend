@@ -95,13 +95,17 @@ fn main() -> ExitCode {
     }
 
     // ---------- HEADLESS MODE ----------
-    if std::env::var("LOCALSEND_HEADLESS").is_ok() {
-        log::info!("HEADLESS mode: server + discovery running. Ctrl+C to stop.");
-        // Kick off one scan so devices respond.
+    if std::env::var("LOCALSEND_AUTO_ACCEPT").is_ok() {
+        {
+            let mut sc = server_controller.borrow_mut();
+            sc.set_auto_accept(true);
+        }
+        log::info!("auto-accept enabled");
         {
             let mut dc = discovery_controller.borrow_mut();
             dc.scan_now();
         }
+
         let mut last_count: i32 = -1;
         loop {
             {

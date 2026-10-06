@@ -138,7 +138,73 @@ impl ServerController {
                     log::info!("[server] {}", msg);
                     self.log_message(QString::from(msg));
                 }
+                ServerEvent::PrepareUpload(session) => {
+                    log::info!(
+                        "[server] incoming session {} from {} ({} files)",
+                        session.session_id,
+                        session.sender_alias,
+                        session.files.len()
+                    );
+                    self.log_message(QString::from(format!(
+                        "Incoming: {} files from {}",
+                        session.files.len(),
+                        session.sender_alias
+                    )));
+                }
+                ServerEvent::PrepareUploadAborted { session_id } => {
+                    log::info!("[server] prepare-upload aborted: {session_id}");
+                    self.log_message(QString::from(format!(
+                        "Sender aborted session {session_id}"
+                    )));
+                }
+                ServerEvent::FileUploadStarted { session_id, file_id } => {
+                    log::info!("[server] file upload started: {session_id}/{file_id}");
+                }
+                ServerEvent::FileUploadProgress {
+                    session_id,
+                    file_id,
+                    progress,
+                } => {
+                    // TODO: forward to IncomingFilesModel.
+                    // For now log at debug level to avoid spam.
+                    log::debug!("[server] progress {session_id}/{file_id}: {progress:.2}");
+                }
+                ServerEvent::FileUploadResult {
+                    session_id,
+                    file_id,
+                    path,
+                    error,
+                } => match (path, error) {
+                    (Some(p), _) => {
+                        log::info!("[server] file saved: {session_id}/{file_id} -> {p}");
+                        self.log_message(QString::from(format!("Saved: {p}")));
+                    }
+                    (None, Some(e)) => {
+                        log::warn!("[server] file failed: {session_id}/{file_id}: {e}");
+                        self.log_message(QString::from(format!("Failed: {e}")));
+                    }
+                    (None, None) => {
+                        log::warn!("[server] file ended without path or error: {session_id}/{file_id}");
+                    }
+                },
+                ServerEvent::SessionEnd {
+                    session_id,
+                    cancelled,
+                } => {
+                    log::info!(
+                        "[server] session ended: {session_id} (cancelled={cancelled})"
+                    );
+                    self.log_message(QString::from(format!(
+                        "Session ended: {session_id}"
+                    )));
+                }
             }
+        }
+    }
+
+    pub fn set_auto_accept(&mut self, v: bool) {
+        if let Some(h) = &self.handle {
+            h.send(ServerCommand::SetAutoAccept(v));
         }
     }
 }
