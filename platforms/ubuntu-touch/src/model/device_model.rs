@@ -5,14 +5,13 @@
 
 use qmetaobject::prelude::*;
 
-use localsend::discovery::StatefulDevice;
-use localsend::model::discovery::ProtocolType;
+use crate::application::discovery_service::DeviceSnapshot;
 
 #[derive(QObject, Default)]
 pub struct DeviceListModel {
     base: qt_base_class!(trait QAbstractListModel),
 
-    items: Vec<StatefulDevice>,
+    items: Vec<DeviceSnapshot>,
 }
 
 impl DeviceListModel {
@@ -20,9 +19,8 @@ impl DeviceListModel {
         Self::default()
     }
 
-    /// Replace the whole list. Called from the Qt thread, after
-    /// DiscoveryController.poll() has a fresh snapshot.
-    pub fn replace_all(&mut self, items: Vec<StatefulDevice>) {
+    /// Replace the whole list. Called on the Qt thread.
+    pub fn replace_all(&mut self, items: Vec<DeviceSnapshot>) {
         self.begin_reset_model();
         self.items = items;
         self.end_reset_model();
@@ -36,47 +34,18 @@ impl QAbstractListModel for DeviceListModel {
 
     fn data(&self, index: QModelIndex, role: i32) -> QVariant {
         let i = index.row() as usize;
-        let Some(sd) = self.items.get(i) else {
+        let Some(d) = self.items.get(i) else {
             return QVariant::default();
         };
-        let d = &sd.device;
 
         match role {
             0 => QString::from(d.fingerprint.clone()).into(),
             1 => QString::from(d.alias.clone()).into(),
             2 => QString::from(d.device_model.clone().unwrap_or_default()).into(),
-            3 => QString::from(
-                d.device_type
-                    .as_ref()
-                    .map(|dt| format!("{dt:?}").to_lowercase())
-                    .unwrap_or_default(),
-            )
-            .into(),
-            4 => {
-                // ip (from best channel)
-                let ip = sd
-                    .get_best_channel()
-                    .and_then(|c| c.http())
-                    .map(|h| h.host.clone())
-                    .unwrap_or_default();
-                QString::from(ip).into()
-            }
-            5 => {
-                let port = sd
-                    .get_best_channel()
-                    .and_then(|c| c.http())
-                    .map(|h| h.port as i32)
-                    .unwrap_or(0);
-                QVariant::from(port)
-            }
-            6 => {
-                let https = sd
-                    .get_best_channel()
-                    .and_then(|c| c.http())
-                    .map(|h| h.protocol == ProtocolType::Https)
-                    .unwrap_or(false);
-                QVariant::from(https)
-            }
+            3 => QString::from(d.device_type.clone().unwrap_or_default()).into(),
+            4 => QString::from(d.ip.clone()).into(),
+            5 => QVariant::from(d.port as i32),
+            6 => QVariant::from(d.https),
             7 => QVariant::from(d.download),
             _ => QVariant::default(),
         }

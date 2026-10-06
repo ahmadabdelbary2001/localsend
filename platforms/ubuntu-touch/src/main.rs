@@ -23,6 +23,7 @@ use crate::bridge::server_controller::ServerController;
 use crate::bridge::settings_controller::SettingsController;
 use crate::bridge::translator::Translator;
 use crate::model::local_ips_model::LocalIpsModel;
+use crate::model::device_model::DeviceListModel;
 
 fn main() -> ExitCode {
     env_logger::Builder::from_env(
@@ -64,6 +65,7 @@ fn main() -> ExitCode {
     ));
     let settings_controller = RefCell::new(SettingsController::new(settings));
     let local_ips_model = RefCell::new(LocalIpsModel::new());
+    let device_list_model = RefCell::new(DeviceListModel::new());
     let discovery_controller = RefCell::new(DiscoveryController::new(
         discovery_handle.clone(),
     ));
@@ -115,6 +117,11 @@ fn main() -> ExitCode {
                     last_count = c;
                 }
             }
+            {
+                let dc = discovery_controller.borrow();
+                let mut dm = device_list_model.borrow_mut();
+                dm.replace_all(dc.snapshot().to_vec());
+            }
             std::thread::sleep(Duration::from_millis(500));
         }
     }
@@ -129,6 +136,7 @@ fn main() -> ExitCode {
         engine.set_object_property("settingsController".into(), QObjectPinned::new(&settings_controller));
         engine.set_object_property("localIpsModel".into(), QObjectPinned::new(&local_ips_model));
         engine.set_object_property("discoveryController".into(), QObjectPinned::new(&discovery_controller));
+        engine.set_object_property("deviceListModel".into(), QObjectPinned::new(&device_list_model));
     }
 
     engine.load_file("qrc:/qml/Main.qml".into());

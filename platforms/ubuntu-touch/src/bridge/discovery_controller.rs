@@ -128,4 +128,9 @@ impl DiscoveryController {
     pub fn device_count(&self) -> i32 {
         self.device_count
     }
+
+    /// Rust-only accessor for the current snapshot (updated on poll).
+    pub fn snapshot(&self) -> &[DeviceSnapshot] {
+        &self.snapshot
+    }
 }

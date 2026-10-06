@@ -47,6 +47,9 @@ MainView {
             if (typeof serverController !== "undefined") {
                 serverController.poll()
             }
+            if (typeof discoveryController !== "undefined") {
+                discoveryController.poll()
+            }
         }
     }
 }
