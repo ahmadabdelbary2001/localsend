@@ -6,19 +6,16 @@ build:
   - |
     set -euo pipefail
     echo "=== staging prebuilt binary ==="
-    ls -la prebuilt/ || true
-
-    mkdir -p "$INSTALL_DIR/usr/bin" \
-             "$INSTALL_DIR/apparmor" \
-             "$INSTALL_DIR/qml" \
-             "$INSTALL_DIR/assets"
-
+    ls -la prebuilt/
+    mkdir -p "$INSTALL_DIR/usr/bin"
+    mkdir -p "$INSTALL_DIR/apparmor"
+    mkdir -p "$INSTALL_DIR/qml"
+    mkdir -p "$INSTALL_DIR/assets"
     cp prebuilt/localsend-ubuntu-touch "$INSTALL_DIR/usr/bin/"
     cp apparmor/localsend-ubuntu-touch.apparmor "$INSTALL_DIR/apparmor/"
     cp localsend-ubuntu-touch.desktop "$INSTALL_DIR/"
-    cp -r qml/* "$INSTALL_DIR/qml/"
-    cp -r assets/* "$INSTALL_DIR/assets/" 2>/dev/null || true
-
+    cp -r qml/. "$INSTALL_DIR/qml/"
+    cp -r assets/. "$INSTALL_DIR/assets/" 2>/dev/null || true
     echo "=== staged ==="
     ls -la "$INSTALL_DIR/usr/bin/"
 

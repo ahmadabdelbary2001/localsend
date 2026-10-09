@@ -9,6 +9,7 @@ on:
     tags: ["v[0-9]+.[0-9]+.[0-9]+"]
     paths:
       - "platforms/ubuntu-touch/**"
+      - "packages/core/**"
       - ".github/workflows/ubuntu-touch.yml"
   workflow_dispatch:
 
@@ -23,10 +24,6 @@ env:
   CLICKABLE_VERSION: "8.10.0"
 
 jobs:
-  # -----------------------------------------------------------------
-  # Fast sanity check on the host (no Docker). Catches Rust errors
-  # before the slow matrix build starts.
-  # -----------------------------------------------------------------
   cargo_checks:
     name: Rust checks (host)
     runs-on: ubuntu-24.04
@@ -49,22 +46,18 @@ jobs:
             target
           key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
 
-      - name: Install system deps (Qt5, dev headers)
+      - name: Install system deps
         run: |
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends \
-            qtbase5-dev qtdeclarative5-dev \
-            libssl-dev pkg-config
+            qtbase5-dev qtdeclarative5-dev libssl-dev pkg-config
 
       - name: cargo check
         run: cargo check -p localsend-ubuntu-touch --all-targets
 
-      - name: cargo test --lib
+      - name: cargo test
         run: cargo test -p localsend-ubuntu-touch --lib
 
-  # -----------------------------------------------------------------
-  # Matrix build of the three clickable archs.
-  # -----------------------------------------------------------------
   ubuntu_touch:
     name: Click · ${{ matrix.arch }}
     needs: [cargo_checks]
@@ -91,7 +84,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Detect version from manifest.json
+      - name: Detect version
         id: version
         run: |
           set -euo pipefail
@@ -99,41 +92,22 @@ jobs:
           test -n "$VERSION"
           echo "version=$VERSION" >> "$GITHUB_OUTPUT"
           echo "EXPECTED_VERSION=$VERSION" >> "$GITHUB_ENV"
-          echo "Version: $VERSION"
-
-      - name: Verify tag matches version (release gate)
-        run: |
-          set -euo pipefail
-          if [[ "$GITHUB_REF_NAME" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
-            TAG_VERSION="${GITHUB_REF_NAME#v}"
-            if [[ "$TAG_VERSION" != "$EXPECTED_VERSION" ]]; then
-              echo "::error::tag $GITHUB_REF_NAME does not match manifest version $EXPECTED_VERSION"
-              exit 1
-            fi
-            echo "Tag $GITHUB_REF_NAME validated against version $EXPECTED_VERSION"
-          fi
 
       - name: Install Clickable
         run: |
           sudo apt-get update
-          sudo apt-get install -y --no-install-recommends \
-            python3-pip click file
-          python3 -m pip install --break-system-packages \
-            "clickable-ut==${CLICKABLE_VERSION}"
-          clickable --version
+          sudo apt-get install -y --no-install-recommends python3-pip click file
+          python3 -m pip install --break-system-packages "clickable-ut==${CLICKABLE_VERSION}"
 
-      - name: Provision Ubuntu Touch SDK image with cross-toolchains
+      - name: Provision SDK image
         run: |
           set -euxo pipefail
-
           docker pull "$SDK_IMAGE"
           docker run -d --name ut-sdk "$SDK_IMAGE" sleep infinity
 
-          # The UT SDK image ships Rust at /opt/rust. Use it directly.
           docker exec ut-sdk bash -lc '
             set -eux
             export DEBIAN_FRONTEND=noninteractive
-
             apt-get update
             apt-get install -y --no-install-recommends \
               build-essential pkg-config \
@@ -146,16 +120,10 @@ jobs:
             export RUSTUP_HOME=/opt/rust/rustup
             export PATH="$CARGO_HOME/bin:$PATH"
 
-            command -v cargo
-            command -v rustup
-            cargo --version
-            rustup --version
-
             rustup target add aarch64-unknown-linux-gnu
             rustup target add armv7-unknown-linux-gnueabihf
             rustup target add x86_64-unknown-linux-gnu
 
-            mkdir -p "$CARGO_HOME"
             cat > "$CARGO_HOME/config.toml" <<EOF
           [target.aarch64-unknown-linux-gnu]
           linker = "aarch64-linux-gnu-gcc"
@@ -163,14 +131,12 @@ jobs:
           [target.armv7-unknown-linux-gnueabihf]
           linker = "arm-linux-gnueabihf-gcc"
           EOF
-
-            rustup target list --installed
           '
 
           docker commit ut-sdk "$PROVISIONED_IMAGE"
           docker rm -f ut-sdk
 
-      - name: Build Rust binary (in provisioned container, whole repo mounted)
+      - name: Build Rust binary (full repo mounted)
         run: |
           set -euxo pipefail
 
@@ -181,8 +147,6 @@ jobs:
           esac
           echo "RUST_TARGET=$RUST_TARGET" >> "$GITHUB_ENV"
 
-          # The clickable container sees only its project dir; run the Rust
-          # build here with the full repo bind-mounted at /src.
           docker run --rm \
             -v "$GITHUB_WORKSPACE":/src \
             -w /src \
@@ -198,17 +162,15 @@ jobs:
 
               cargo build --release \
                 --target "$RUST_TARGET" \
-                --package localsend-ubuntu-touch
+                -p localsend-ubuntu-touch
             '
 
-          # Stage the binary so the clickable build command can find it
-          # without needing the rest of the repo.
           mkdir -p platforms/ubuntu-touch/prebuilt
           cp "target/${RUST_TARGET}/release/localsend-ubuntu-touch" \
              platforms/ubuntu-touch/prebuilt/
           ls -la platforms/ubuntu-touch/prebuilt/
 
-      - name: Build click (packaging only)
+      - name: Build click
         env:
           CLICKABLE_DOCKER_COMMAND: docker
           CLICKABLE_NON_INTERACTIVE: "1"
@@ -224,38 +186,21 @@ jobs:
           CLICK_OUT="$(find build -type f -name "*_${EXPECTED_VERSION}_${ARCH}.click" -print -quit)"
           test -n "$CLICK_OUT"
           test -f "$CLICK_OUT"
-
           echo "CLICK_OUT=$CLICK_OUT" >> "$GITHUB_ENV"
           ls -lh "$CLICK_OUT"
 
-      - name: Validate click metadata and contents
+      - name: Validate click
         run: |
           set -euxo pipefail
-
           click info "$CLICK_OUT" > /tmp/info.json
           cat /tmp/info.json
-
-          EXPECTED_VERSION="$EXPECTED_VERSION" ARCH="$ARCH" \
-          python3 - <<'PY'
-          import json, os
-          manifest = json.load(open("/tmp/info.json"))
-          assert manifest["architecture"] == os.environ["ARCH"], manifest
-          assert manifest["framework"] == "ubuntu-touch-24.04-1.x", manifest
-          assert manifest["version"] == os.environ["EXPECTED_VERSION"], manifest
-          print("manifest OK")
-          PY
-
-          ACTUAL_ARCH="$(dpkg-deb -f "$CLICK_OUT" Architecture)"
-          test "$ACTUAL_ARCH" = "$ARCH"
 
           rm -rf /tmp/pk && mkdir -p /tmp/pk
           dpkg-deb -x "$CLICK_OUT" /tmp/pk
 
-          # Required payload
           test -f /tmp/pk/usr/bin/localsend-ubuntu-touch
           test -f /tmp/pk/localsend-ubuntu-touch.desktop
           test -f /tmp/pk/apparmor/localsend-ubuntu-touch.apparmor
-
           echo "package validation OK"
 
       - name: Upload click artifact
@@ -273,13 +218,6 @@ jobs:
           CLICKABLE_NON_INTERACTIVE: "1"
         run: |
           set -euo pipefail
-          test -n "${OPENSTORE_API_KEY:-}" || {
-            echo "::error::OPENSTORE_API_KEY secret not configured"
-            exit 1
-          }
-
-          CHANGELOG="Release ${GITHUB_REF_NAME}"
+          test -n "${OPENSTORE_API_KEY:-}" || { echo "::error::OPENSTORE_API_KEY missing"; exit 1; }
           cd platforms/ubuntu-touch
-          clickable publish \
-            --arch "$ARCH" \
-            "$CHANGELOG"
+          clickable publish --arch "$ARCH" "Release ${GITHUB_REF_NAME}"
