@@ -1,19 +1,11 @@
 clickable_minimum_required: 8.0.0
 
 builder: custom
-build:
-  - cargo build --release --target aarch64-unknown-linux-gnu
-  - mkdir -p ${INSTALL_DIR}/bin
-  - cp target/aarch64-unknown-linux-gnu/release/localsend-ubuntu-touch ${INSTALL_DIR}/bin/
 
-install_dir: ${INSTALL_DIR}
+build:
+  - ./build.sh
 
 kill: localsend-ubuntu-touch
-
-# Qt 5, not Qt 6.
-dependencies_host:
-  - qtbase5-dev
-  - qtdeclarative5-dev
 
 dependencies_target:
   - qtbase5-dev
@@ -24,12 +16,10 @@ dependencies_target:
   - qml-module-qtquick-layouts
   - qml-module-qtquick-window2
   - qml-module-qtqml-workerscript2
-  - liblomiri-connectivity-qt1-1
-  - lomiri-components
-  - lomiri-components-extras
   - qml-module-lomiri-components
   - qml-module-lomiri-components-extras
   - qml-module-lomiri-content
   - qml-module-lomiri-content-doc
-
-app: localsend-ubuntu-touch
+  - liblomiri-connectivity-qt1-1
+  - lomiri-components
+  - lomiri-components-extras
