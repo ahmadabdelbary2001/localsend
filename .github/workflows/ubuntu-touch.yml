@@ -1,7 +1,7 @@
 name: ubuntu-touch
 
 run-name: >-
-  ${{ github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v') && format('Release · {0}', github.ref_name) || format('CI · {0}', github.ref_name) }}
+  ${{ startsWith(github.ref, 'refs/tags/v') && format('Release · {0}', github.ref_name) || format('CI · {0}', github.ref_name) }}
 
 on:
   push:
@@ -20,22 +20,16 @@ concurrency:
 permissions:
   contents: read
 
-env:
-  CLICKABLE_VERSION: "8.10.0"
-
 jobs:
   cargo_checks:
     name: Rust checks (host)
     runs-on: ubuntu-24.04
     timeout-minutes: 20
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
-        with:
-          components: rustfmt, clippy
 
       - name: Cache cargo
         uses: actions/cache@v4
@@ -46,7 +40,7 @@ jobs:
             target
           key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
 
-      - name: Install system deps
+      - name: Install Qt5 dev headers
         run: |
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends \
@@ -69,35 +63,32 @@ jobs:
       matrix:
         include:
           - arch: arm64
+            rust_target: aarch64-unknown-linux-gnu
             sdk_image: docker.io/clickable/ci-ut24.04-1.x-arm64
           - arch: armhf
+            rust_target: armv7-unknown-linux-gnueabihf
             sdk_image: docker.io/clickable/ci-ut24.04-1.x-armhf
           - arch: amd64
+            rust_target: x86_64-unknown-linux-gnu
             sdk_image: docker.io/clickable/ci-ut24.04-1.x-amd64
 
     env:
       ARCH: ${{ matrix.arch }}
+      RUST_TARGET: ${{ matrix.rust_target }}
       SDK_IMAGE: ${{ matrix.sdk_image }}
       PROVISIONED_IMAGE: localsend-ut-sdk:24.04-1.x-${{ matrix.arch }}
 
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
-      - name: Detect version
-        id: version
+      - name: Read version from manifest.json
+        id: v
         run: |
           set -euo pipefail
-          VERSION="$(python3 -c 'import json; print(json.load(open("platforms/ubuntu-touch/manifest.json"))["version"])')"
-          test -n "$VERSION"
-          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
-          echo "EXPECTED_VERSION=$VERSION" >> "$GITHUB_ENV"
-
-      - name: Install Clickable
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y --no-install-recommends python3-pip click file
-          python3 -m pip install --break-system-packages "clickable-ut==${CLICKABLE_VERSION}"
+          V="$(python3 -c 'import json; print(json.load(open("platforms/ubuntu-touch/manifest.json"))["version"])')"
+          test -n "$V"
+          echo "version=$V" >> "$GITHUB_OUTPUT"
+          echo "EXPECTED_VERSION=$V" >> "$GITHUB_ENV"
 
       - name: Provision SDK image
         run: |
@@ -113,13 +104,11 @@ jobs:
               build-essential pkg-config \
               gcc-aarch64-linux-gnu gcc-arm-linux-gnueabihf \
               libc6-dev-arm64-cross libc6-dev-armhf-cross \
-              libssl-dev \
-              qtbase5-dev qtdeclarative5-dev
+              libssl-dev qtbase5-dev qtdeclarative5-dev click file
 
             export CARGO_HOME=/opt/rust/cargo
             export RUSTUP_HOME=/opt/rust/rustup
             export PATH="$CARGO_HOME/bin:$PATH"
-
             rustup target add aarch64-unknown-linux-gnu
             rustup target add armv7-unknown-linux-gnueabihf
             rustup target add x86_64-unknown-linux-gnu
@@ -132,58 +121,63 @@ jobs:
           linker = "arm-linux-gnueabihf-gcc"
           EOF
           '
-
           docker commit ut-sdk "$PROVISIONED_IMAGE"
           docker rm -f ut-sdk
 
-      - name: Build Rust binary (full repo mounted)
+      - name: Build + assemble + package (single container)
         run: |
           set -euxo pipefail
-
-          case "$ARCH" in
-            arm64) RUST_TARGET=aarch64-unknown-linux-gnu ;;
-            armhf) RUST_TARGET=armv7-unknown-linux-gnueabihf ;;
-            amd64) RUST_TARGET=x86_64-unknown-linux-gnu ;;
-          esac
-          echo "RUST_TARGET=$RUST_TARGET" >> "$GITHUB_ENV"
 
           docker run --rm \
             -v "$GITHUB_WORKSPACE":/src \
             -w /src \
+            -e ARCH="$ARCH" \
             -e RUST_TARGET="$RUST_TARGET" \
+            -e EXPECTED_VERSION="$EXPECTED_VERSION" \
             "$PROVISIONED_IMAGE" \
             bash -c '
               set -euxo pipefail
               export CARGO_HOME=/opt/rust/cargo
               export RUSTUP_HOME=/opt/rust/rustup
               export PATH="$CARGO_HOME/bin:$PATH"
+              export DEBIAN_FRONTEND=noninteractive
 
+              # 1. Rust build
               rustup target add "$RUST_TARGET"
+              cargo build --release --target "$RUST_TARGET" -p localsend-ubuntu-touch
 
-              cargo build --release \
-                --target "$RUST_TARGET" \
-                -p localsend-ubuntu-touch
+              BIN="/src/target/${RUST_TARGET}/release/localsend-ubuntu-touch"
+              test -x "$BIN"
+
+              # 2. Assemble the click root
+              ROOT=/tmp/click-root
+              rm -rf "$ROOT"
+              mkdir -p "$ROOT/usr/bin" "$ROOT/apparmor" "$ROOT/qml" "$ROOT/assets"
+
+              # manifest with the correct architecture substituted
+              sed "s/\"architecture\": \"[^\"]*\"/\"architecture\": \"$ARCH\"/" \
+                /src/platforms/ubuntu-touch/manifest.json > "$ROOT/manifest.json"
+
+              cp /src/platforms/ubuntu-touch/localsend-ubuntu-touch.desktop "$ROOT/"
+              cp /src/platforms/ubuntu-touch/apparmor/localsend-ubuntu-touch.apparmor "$ROOT/apparmor/"
+              cp "$BIN" "$ROOT/usr/bin/"
+              cp -r /src/platforms/ubuntu-touch/qml/. "$ROOT/qml/"
+              if [ -d /src/platforms/ubuntu-touch/assets ]; then
+                cp -r /src/platforms/ubuntu-touch/assets/. "$ROOT/assets/" || true
+              fi
+
+              echo "=== click root ==="
+              find "$ROOT" -type f | sort
+
+              # 3. Build the click
+              mkdir -p /src/dist
+              cd "$ROOT"
+              click build . -o /src/dist/
+
+              ls -la /src/dist/
             '
 
-          mkdir -p platforms/ubuntu-touch/prebuilt
-          cp "target/${RUST_TARGET}/release/localsend-ubuntu-touch" \
-             platforms/ubuntu-touch/prebuilt/
-          ls -la platforms/ubuntu-touch/prebuilt/
-
-      - name: Build click
-        env:
-          CLICKABLE_DOCKER_COMMAND: docker
-          CLICKABLE_NON_INTERACTIVE: "1"
-        run: |
-          set -euxo pipefail
-          cd platforms/ubuntu-touch
-
-          clickable build \
-            --arch "$ARCH" \
-            --docker-image "$PROVISIONED_IMAGE" \
-            --skip-image-setup
-
-          CLICK_OUT="$(find build -type f -name "*_${EXPECTED_VERSION}_${ARCH}.click" -print -quit)"
+          CLICK_OUT="$(find dist -type f -name "*_${EXPECTED_VERSION}_${ARCH}.click" -print -quit)"
           test -n "$CLICK_OUT"
           test -f "$CLICK_OUT"
           echo "CLICK_OUT=$CLICK_OUT" >> "$GITHUB_ENV"
@@ -201,9 +195,16 @@ jobs:
           test -f /tmp/pk/usr/bin/localsend-ubuntu-touch
           test -f /tmp/pk/localsend-ubuntu-touch.desktop
           test -f /tmp/pk/apparmor/localsend-ubuntu-touch.apparmor
-          echo "package validation OK"
 
-      - name: Upload click artifact
+          python3 - <<PY
+          import json
+          m = json.load(open("/tmp/info.json"))
+          assert m["architecture"] == "$ARCH", m
+          assert m["version"] == "$EXPECTED_VERSION", m
+          print("click validation OK")
+          PY
+
+      - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
           name: localsend-ut-${{ matrix.arch }}
@@ -215,9 +216,16 @@ jobs:
         if: startsWith(github.ref, 'refs/tags/v')
         env:
           OPENSTORE_API_KEY: ${{ secrets.OPENSTORE_API_KEY }}
-          CLICKABLE_NON_INTERACTIVE: "1"
         run: |
-          set -euo pipefail
+          set -euxo pipefail
           test -n "${OPENSTORE_API_KEY:-}" || { echo "::error::OPENSTORE_API_KEY missing"; exit 1; }
-          cd platforms/ubuntu-touch
-          clickable publish --arch "$ARCH" "Release ${GITHUB_REF_NAME}"
+
+          APP_ID="localsend.ahmadabdelbary"
+          CHANGELOG="Release ${GITHUB_REF_NAME} (${ARCH})"
+
+          curl --fail-with-body \
+            -X POST \
+            -H "Authorization: Bearer ${OPENSTORE_API_KEY}" \
+            -F "file=@${CLICK_OUT}" \
+            -F "changelog=${CHANGELOG}" \
+            "https://open-store.io/api/v3/manage/${APP_ID}/releases"
