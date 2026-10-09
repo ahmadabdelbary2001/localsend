@@ -169,11 +169,28 @@ jobs:
               echo "=== click root ==="
               find "$ROOT" -type f | sort
 
-              # 3. Build the click
-              mkdir -p /src/dist
-              cd "$ROOT"
-              click build . -o /src/dist/
+              # 3. A placeholder icon if the manifest references one
+              #    that isn't in the tree yet.
+              if [ ! -f "$ROOT/assets/logo.svg" ]; then
+                cat > "$ROOT/assets/logo.svg" <<'SVG'
+          <?xml version="1.0" encoding="UTF-8"?>
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
+            <rect width="64" height="64" rx="12" fill="#00695C"/>
+            <text x="32" y="42" font-size="28" text-anchor="middle"
+                  fill="#ffffff" font-family="sans-serif" font-weight="bold">LS</text>
+          </svg>
+          SVG
+              fi
 
+              # 4. Build the click. `click build` writes the .click into
+              #    the current working directory and does not accept -o.
+              mkdir -p /src/dist
+              cd /tmp
+              click build "$ROOT"
+
+              echo "=== produced click ==="
+              ls -la /tmp/*.click
+              mv /tmp/*.click /src/dist/
               ls -la /src/dist/
             '
 
