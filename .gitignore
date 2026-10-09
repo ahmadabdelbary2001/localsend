@@ -29,3 +29,6 @@ platforms/ubuntu-touch/target/
 platforms/ubuntu-touch/build/
 platforms/ubuntu-touch/.clickable/
 *.click
+
+# CI-only staging for clickable
+platforms/ubuntu-touch/prebuilt/

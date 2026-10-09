@@ -170,11 +170,48 @@ jobs:
           docker commit ut-sdk "$PROVISIONED_IMAGE"
           docker rm -f ut-sdk
 
-      - name: Build click
+      - name: Build Rust binary (in provisioned container, whole repo mounted)
+        run: |
+          set -euxo pipefail
+
+          case "$ARCH" in
+            arm64) RUST_TARGET=aarch64-unknown-linux-gnu ;;
+            armhf) RUST_TARGET=armv7-unknown-linux-gnueabihf ;;
+            amd64) RUST_TARGET=x86_64-unknown-linux-gnu ;;
+          esac
+          echo "RUST_TARGET=$RUST_TARGET" >> "$GITHUB_ENV"
+
+          # The clickable container sees only its project dir; run the Rust
+          # build here with the full repo bind-mounted at /src.
+          docker run --rm \
+            -v "$GITHUB_WORKSPACE":/src \
+            -w /src \
+            -e RUST_TARGET="$RUST_TARGET" \
+            "$PROVISIONED_IMAGE" \
+            bash -c '
+              set -euxo pipefail
+              export CARGO_HOME=/opt/rust/cargo
+              export RUSTUP_HOME=/opt/rust/rustup
+              export PATH="$CARGO_HOME/bin:$PATH"
+
+              rustup target add "$RUST_TARGET"
+
+              cargo build --release \
+                --target "$RUST_TARGET" \
+                --package localsend-ubuntu-touch
+            '
+
+          # Stage the binary so the clickable build command can find it
+          # without needing the rest of the repo.
+          mkdir -p platforms/ubuntu-touch/prebuilt
+          cp "target/${RUST_TARGET}/release/localsend-ubuntu-touch" \
+             platforms/ubuntu-touch/prebuilt/
+          ls -la platforms/ubuntu-touch/prebuilt/
+
+      - name: Build click (packaging only)
         env:
           CLICKABLE_DOCKER_COMMAND: docker
           CLICKABLE_NON_INTERACTIVE: "1"
-          CLICKABLE_ARCH: ${{ matrix.arch }}
         run: |
           set -euxo pipefail
           cd platforms/ubuntu-touch
