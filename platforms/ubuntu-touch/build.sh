@@ -1,20 +1,33 @@
 #!/bin/bash
-# (الصق محتوى build.sh هنا)
-#!/bin/bash
 # SPDX-License-Identifier: Apache-2.0
 #
-# Unified build script used by clickable (local + CI).
-# Maps the clickable $ARCH to a Rust target triple, builds the
-# binary, and stages it into the click install root.
+# Build script used by clickable. Maps $ARCH to a Rust target triple,
+# builds the binary, and stages it into the click install root.
 
 set -euo pipefail
 
-# clickable provides:
-#   $ARCH               - arm64 | armhf | amd64
-#   $INSTALL_DIR        - click root staging dir
-#   $CLICKABLE_BUILD_DIR - build/ directory
 : "${ARCH:?ARCH not set by clickable}"
 : "${INSTALL_DIR:?INSTALL_DIR not set by clickable}"
+
+# The UT SDK image ships Rust at /opt/rust. Prefer it; fall back to
+# the standard rustup location otherwise.
+if [ -d /opt/rust/cargo/bin ]; then
+  export CARGO_HOME="${CARGO_HOME:-/opt/rust/cargo}"
+  export RUSTUP_HOME="${RUSTUP_HOME:-/opt/rust/rustup}"
+  export PATH="$CARGO_HOME/bin:$PATH"
+fi
+if [ -d "$HOME/.cargo/bin" ]; then
+  export PATH="$HOME/.cargo/bin:$PATH"
+fi
+
+if ! command -v cargo >/dev/null 2>&1; then
+  echo "cargo not found in PATH: $PATH" >&2
+  exit 1
+fi
+
+echo "Using cargo: $(command -v cargo)"
+cargo --version
+rustup --version || true
 
 case "$ARCH" in
   arm64) RUST_TARGET=aarch64-unknown-linux-gnu ;;
@@ -25,35 +38,23 @@ esac
 
 echo "Building for $ARCH (Rust target: $RUST_TARGET)"
 
-CARGO="${HOME}/.cargo/bin/cargo"
-if [ ! -x "$CARGO" ]; then
-  echo "cargo not found at $CARGO" >&2
-  exit 1
-fi
+rustup target add "$RUST_TARGET"
 
-# Ensure the target is installed.
-"${HOME}/.cargo/bin/rustup" target add "$RUST_TARGET" >/dev/null
+cargo build --release --target "$RUST_TARGET" --manifest-path Cargo.toml
 
-# Build.
-"$CARGO" build --release --target "$RUST_TARGET" --manifest-path Cargo.toml
-
-# Stage the binary.
 mkdir -p "${INSTALL_DIR}/usr/bin"
 cp "target/${RUST_TARGET}/release/localsend-ubuntu-touch" \
    "${INSTALL_DIR}/usr/bin/"
 
-# Stage apparmor + desktop file at the paths the manifest expects.
 mkdir -p "${INSTALL_DIR}/apparmor"
 cp apparmor/localsend-ubuntu-touch.apparmor \
    "${INSTALL_DIR}/apparmor/"
 cp localsend-ubuntu-touch.desktop \
    "${INSTALL_DIR}/"
 
-# Ship QML sources for debugability (the binary embeds them via qrc!).
 mkdir -p "${INSTALL_DIR}/qml"
 cp -r qml/* "${INSTALL_DIR}/qml/"
 
-# Ship assets referenced from QML (if any).
 if [ -d "assets" ]; then
   mkdir -p "${INSTALL_DIR}/assets"
   cp -r assets/* "${INSTALL_DIR}/assets/" 2>/dev/null || true

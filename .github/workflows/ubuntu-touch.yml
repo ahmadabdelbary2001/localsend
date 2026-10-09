@@ -122,40 +122,49 @@ jobs:
             "clickable-ut==${CLICKABLE_VERSION}"
           clickable --version
 
-      - name: Provision Ubuntu Touch SDK image with Rust + cross-toolchains
+      - name: Provision Ubuntu Touch SDK image with cross-toolchains
         run: |
           set -euxo pipefail
 
           docker pull "$SDK_IMAGE"
           docker run -d --name ut-sdk "$SDK_IMAGE" sleep infinity
 
-          # Install rust + cross-compile toolchains + Qt5 dev headers
+          # The UT SDK image ships Rust at /opt/rust. Use it directly.
           docker exec ut-sdk bash -lc '
             set -eux
             export DEBIAN_FRONTEND=noninteractive
+
             apt-get update
             apt-get install -y --no-install-recommends \
-              curl ca-certificates build-essential pkg-config \
+              build-essential pkg-config \
               gcc-aarch64-linux-gnu gcc-arm-linux-gnueabihf \
               libc6-dev-arm64-cross libc6-dev-armhf-cross \
               libssl-dev \
               qtbase5-dev qtdeclarative5-dev
 
-            curl --proto "=https" --tlsv1.2 -sSf https://sh.rustup.rs | \
-              sh -s -- -y --default-toolchain stable --profile minimal
+            export CARGO_HOME=/opt/rust/cargo
+            export RUSTUP_HOME=/opt/rust/rustup
+            export PATH="$CARGO_HOME/bin:$PATH"
 
-            /root/.cargo/bin/rustup target add aarch64-unknown-linux-gnu
-            /root/.cargo/bin/rustup target add armv7-unknown-linux-gnueabihf
-            /root/.cargo/bin/rustup target add x86_64-unknown-linux-gnu
+            command -v cargo
+            command -v rustup
+            cargo --version
+            rustup --version
 
-            mkdir -p /root/.cargo
-            cat > /root/.cargo/config.toml <<EOF
+            rustup target add aarch64-unknown-linux-gnu
+            rustup target add armv7-unknown-linux-gnueabihf
+            rustup target add x86_64-unknown-linux-gnu
+
+            mkdir -p "$CARGO_HOME"
+            cat > "$CARGO_HOME/config.toml" <<EOF
           [target.aarch64-unknown-linux-gnu]
           linker = "aarch64-linux-gnu-gcc"
 
           [target.armv7-unknown-linux-gnueabihf]
           linker = "arm-linux-gnueabihf-gcc"
           EOF
+
+            rustup target list --installed
           '
 
           docker commit ut-sdk "$PROVISIONED_IMAGE"
