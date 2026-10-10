@@ -1,11 +1,4 @@
-# AppArmor profile for LocalSend on Ubuntu Touch.
-#
-# @{HOME} is defined by AppArmor's tunables/home and must NOT be
-# redeclared here. The click path is hardcoded because CI's
-# apparmor_parser does not know @{CLICK_DIR}.
-#
-# On the device, aa-clickhook wraps this file with its own header
-# (variables + include); the rules below are appended after it.
+#include <tunables/global>
 
 /opt/click.ubuntu.com/localsend.ahmadabdelbary/current/usr/bin/localsend mr,
 
