@@ -1,9 +1,6 @@
 #include <templates/template>
 
-@{CLICK_DIR}/usr/bin/localsend.ahmadabdelbary rix,
-@{CLICK_DIR}/qml/** r,
-@{CLICK_DIR}/assets/** r,
-@{CLICK_DIR}/logo.png r,
+@{CLICK_DIR}/usr/bin/localsend.ahmadabdelbary mr,
 
 network inet,
 network inet6,

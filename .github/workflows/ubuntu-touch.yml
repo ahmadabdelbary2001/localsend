@@ -115,7 +115,10 @@ jobs:
               build-essential pkg-config \
               gcc-aarch64-linux-gnu gcc-arm-linux-gnueabihf \
               libc6-dev-arm64-cross libc6-dev-armhf-cross \
-              libssl-dev qtbase5-dev qtdeclarative5-dev click file
+              libssl-dev \
+              qtbase5-dev qtdeclarative5-dev \
+              click file click-reviewers-tools \
+              apparmor apparmor-utils apparmor-profiles
 
             export CARGO_HOME=/opt/rust/cargo
             export RUSTUP_HOME=/opt/rust/rustup
