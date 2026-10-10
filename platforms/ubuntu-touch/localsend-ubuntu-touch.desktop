@@ -2,7 +2,7 @@
 Name=LocalSend
 Comment=Share files with nearby devices
 Exec=localsend-ubuntu-touch
-Icon=assets/logo.svg
+Icon=assets/logo.png
 Terminal=false
 Type=Application
 X-Ubuntu-Touch=true

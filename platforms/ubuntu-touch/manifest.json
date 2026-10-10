@@ -12,5 +12,5 @@
             "desktop": "localsend-ubuntu-touch.desktop"
         }
     },
-    "icon": "assets/logo.svg"
+    "icon": "assets/logo.png"
 }
