@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
 //
 // Persisted settings for Ubuntu Touch.
-// Stored at ~/.config/localsend/settings.json.
+// Stored at ~/.config/localsend.ahmadabdelbary/settings.json.
 //
 // Fields mirror app/lib/model/state/settings_state.dart, but only the
 // subset that applies on Ubuntu Touch. Desktop-only fields

@@ -166,13 +166,21 @@ jobs:
           cp "$BIN" "$ROOT/usr/bin/"
           cp -r /src/platforms/ubuntu-touch/qml/. "$ROOT/qml/"
           cp -r /src/platforms/ubuntu-touch/assets/. "$ROOT/assets/"
+          cp /src/platforms/ubuntu-touch/assets/logo.png "$ROOT/logo.png"
 
           find "$ROOT" -type f | sort
 
           mkdir -p /src/dist
           cd /tmp
           click build "$ROOT"
-          mv /tmp/*.click /src/dist/
+          CLICK_FILE="$(find /tmp -maxdepth 1 -type f -name "localsend.ahmadabdelbary_*.click" -print -quit)"
+          test -n "$CLICK_FILE"
+          click-review "$CLICK_FILE" 2>&1 | tee /tmp/click-review.log
+          if grep -Eiq "ERROR:|Could not load|Traceback|FATAL" /tmp/click-review.log; then
+            echo "Click review reported errors" >&2
+            exit 1
+          fi
+          mv "$CLICK_FILE" /src/dist/
           ls -la /src/dist/'
 
           CLICK_OUT="$(find dist -type f -name "*_${EXPECTED_VERSION}_${ARCH}.click" -print -quit)"
@@ -199,6 +207,7 @@ jobs:
           test -f /tmp/pk/localsend-ubuntu-touch.desktop
           test -f /tmp/pk/apparmor/localsend-ubuntu-touch.apparmor
           test -f /tmp/pk/assets/logo.png
+          test -f /tmp/pk/logo.png
 
           python3 -c "import json; m=json.load(open('/tmp/info.json')); assert m['architecture']=='$ARCH', m; assert m['version']=='$EXPECTED_VERSION', m; print('click validation OK')"
 
@@ -252,7 +261,7 @@ jobs:
 
           ### What's included
 
-          - **Receive**: automatic and manual accept, saved to \`~/.local/share/localsend/received/\`
+          - **Receive**: automatic and manual accept, saved to \`~/.local/share/localsend.ahmadabdelbary/received/\`
           - **Send**: pick files and send to nearby devices
           - **Discovery**: multicast + HTTP register
           - **Content Hub**: share received files to other apps

@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: Apache-2.0
 //
-// QML resources are compiled into the binary via qmetaobject-rs `qrc!`.
-// This avoids shipping loose .qml files in the .click and keeps the
-// frontend self-contained.
+// QML and the Ubuntu Touch logo are embedded in the binary. Runtime-loaded
+// components must also be listed here; files copied into the .click alone
+// are not visible to a qrc:/qml/... URL.
 
 use qmetaobject::qrc;
 
@@ -19,8 +19,10 @@ pub fn register() {
             "qml/theme/Colors.qml" as "theme/Colors.qml",
             "qml/theme/Metrics.qml" as "theme/Metrics.qml",
             "qml/components/ContentHubPicker.qml" as "components/ContentHubPicker.qml",
+            "qml/components/DeviceCard.qml" as "components/DeviceCard.qml",
+            "qml/dialogs/IncomingTransferDialog.qml" as "dialogs/IncomingTransferDialog.qml",
             "qml/dialogs/SendProgressDialog.qml" as "dialogs/SendProgressDialog.qml",
-            // TODO: add logo asset once copied from app/assets/images/.
+            "assets/logo.png" as "assets/logo.png",
         }
     );
 

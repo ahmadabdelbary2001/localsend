@@ -45,10 +45,9 @@ Page {
                 Image {
                     id: logo
                     anchors.fill: parent
-                    source: "qrc:/qml/assets/logo.svg"
+                    source: "qrc:/qml/assets/logo.png"
                     fillMode: Image.PreserveAspectFit
-                    // TODO(assets): reuse app/assets/images/logo.svg from Flutter.
-                    visible: false
+                    visible: true
                 }
 
                 // Fallback text logo until assets are wired.
@@ -56,6 +55,7 @@ Page {
                     anchors.centerIn: parent
                     text: "LocalSend"
                     fontSize: "x-large"
+                    visible: logo.status !== Image.Ready
                 }
 
                 RotationAnimator on rotation {

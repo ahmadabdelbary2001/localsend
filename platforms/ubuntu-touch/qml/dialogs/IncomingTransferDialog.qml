@@ -16,6 +16,11 @@ Rectangle {
         id: contentHub
     }
 
+    Component {
+        id: contentItemFactory
+        ContentItem {}
+    }
+
     Rectangle {
         id: card
         anchors.centerIn: parent
@@ -33,7 +38,7 @@ Rectangle {
             Label {
                 Layout.fillWidth: true
                 text: {
-                    var p = serverController.incomingPhase
+                    var p = serverController.incoming_phase
                     if (p === "waiting")   return "Incoming transfer"
                     if (p === "receiving") return "Receiving…"
                     return "Transfer finished"
@@ -44,9 +49,9 @@ Rectangle {
 
             Label {
                 Layout.fillWidth: true
-                text: serverController.incomingSender
+                text: serverController.incoming_sender
                       + " · "
-                      + serverController.incomingFileCount
+                      + serverController.incoming_file_count
                       + " file(s)"
                 fontSize: "small"
                 opacity: 0.7
@@ -146,7 +151,7 @@ Rectangle {
 
                 // Share all — visible when at least one file is finished
                 Button {
-                    visible: serverController.incomingPhase === "done"
+                    visible: serverController.incoming_phase === "done"
                              && _finishedCount() > 0
                     text: "Share all"
                     color: theme ? theme.colors.primary : "#00695C"
@@ -157,20 +162,20 @@ Rectangle {
 
                 Button {
                     text: "Decline"
-                    visible: serverController.incomingPhase === "waiting"
+                    visible: serverController.incoming_phase === "waiting"
                     onClicked: serverController.decline_incoming()
                 }
 
                 Button {
                     text: "Accept"
                     color: theme ? theme.colors.primary : "#00695C"
-                    visible: serverController.incomingPhase === "waiting"
+                    visible: serverController.incoming_phase === "waiting"
                     onClicked: serverController.accept_incoming()
                 }
 
                 Button {
                     text: "Close"
-                    visible: serverController.incomingPhase === "done"
+                    visible: serverController.incoming_phase === "done"
                     onClicked: serverController.dismiss_incoming()
                 }
             }
@@ -205,12 +210,11 @@ Rectangle {
 
     function shareFile(path, fileName) {
         if (!path || path.length === 0) return
-        contentHub.export([
-            ContentItem {
-                source: "file://" + path
-                contentType: _contentTypeFor(fileName)
-            }
-        ])
+        var item = contentItemFactory.createObject(root, {
+            "source": "file://" + path,
+            "contentType": _contentTypeFor(fileName)
+        })
+        if (item) contentHub.export([item])
     }
 
     function shareAllFinished() {
@@ -222,10 +226,11 @@ Rectangle {
             var path = incomingFilesModel.data(idx, 4)
             var name = incomingFilesModel.data(idx, 0)
             if (status === "finished" && path && path.length > 0) {
-                items.push(ContentItem {
-                    source: "file://" + path
-                    contentType: _contentTypeFor(name)
+                var item = contentItemFactory.createObject(root, {
+                    "source": "file://" + path,
+                    "contentType": _contentTypeFor(name)
                 })
+                if (item) items.push(item)
             }
         }
         if (items.length > 0) {
