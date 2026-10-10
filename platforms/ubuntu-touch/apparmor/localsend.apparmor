@@ -1,6 +1,8 @@
-/opt/click.ubuntu.com/localsend.ahmadabdelbary/current/usr/bin/localsend mr,
-network inet,
-network inet6,
-owner /home/phablet/.config/localsend.ahmadabdelbary/** rw,
-owner /home/phablet/.local/share/localsend.ahmadabdelbary/** rw,
-owner /home/phablet/.cache/localsend.ahmadabdelbary/** rw,
+{
+    "policy_groups": [
+        "networking",
+        "content_exchange",
+        "content_exchange_source"
+    ],
+    "policy_version": 24.04
+}
