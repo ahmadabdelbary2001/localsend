@@ -117,8 +117,10 @@ jobs:
               libc6-dev-arm64-cross libc6-dev-armhf-cross \
               libssl-dev \
               qtbase5-dev qtdeclarative5-dev \
-              click file click-reviewers-tools \
-              apparmor apparmor-utils apparmor-profiles
+              click click-apparmor file click-reviewers-tools \
+              apparmor apparmor-utils apparmor-profiles \
+              python3-apparmor python3-libapparmor \
+              apparmor-easyprof apparmor-easyprof-ubuntu
 
             export CARGO_HOME=/opt/rust/cargo
             export RUSTUP_HOME=/opt/rust/rustup
@@ -137,6 +139,36 @@ jobs:
           '
           docker commit ut-sdk "$PROVISIONED_IMAGE"
           docker rm -f ut-sdk
+
+      - name: Debug apparmor tooling
+        run: |
+          docker run --rm \
+            -v "$GITHUB_WORKSPACE":/src \
+            -w /src \
+            "$PROVISIONED_IMAGE" \
+            bash -c '
+              set -x
+              echo "=== PATH ==="
+              echo "$PATH"
+              echo "=== which ==="
+              which apparmor_parser aa-clickhook || true
+              ls -la /sbin/apparmor_parser /usr/sbin/apparmor_parser 2>/dev/null || true
+              echo "=== version ==="
+              apparmor_parser --version 2>&1 || true
+              echo "=== templates dir ==="
+              ls /etc/apparmor.d/templates/ 2>&1 || true
+              echo "=== abstractions dir (first 3) ==="
+              ls /etc/apparmor.d/abstractions/ 2>&1 | head -3
+              echo "=== parse test ==="
+              mkdir -p /tmp/aa
+              printf "%s\n" \
+                "@{CLICK_DIR}=\"/tmp/clickdir\"" \
+                "@{APP_PKGNAME}=\"localsend.ahmadabdelbary\"" \
+                "@{HOME}=\"/home/phablet\"" \
+                > /tmp/aa/profile
+              cat /src/platforms/ubuntu-touch/apparmor/localsend.ahmadabdelbary.apparmor >> /tmp/aa/profile
+              apparmor_parser -Q /tmp/aa/profile 2>&1 || echo "PARSER EXIT CODE: $?"
+            '
 
       - name: Build + assemble + package
         run: |
