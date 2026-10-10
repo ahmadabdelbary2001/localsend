@@ -1,15 +1,8 @@
-#include <templates/template>
-#include <abstractions/base>
-#include <abstractions/openssl>
-#include <abstractions/ssl_certs>
-
-@{APP_PKGNAME}/usr/bin/localsend-ubuntu-touch rix,
-@{APP_PKGNAME}/qml/** r,
-@{APP_PKGNAME}/assets/** r,
-
-network inet,
-network inet6,
-
-@{HOME}/.config/localsend/** rw,
-@{HOME}/.local/share/localsend/** rw,
-@{HOME}/.cache/localsend/** rw,
+{
+  "policy_groups": [
+    "networking",
+    "content_exchange",
+    "content_exchange_source"
+  ],
+  "policy_version": 2404.1
+}
