@@ -1,0 +1,16 @@
+#include <templates/template>
+#include <abstractions/base>
+#include <abstractions/openssl>
+#include <abstractions/ssl_certs>
+
+@{CLICK_DIR}/usr/bin/localsend.ahmadabdelbary mr,
+@{CLICK_DIR}/qml/** r,
+@{CLICK_DIR}/assets/** r,
+@{CLICK_DIR}/logo.png r,
+
+network inet,
+network inet6,
+
+@{HOME}/.config/localsend.ahmadabdelbary/** rw,
+@{HOME}/.local/share/localsend.ahmadabdelbary/** rw,
+@{HOME}/.cache/localsend.ahmadabdelbary/** rw,

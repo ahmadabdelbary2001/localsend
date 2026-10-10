@@ -20,7 +20,7 @@ build:
     echo "=== staged ==="
     ls -la "$INSTALL_DIR/usr/bin/"
 
-kill: localsend-ubuntu-touch
+kill: localsend.ahmadabdelbary
 
 dependencies_target:
   - qtbase5-dev

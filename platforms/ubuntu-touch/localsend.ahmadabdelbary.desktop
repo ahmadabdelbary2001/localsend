@@ -1,11 +1,11 @@
 [Desktop Entry]
 Name=LocalSend
 Comment=Share files with nearby devices
-Exec=localsend-ubuntu-touch
+Exec=localsend.ahmadabdelbary
 Icon=logo.png
 Terminal=false
 Type=Application
-X-Lomiri-Touch=true
-X-Lomiri-Splash-Color=#4B5B8C
-X-Lomiri-Single-Instance=true
+X-Ubuntu-Touch=true
+X-Ubuntu-Splash-Color=#4B5B8C
+X-Ubuntu-Single-Instance=true
 X-Ubuntu-Application-ID=localsend.ahmadabdelbary

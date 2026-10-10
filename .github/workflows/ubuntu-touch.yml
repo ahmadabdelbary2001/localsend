@@ -161,9 +161,9 @@ jobs:
           mkdir -p "$ROOT/usr/bin" "$ROOT/apparmor" "$ROOT/qml" "$ROOT/assets"
 
           sed "s/\"architecture\": \"[^\"]*\"/\"architecture\": \"$ARCH\"/" /src/platforms/ubuntu-touch/manifest.json > "$ROOT/manifest.json"
-          cp /src/platforms/ubuntu-touch/localsend-ubuntu-touch.desktop "$ROOT/"
-          cp /src/platforms/ubuntu-touch/apparmor/localsend-ubuntu-touch.apparmor "$ROOT/apparmor/"
-          cp "$BIN" "$ROOT/usr/bin/"
+          cp /src/platforms/ubuntu-touch/localsend.ahmadabdelbary.desktop "$ROOT/"
+          cp /src/platforms/ubuntu-touch/apparmor/localsend.ahmadabdelbary.apparmor "$ROOT/apparmor/"
+          cp "$BIN" "$ROOT/usr/bin/localsend.ahmadabdelbary"
           cp -r /src/platforms/ubuntu-touch/qml/. "$ROOT/qml/"
           cp -r /src/platforms/ubuntu-touch/assets/. "$ROOT/assets/"
           cp /src/platforms/ubuntu-touch/assets/logo.png "$ROOT/logo.png"
@@ -203,9 +203,9 @@ jobs:
           rm -rf /tmp/pk && mkdir -p /tmp/pk
           dpkg-deb -x "$CLICK_OUT" /tmp/pk
 
-          test -f /tmp/pk/usr/bin/localsend-ubuntu-touch
-          test -f /tmp/pk/localsend-ubuntu-touch.desktop
-          test -f /tmp/pk/apparmor/localsend-ubuntu-touch.apparmor
+          test -f /tmp/pk/usr/bin/localsend.ahmadabdelbary
+          test -f /tmp/pk/localsend.ahmadabdelbary.desktop
+          test -f /tmp/pk/apparmor/localsend.ahmadabdelbary.apparmor
           test -f /tmp/pk/assets/logo.png
           test -f /tmp/pk/logo.png
 
