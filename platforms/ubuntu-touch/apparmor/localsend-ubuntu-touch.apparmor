@@ -23,9 +23,6 @@ network netlink raw,
 content_exchange,
 content_exchange_source,
 
-# Content Hub peer discovery for export
-dbus (send, receive) bus=session interface=com.lomiri.content.hub,
-
 # Settings (persisted)
 @{HOME}/.config/localsend/** rw,
 @{HOME}/.local/share/localsend/** rw,

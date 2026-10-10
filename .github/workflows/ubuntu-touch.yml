@@ -170,6 +170,11 @@ jobs:
           echo "CLICK_OUT=$CLICK_OUT" >> "$GITHUB_ENV"
           ls -lh "$CLICK_OUT"
 
+      - name: Install host validation tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends click
+
       - name: Validate click
         run: |
           set -euxo pipefail
