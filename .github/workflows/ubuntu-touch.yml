@@ -339,19 +339,54 @@ jobs:
           echo "CLICK=$CLICK" >> "$GITHUB_ENV"
           ls -lh "$CLICK"
 
-      - name: Publish to OpenStore
+      - name: Diagnose API key
+        env:
+          OPENSTORE_API_KEY: ${{ secrets.OPENSTORE_API_KEY }}
         run: |
-          set -euxo pipefail
+          set -euo pipefail
+          echo "Length: ${#OPENSTORE_API_KEY}"
+          echo "First 8 chars: ${OPENSTORE_API_KEY:0:8}"
+          echo "Last 8 chars: ${OPENSTORE_API_KEY: -8}"
+          echo "Has trailing newline? $(printf '%s' "$OPENSTORE_API_KEY" | tail -c 1 | xxd)"
+          echo "First 8 bytes hex: $(printf '%s' "$OPENSTORE_API_KEY" | head -c 8 | xxd)"
+
+      - name: Publish to OpenStore
+        env:
+          OPENSTORE_API_KEY: ${{ secrets.OPENSTORE_API_KEY }}
+          APP_ID: localsend.ahmadabdelbary
+        run: |
+          set -euo pipefail
           echo "Publishing ${CLICK} (${VERSION}, ${{ matrix.arch }})"
 
-          curl --fail-with-body -sS -L \
-            -X POST \
-            -H "Authorization: Bearer ${OPENSTORE_API_KEY}" \
-            -F "file=@${CLICK}" \
-            -F "changelog=Release ${GITHUB_REF_NAME} (${VERSION}, ${{ matrix.arch }})" \
-            "https://open-store.io/api/v3/manage/${APP_ID}/revision" \
-            | tee /tmp/openstore-response.txt
+          # Try 1: Bearer
+          echo "--- attempt 1: Authorization: Bearer ---"
+          if curl --fail-with-body -sS -L \
+              -X POST \
+              -H "Authorization: Bearer ${OPENSTORE_API_KEY}" \
+              -F "file=@${CLICK}" \
+              -F "changelog=Release ${GITHUB_REF_NAME} (${VERSION}, ${{ matrix.arch }})" \
+              "https://open-store.io/api/v3/manage/${APP_ID}/revision" \
+              | tee /tmp/openstore-response.txt; then
+            echo "Success"
+            cat /tmp/openstore-response.txt
+            exit 0
+          fi
+          echo "Bearer failed:"
+          cat /tmp/openstore-response.txt
 
-          echo ""
-          echo "=== OpenStore response ==="
-          cat /tmp/openstore-response.txt 
+          # Try 2: token as-is (some OpenStore deployments use this)
+          echo "--- attempt 2: Authorization: token ---"
+          if curl --fail-with-body -sS -L \
+              -X POST \
+              -H "Authorization: ${OPENSTORE_API_KEY}" \
+              -F "file=@${CLICK}" \
+              -F "changelog=Release ${GITHUB_REF_NAME} (${VERSION}, ${{ matrix.arch }})" \
+              "https://open-store.io/api/v3/manage/${APP_ID}/revision" \
+              | tee /tmp/openstore-response.txt; then
+            echo "Success"
+            cat /tmp/openstore-response.txt
+            exit 0
+          fi
+          echo "Both attempts failed:"
+          cat /tmp/openstore-response.txt
+          exit 1
