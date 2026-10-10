@@ -1,14 +1,14 @@
 {
     "name": "localsend.ahmadabdelbary",
     "title": "LocalSend",
-    "version": "1.0.9",
+    "version": "1.0.3",
     "description": "Native Ubuntu Touch frontend for LocalSend (QML + Rust).",
     "architecture": "arm64",
     "maintainer": "Ahmad Abdelbary <ahmadabdelbary2001@users.noreply.github.com>",
     "framework": "ubuntu-touch-24.04-1.x",
     "hooks": {
         "localsend.ahmadabdelbary": {
-            "apparmor": "apparmor/localsend.ahmadabdelbary.apparmor",
+            "apparmor": "apparmor/localsend.ahmadabdelbary.json",
             "desktop": "localsend.ahmadabdelbary.desktop"
         }
     }

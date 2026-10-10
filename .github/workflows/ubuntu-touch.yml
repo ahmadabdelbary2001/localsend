@@ -140,36 +140,6 @@ jobs:
           docker commit ut-sdk "$PROVISIONED_IMAGE"
           docker rm -f ut-sdk
 
-      - name: Debug apparmor tooling
-        run: |
-          docker run --rm \
-            -v "$GITHUB_WORKSPACE":/src \
-            -w /src \
-            "$PROVISIONED_IMAGE" \
-            bash -c '
-              set -x
-              echo "=== PATH ==="
-              echo "$PATH"
-              echo "=== which ==="
-              which apparmor_parser aa-clickhook || true
-              ls -la /sbin/apparmor_parser /usr/sbin/apparmor_parser 2>/dev/null || true
-              echo "=== version ==="
-              apparmor_parser --version 2>&1 || true
-              echo "=== templates dir ==="
-              ls /etc/apparmor.d/templates/ 2>&1 || true
-              echo "=== abstractions dir (first 3) ==="
-              ls /etc/apparmor.d/abstractions/ 2>&1 | head -3
-              echo "=== parse test ==="
-              mkdir -p /tmp/aa
-              printf "%s\n" \
-                "@{CLICK_DIR}=\"/tmp/clickdir\"" \
-                "@{APP_PKGNAME}=\"localsend.ahmadabdelbary\"" \
-                "@{HOME}=\"/home/phablet\"" \
-                > /tmp/aa/profile
-              cat /src/platforms/ubuntu-touch/apparmor/localsend.ahmadabdelbary.apparmor >> /tmp/aa/profile
-              apparmor_parser -Q /tmp/aa/profile 2>&1 || echo "PARSER EXIT CODE: $?"
-            '
-
       - name: Build + assemble + package
         run: |
           set -euxo pipefail
@@ -197,12 +167,13 @@ jobs:
 
           sed "s/\"architecture\": \"[^\"]*\"/\"architecture\": \"$ARCH\"/" /src/platforms/ubuntu-touch/manifest.json > "$ROOT/manifest.json"
           cp /src/platforms/ubuntu-touch/localsend.ahmadabdelbary.desktop "$ROOT/"
-          cp /src/platforms/ubuntu-touch/apparmor/localsend.ahmadabdelbary.apparmor "$ROOT/apparmor/"
+          cp /src/platforms/ubuntu-touch/apparmor/localsend.ahmadabdelbary.json "$ROOT/apparmor/"
           cp "$BIN" "$ROOT/usr/bin/localsend.ahmadabdelbary"
           cp -r /src/platforms/ubuntu-touch/qml/. "$ROOT/qml/"
           cp -r /src/platforms/ubuntu-touch/assets/. "$ROOT/assets/"
           cp /src/platforms/ubuntu-touch/assets/logo.png "$ROOT/logo.png"
 
+          python3 -m json.tool /src/platforms/ubuntu-touch/apparmor/localsend.ahmadabdelbary.json > /dev/null
           find "$ROOT" -type f | sort
 
           mkdir -p /src/dist
@@ -240,7 +211,7 @@ jobs:
 
           test -f /tmp/pk/usr/bin/localsend.ahmadabdelbary
           test -f /tmp/pk/localsend.ahmadabdelbary.desktop
-          test -f /tmp/pk/apparmor/localsend.ahmadabdelbary.apparmor
+          test -f /tmp/pk/apparmor/localsend.ahmadabdelbary.json
           test -f /tmp/pk/assets/logo.png
           test -f /tmp/pk/logo.png
 
