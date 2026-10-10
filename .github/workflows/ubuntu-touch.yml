@@ -261,7 +261,7 @@ jobs:
 
           ### What's included
 
-          - **Receive**: automatic and manual accept, saved to \`~/.local/share/localsend/received/\`
+          - **Receive**: automatic and manual accept, saved to \`~/.local/share/localsend.ahmadabdelbary/received/\`
           - **Send**: pick files and send to nearby devices
           - **Discovery**: multicast + HTTP register
           - **Content Hub**: share received files to other apps

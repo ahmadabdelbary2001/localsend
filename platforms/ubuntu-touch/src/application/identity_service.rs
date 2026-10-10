@@ -2,7 +2,7 @@
 //
 // Persists the device's self-signed certificate + private key.
 // Generated once on first launch, reloaded after that.
-// Stored at ~/.config/localsend/{certificate,private_key,public_key}.pem
+// Stored at ~/.config/localsend.ahmadabdelbary/{certificate,private_key,public_key}.pem
 // and fingerprint.txt.
 
 use anyhow::{anyhow, Context, Result};

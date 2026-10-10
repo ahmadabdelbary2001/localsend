@@ -2,7 +2,6 @@ import QtQuick 2.15
 import QtQuick.Controls 2.15
 import Lomiri.Components 1.3
 
-import "BottomNavigation.qml"
 import "../pages"
 
 Page {

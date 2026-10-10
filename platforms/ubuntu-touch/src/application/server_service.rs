@@ -11,7 +11,7 @@
 //   4. We answer via decision_tx; core then emits FileUpload events with a
 //      oneshot target_tx per file.
 //   5. For each FileUpload, we compute a unique save path in
-//      ~/.local/share/localsend/received/ and send FileUploadTarget::Path
+//      ~/.local/share/localsend.ahmadabdelbary/received/ and send FileUploadTarget::Path
 //      via target_tx. Progress events arrive on progress_rx, the final
 //      result on result_rx; both are forwarded to the Qt side.
 

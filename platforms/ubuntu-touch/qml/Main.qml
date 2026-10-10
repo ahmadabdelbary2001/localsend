@@ -15,8 +15,8 @@ MainView {
     Theme {
         id: theme
         mode: settingsController.theme
-        colorMode: settingsController.colorMode
-        customColor: settingsController.customColor
+        colorMode: settingsController.color_mode
+        customColor: settingsController.custom_color
     }
 
     PageStack {
@@ -24,7 +24,7 @@ MainView {
         Component.onCompleted: push(shellComponent)
         Loader {
             anchors.fill: parent
-            active: serverController.incomingActive
+            active: serverController.incoming_active
             source: "dialogs/IncomingTransferDialog.qml"
             onLoaded: item.theme = theme
         }
