@@ -1,10 +1,22 @@
-#include <templates/template>
+# AppArmor profile for LocalSend on Ubuntu Touch.
+#
+# We intentionally do NOT include <templates/template>: it is
+# shipped by click-apparmor at install time but is not present
+# in the CI image used by click-review (and apparmor-profiles in
+# Ubuntu 24.04 no longer carries it). We declare the variables
+# we depend on here, so the file parses standalone.
 
+@{HOME}=/home/phablet
+@{CLICK_DIR}=/opt/click.ubuntu.com/localsend.ahmadabdelbary/current
+
+# The binary inside the click.
 @{CLICK_DIR}/usr/bin/localsend.ahmadabdelbary mr,
 
+# LocalSend uses TCP for transfers and UDP for multicast discovery.
 network inet,
 network inet6,
 
+# App-private directories (see platform/filesystem.rs).
 owner @{HOME}/.config/localsend.ahmadabdelbary/** rw,
 owner @{HOME}/.local/share/localsend.ahmadabdelbary/** rw,
 owner @{HOME}/.cache/localsend.ahmadabdelbary/** rw,
