@@ -349,7 +349,7 @@ jobs:
             -H "Authorization: Bearer ${OPENSTORE_API_KEY}" \
             -F "file=@${CLICK}" \
             -F "changelog=Release ${GITHUB_REF_NAME} (${VERSION}, ${{ matrix.arch }})" \
-            "https://open-store.io/api/v3/manage/${APP_ID}/releases" \
+            "https://open-store.io/api/v3/manage/${APP_ID}/revision" \
             | tee /tmp/openstore-response.txt
 
           echo ""
