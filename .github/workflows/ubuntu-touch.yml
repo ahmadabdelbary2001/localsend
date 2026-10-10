@@ -290,7 +290,7 @@ jobs:
     needs: [release]
     if: startsWith(github.ref, 'refs/tags/v')
     runs-on: ubuntu-24.04
-    timeout-minutes: 30
+    timeout-minutes: 15
 
     strategy:
       fail-fast: false
@@ -303,69 +303,55 @@ jobs:
 
     env:
       OPENSTORE_API_KEY: ${{ secrets.OPENSTORE_API_KEY }}
-      APP_ARCH: ${{ matrix.arch }}
+      APP_ID: localsend.ahmadabdelbary
 
     steps:
-      - name: Checkout repository
+      - name: Checkout (for manifest version)
         uses: actions/checkout@v4
 
-      - name: Verify tag and secret
+      - name: Verify API key and version
         run: |
           set -euo pipefail
-
           test -n "${OPENSTORE_API_KEY:-}" || {
             echo "::error::OPENSTORE_API_KEY is not configured"
             exit 1
           }
-
-          VERSION="$(python3 -c \
-            'import json; print(json.load(open("platforms/ubuntu-touch/manifest.json"))["version"])')"
-
+          VERSION="$(python3 -c 'import json; print(json.load(open("platforms/ubuntu-touch/manifest.json"))["version"])')"
           TAG_VERSION="${GITHUB_REF_NAME#v}"
-
-          if [[ "$VERSION" != "$TAG_VERSION" ]]; then
-            echo "::error::Tag version does not match manifest version"
-            exit 1
-          fi
-
-      - name: Download binary for this architecture
-        uses: actions/download-artifact@v4
-        with:
-          name: localsend-bin-${{ matrix.arch }}
-          path: platforms/ubuntu-touch/prebuilt
-
-      - name: Set up Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: "3.12"
-
-      - name: Install Clickable
-        run: |
-          python -m pip install --disable-pip-version-check clickable-ut==8.10.0
-
-      - name: Build and publish to OpenStore
-        working-directory: platforms/ubuntu-touch
-        run: |
-          set -euo pipefail
-
-          chmod +x prebuilt/localsend-ubuntu-touch
-          test -x prebuilt/localsend-ubuntu-touch
-
-          # Package and validate this architecture through Clickable.
-          clickable build --arch "$APP_ARCH"
-
-          VERSION="$(python3 -c \
-            'import json; print(json.load(open("manifest.json"))["version"])')"
-
-          CLICK_FILE="$(find build -type f \
-            -name "localsend.ahmadabdelbary_${VERSION}_${APP_ARCH}.click" \
-            -print -quit)"
-
-          test -n "$CLICK_FILE" || {
-            echo "::error::Clickable did not produce the expected package"
+          test "$VERSION" = "$TAG_VERSION" || {
+            echo "::error::tag $GITHUB_REF_NAME does not match manifest version $VERSION"
             exit 1
           }
+          echo "VERSION=$VERSION" >> "$GITHUB_ENV"
 
-          echo "Publishing version ${VERSION}, architecture ${APP_ARCH}"
+      - name: Download built click
+        uses: actions/download-artifact@v4
+        with:
+          name: localsend-ut-${{ matrix.arch }}
+          path: dist
 
-          clickable publish "Automated release ${GITHUB_REF_NAME}"
+      - name: Locate click
+        run: |
+          set -euxo pipefail
+          ls -la dist/
+          CLICK="$(find dist -type f -name "*_${{ matrix.arch }}.click" -print -quit)"
+          test -n "$CLICK" || { echo "::error::no .click found"; exit 1; }
+          echo "CLICK=$CLICK" >> "$GITHUB_ENV"
+          ls -lh "$CLICK"
+
+      - name: Publish to OpenStore
+        run: |
+          set -euxo pipefail
+          echo "Publishing ${CLICK} (${VERSION}, ${{ matrix.arch }})"
+
+          curl --fail-with-body -sS -L \
+            -X POST \
+            -H "Authorization: Bearer ${OPENSTORE_API_KEY}" \
+            -F "file=@${CLICK}" \
+            -F "changelog=Release ${GITHUB_REF_NAME} (${VERSION}, ${{ matrix.arch }})" \
+            "https://open-store.io/api/v3/manage/${APP_ID}/releases" \
+            | tee /tmp/openstore-response.txt
+
+          echo ""
+          echo "=== OpenStore response ==="
+          cat /tmp/openstore-response.txt 
