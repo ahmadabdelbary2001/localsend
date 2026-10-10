@@ -173,7 +173,6 @@ jobs:
           cp -r /src/platforms/ubuntu-touch/assets/. "$ROOT/assets/"
           cp /src/platforms/ubuntu-touch/assets/logo.png "$ROOT/logo.png"
 
-          python3 -m json.tool /src/platforms/ubuntu-touch/apparmor/localsend.ahmadabdelbary.json > /dev/null
           find "$ROOT" -type f | sort
 
           mkdir -p /src/dist
