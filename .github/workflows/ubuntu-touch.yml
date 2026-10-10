@@ -166,9 +166,9 @@ jobs:
           mkdir -p "$ROOT/usr/bin" "$ROOT/apparmor" "$ROOT/qml" "$ROOT/assets"
 
           sed "s/\"architecture\": \"[^\"]*\"/\"architecture\": \"$ARCH\"/" /src/platforms/ubuntu-touch/manifest.json > "$ROOT/manifest.json"
-          cp /src/platforms/ubuntu-touch/localsend.ahmadabdelbary.desktop "$ROOT/"
-          cp /src/platforms/ubuntu-touch/apparmor/localsend.ahmadabdelbary.json "$ROOT/apparmor/"
-          cp "$BIN" "$ROOT/usr/bin/localsend.ahmadabdelbary"
+          cp /src/platforms/ubuntu-touch/localsend.desktop "$ROOT/"
+          cp /src/platforms/ubuntu-touch/apparmor/localsend.apparmor "$ROOT/apparmor/"
+          cp "$BIN" "$ROOT/usr/bin/localsend"
           cp -r /src/platforms/ubuntu-touch/qml/. "$ROOT/qml/"
           cp -r /src/platforms/ubuntu-touch/assets/. "$ROOT/assets/"
           cp /src/platforms/ubuntu-touch/assets/logo.png "$ROOT/logo.png"
@@ -209,13 +209,21 @@ jobs:
           rm -rf /tmp/pk && mkdir -p /tmp/pk
           dpkg-deb -x "$CLICK_OUT" /tmp/pk
 
-          test -f /tmp/pk/usr/bin/localsend.ahmadabdelbary
-          test -f /tmp/pk/localsend.ahmadabdelbary.desktop
-          test -f /tmp/pk/apparmor/localsend.ahmadabdelbary.json
+          test -f /tmp/pk/usr/bin/localsend
+          test -f /tmp/pk/localsend.desktop
+          test -f /tmp/pk/apparmor/localsend.apparmor
           test -f /tmp/pk/assets/logo.png
           test -f /tmp/pk/logo.png
 
           python3 -c "import json; m=json.load(open('/tmp/info.json')); assert m['architecture']=='$ARCH', m; assert m['version']=='$EXPECTED_VERSION', m; print('click validation OK')"
+
+      - name: Upload Rust binary for OpenStore publication
+        uses: actions/upload-artifact@v4
+        with:
+          name: localsend-bin-${{ matrix.arch }}
+          path: target/${{ env.RUST_TARGET }}/release/localsend-ubuntu-touch
+          if-no-files-found: error
+          retention-days: 30
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
@@ -277,3 +285,88 @@ jobs:
           - Ubuntu Touch 24.04 (framework 24.04-1.x)
           - arm64, armhf, or amd64 device"
           fi
+
+  publish_openstore:
+    name: Publish to OpenStore · ${{ matrix.arch }}
+    needs: [release]
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+
+    strategy:
+      fail-fast: false
+      max-parallel: 1
+      matrix:
+        include:
+          - arch: arm64
+          - arch: armhf
+          - arch: amd64
+
+    env:
+      OPENSTORE_API_KEY: ${{ secrets.OPENSTORE_API_KEY }}
+      APP_ARCH: ${{ matrix.arch }}
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Verify tag and secret
+        run: |
+          set -euo pipefail
+
+          test -n "${OPENSTORE_API_KEY:-}" || {
+            echo "::error::OPENSTORE_API_KEY is not configured"
+            exit 1
+          }
+
+          VERSION="$(python3 -c \
+            'import json; print(json.load(open("platforms/ubuntu-touch/manifest.json"))["version"])')"
+
+          TAG_VERSION="${GITHUB_REF_NAME#v}"
+
+          if [[ "$VERSION" != "$TAG_VERSION" ]]; then
+            echo "::error::Tag version does not match manifest version"
+            exit 1
+          fi
+
+      - name: Download binary for this architecture
+        uses: actions/download-artifact@v4
+        with:
+          name: localsend-bin-${{ matrix.arch }}
+          path: platforms/ubuntu-touch/prebuilt
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install Clickable
+        run: |
+          python -m pip install --disable-pip-version-check clickable-ut==8.10.0
+
+      - name: Build and publish to OpenStore
+        working-directory: platforms/ubuntu-touch
+        run: |
+          set -euo pipefail
+
+          chmod +x prebuilt/localsend-ubuntu-touch
+          test -x prebuilt/localsend-ubuntu-touch
+
+          # Package and validate this architecture through Clickable.
+          clickable build --arch "$APP_ARCH"
+
+          VERSION="$(python3 -c \
+            'import json; print(json.load(open("manifest.json"))["version"])')"
+
+          CLICK_FILE="$(find build -type f \
+            -name "localsend.ahmadabdelbary_${VERSION}_${APP_ARCH}.click" \
+            -print -quit)"
+
+          test -n "$CLICK_FILE" || {
+            echo "::error::Clickable did not produce the expected package"
+            exit 1
+          }
+
+          echo "Publishing version ${VERSION}, architecture ${APP_ARCH}"
+
+          clickable publish "Automated release ${GITHUB_REF_NAME}"

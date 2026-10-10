@@ -1,0 +1,13 @@
+# AppArmor profile for LocalSend on Ubuntu Touch.
+#
+# @{HOME}, @{CLICK_DIR}, @{APP_PKGNAME} are predeclared by aa-clickhook.
+# Do not redeclare them.
+
+@{CLICK_DIR}/usr/bin/localsend mr,
+
+network inet,
+network inet6,
+
+owner @{HOME}/.config/localsend.ahmadabdelbary/** rw,
+owner @{HOME}/.local/share/localsend.ahmadabdelbary/** rw,
+owner @{HOME}/.cache/localsend.ahmadabdelbary/** rw,

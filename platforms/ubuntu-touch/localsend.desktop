@@ -1,7 +1,7 @@
 [Desktop Entry]
 Name=LocalSend
 Comment=Share files with nearby devices
-Exec=localsend.ahmadabdelbary
+Exec=localsend
 Icon=logo.png
 Terminal=false
 Type=Application
