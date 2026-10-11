@@ -59,7 +59,7 @@ MainView {
             if (typeof serverController !== "undefined") serverController.poll()
             if (typeof discoveryController !== "undefined") discoveryController.poll()
             if (typeof deviceListModel !== "undefined") {
-                // Trigger a re-read of the model
+                deviceListModel.refresh()
             }
             if (typeof incomingFilesModel !== "undefined") incomingFilesModel.refresh()
             if (typeof sendController !== "undefined") sendController.poll()

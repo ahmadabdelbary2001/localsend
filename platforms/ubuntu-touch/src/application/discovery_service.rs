@@ -185,6 +185,13 @@ impl DiscoveryServiceHandle {
             .map(|g| g.clone())
             .unwrap_or_default()
     }
+
+    /// The same shared Vec used by `snapshot()`, exposed so that
+    /// QAbstractListModel wrappers can read it directly without
+    /// going through the service handle every poll.
+    pub fn snapshot_arc(&self) -> Arc<RwLock<Vec<DeviceSnapshot>>> {
+        self.snapshot_cache.clone()
+    }
 }
 
 struct RunningDiscovery {

@@ -18,6 +18,7 @@ use crate::application::discovery_service::{
 use crate::application::identity_service::DeviceIdentity;
 use crate::application::settings_service::SettingsService;
 use crate::application::server_service::IncomingFileEntry;
+use crate::application::discovery_service::DeviceSnapshot;
 use crate::bridge::app::AppController;
 use crate::bridge::discovery_controller::DiscoveryController;
 use crate::bridge::home_controller::HomeController;
@@ -85,7 +86,9 @@ fn main() -> ExitCode {
 
     let settings_controller = RefCell::new(SettingsController::new(settings));
     let local_ips_model = RefCell::new(LocalIpsModel::new());
-    let device_list_model = RefCell::new(DeviceListModel::new());
+    let device_list_model = RefCell::new(DeviceListModel::new(
+        discovery_handle.snapshot_arc(),
+    ));
     let incoming_files_model = RefCell::new(IncomingFilesModel::new(incoming_entries.clone()));
     let outgoing_files_model = RefCell::new(OutgoingFilesModel::new(outgoing_entries.clone()));
     let discovery_controller = RefCell::new(DiscoveryController::new(
@@ -168,9 +171,8 @@ fn main() -> ExitCode {
                 }
             }
             {
-                let dc = discovery_controller.borrow();
                 let mut dm = device_list_model.borrow_mut();
-                dm.replace_all(dc.snapshot().to_vec());
+                dm.refresh();
             }
             {
                 let mut im = incoming_files_model.borrow_mut();

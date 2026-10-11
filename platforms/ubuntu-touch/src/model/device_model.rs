@@ -1,43 +1,57 @@
 // SPDX-License-Identifier: Apache-2.0
 //
-// QAbstractListModel exposing discovered devices to QML.
-// Fed from DiscoveryController.snapshot (updated on the Qt thread).
+// QAbstractListModel for nearby devices.
+// Reads directly from the shared Vec maintained by
+// application::discovery_service, so it stays in sync with Rust
+// without copying on every poll.
+
+use std::sync::{Arc, RwLock};
 
 use qmetaobject::prelude::*;
 
 use crate::application::discovery_service::DeviceSnapshot;
 
-#[derive(QObject, Default)]
+#[derive(QObject)]
 pub struct DeviceListModel {
     base: qt_base_class!(trait QAbstractListModel),
 
-    items: Vec<DeviceSnapshot>,
+    /// Shared with DiscoveryServiceHandle.
+    items: Arc<RwLock<Vec<DeviceSnapshot>>>,
+
+    /// Called from QML after discoveryController.poll() to force
+    /// the view to re-read the shared Vec.
+    refresh: qt_method!(fn(&mut self)),
 }
 
 impl DeviceListModel {
-    pub fn new() -> Self {
-        Self::default()
+    pub fn new(items: Arc<RwLock<Vec<DeviceSnapshot>>>) -> Self {
+        Self {
+            base: Default::default(),
+            items,
+            refresh: Default::default(),
+        }
     }
 
-    /// Replace the whole list. Called on the Qt thread.
-    pub fn replace_all(&mut self, items: Vec<DeviceSnapshot>) {
+    pub fn refresh(&mut self) {
         self.begin_reset_model();
-        self.items = items;
         self.end_reset_model();
     }
 }
 
 impl QAbstractListModel for DeviceListModel {
     fn row_count(&self) -> i32 {
-        self.items.len() as i32
+        self.items.read().map(|g| g.len() as i32).unwrap_or(0)
     }
 
     fn data(&self, index: QModelIndex, role: i32) -> QVariant {
         let i = index.row() as usize;
-        let Some(d) = self.items.get(i) else {
+        let g = match self.items.read() {
+            Ok(g) => g,
+            Err(_) => return QVariant::default(),
+        };
+        let Some(d) = g.get(i) else {
             return QVariant::default();
         };
-
         match role {
             0 => QString::from(d.fingerprint.clone()).into(),
             1 => QString::from(d.alias.clone()).into(),

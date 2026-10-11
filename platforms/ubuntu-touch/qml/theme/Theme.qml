@@ -4,20 +4,22 @@ import Lomiri.Components 1.3
 QtObject {
     id: theme
 
-    property string mode: "system"
-    property string colorMode: "localsend"
+    // Bound from Main.qml to settingsController.{theme, colorMode, customColor}.
+    property string mode: "system"          // "system" | "light" | "dark"
+    property string colorMode: "localsend"  // "system" | "localsend" | "oled" | "custom"
     property color customColor: "#009688"
 
+    // Resolved by Rust once settings load. Defaults to light.
     readonly property bool dark: mode === "dark"
 
-    // ---------- colors (inline) ----------
+    // ---------- colors (inline, no external type) ----------
     readonly property QtObject colors: QtObject {
-        readonly property color _primary: theme.dark ? "#4DB6AC" : "#00695C"
-
         readonly property color background:       theme.dark ? "#111214" : "#F6F6F6"
-        readonly property color surface:          (theme.colorMode === "oled" && theme.dark) ? "#000000" : (theme.dark ? "#1B1D21" : "#FFFFFF")
+        readonly property color surface:          (theme.colorMode === "oled" && theme.dark)
+                                                    ? "#000000"
+                                                    : (theme.dark ? "#1B1D21" : "#FFFFFF")
         readonly property color surfaceTint:      theme.dark ? "#23262B" : "#ECEFF1"
-        readonly property color primary:          _primary
+        readonly property color primary:          theme.dark ? "#4DB6AC" : "#00695C"
         readonly property color primaryText:      "#FFFFFF"
         readonly property color surfaceText:      theme.dark ? "#F2F2F2" : "#1B1D21"
         readonly property color surfaceTextMuted: theme.dark ? "#9AA0A6" : "#5F6368"
