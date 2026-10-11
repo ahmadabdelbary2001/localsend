@@ -6,7 +6,6 @@ Page {
     id: page
     property var appTheme
 
-    // UI-only state that mirrors receive_tab.dart
     property bool _showAdvanced: false
     property bool _showHistoryButton: true
 
@@ -20,6 +19,15 @@ Page {
         }
     }
 
+    function _ipsLabel() {
+        var parts = []
+        for (var i = 0; i < localIpsModel.rowCount(); i++) {
+            var idx = localIpsModel.index(i, 0)
+            parts.push(localIpsModel.data(idx, 0))
+        }
+        return parts.join("   ")
+    }
+
     Timer {
         id: hideTimer
         interval: 200
@@ -27,35 +35,28 @@ Page {
         onTriggered: page._showHistoryButton = true
     }
 
-    // ---------- Main content ----------
+    // ---------------- Main content ----------------
     Item {
         anchors.fill: parent
 
         ColumnLayout {
             anchors.centerIn: parent
-            width: Math.min(parent.width - units.gu(4), units.gu(60))
+            width: Math.min(parent.width - units.gu(4), units.gu(55))
             spacing: units.gu(2)
 
-            // Animated logo. Rotates when server is running.
-            Item {
+            // Logo mark
+            Rectangle {
                 Layout.alignment: Qt.AlignHCenter
-                Layout.preferredWidth: units.gu(20)
-                Layout.preferredHeight: units.gu(20)
+                Layout.preferredWidth: units.gu(18)
+                Layout.preferredHeight: units.gu(18)
+                radius: width / 2
+                color: page.appTheme ? page.appTheme.colors.surfaceTint : "#ECEFF1"
 
-                Image {
-                    id: logo
-                    anchors.fill: parent
-                    source: "qrc:/qml/assets/logo.png"
-                    fillMode: Image.PreserveAspectFit
-                    visible: true
-                }
-
-                // Fallback text logo until assets are wired.
                 Label {
                     anchors.centerIn: parent
-                    text: "LocalSend"
-                    fontSize: "x-large"
-                    visible: logo.status !== Image.Ready
+                    text: "LS"
+                    fontSize: "xx-large"
+                    color: page.appTheme ? page.appTheme.colors.primary : "#00695C"
                 }
 
                 RotationAnimator on rotation {
@@ -66,38 +67,90 @@ Page {
                 }
             }
 
+            // Alias
             Label {
                 Layout.alignment: Qt.AlignHCenter
-                text: serverController.alias.length > 0 ? serverController.alias : settingsController.alias
+                Layout.fillWidth: true
+                text: serverController.alias.length > 0
+                      ? serverController.alias
+                      : settingsController.alias
                 fontSize: "xx-large"
-                wrapMode: Text.NoWrap
+                color: page.appTheme ? page.appTheme.colors.surfaceText : "#1B1D21"
                 elide: Text.ElideRight
+                horizontalAlignment: Text.AlignHCenter
             }
 
+            // Online/offline indicator
+            RowLayout {
+                Layout.alignment: Qt.AlignHCenter
+                spacing: units.gu(1)
+
+                Rectangle {
+                    width: units.gu(1)
+                    height: width
+                    radius: width / 2
+                    color: serverController.running
+                           ? (page.appTheme ? page.appTheme.colors.primary : "#00695C")
+                           : (page.appTheme ? page.appTheme.colors.surfaceTextMuted : "#888")
+                }
+
+                Label {
+                    text: serverController.running
+                          ? translator.tr("general.online")
+                          : translator.tr("general.offline")
+                    fontSize: "medium"
+                    color: page.appTheme ? page.appTheme.colors.surfaceTextMuted : "#5F6368"
+                }
+            }
+
+            // IPs
             Label {
                 Layout.alignment: Qt.AlignHCenter
-                text: serverController.running
-                    ? _ipsLabel()
-                    : translator.tr("general.offline")
-                fontSize: "large"
-                opacity: 0.8
+                Layout.fillWidth: true
+                text: page._ipsLabel()
+                visible: serverController.running && text.length > 0
+                fontSize: "small"
+                color: page.appTheme ? page.appTheme.colors.surfaceTextMuted : "#5F6368"
                 horizontalAlignment: Text.AlignHCenter
                 wrapMode: Text.Wrap
             }
 
-            Item { Layout.preferredHeight: units.gu(2) }
-
+            // Receive via link
             Button {
                 Layout.alignment: Qt.AlignHCenter
+                Layout.topMargin: units.gu(2)
                 text: translator.tr("receiveTab.link")
                 onClicked: {
-                    // TODO(nav): push WebSharePage once the Rust bridge exposes it.
+                    // TODO: Web share page (core supports it)
+                    console.log("TODO: web share page")
+                }
+            }
+
+            // Server start/stop
+            Button {
+                Layout.alignment: Qt.AlignHCenter
+                text: serverController.running
+                      ? translator.tr("general.stop")
+                      : translator.tr("general.start")
+                color: serverController.running
+                       ? (page.appTheme ? page.appTheme.colors.danger : "#C0392B")
+                       : (page.appTheme ? page.appTheme.colors.primary : "#00695C")
+                onClicked: {
+                    if (serverController.running) {
+                        serverController.stop()
+                    } else {
+                        serverController.start(
+                            settingsController.alias,
+                            settingsController.port,
+                            settingsController.https,
+                            settingsController.receivePin)
+                    }
                 }
             }
         }
     }
 
-    // ---------- Top-right corner buttons ----------
+    // ---------------- Top-right buttons ----------------
     Row {
         anchors { top: parent.top; right: parent.right; margins: units.gu(2) }
         spacing: units.gu(1)
@@ -106,9 +159,7 @@ Page {
             visible: !page._showAdvanced && page._showHistoryButton
             width: units.gu(5); height: units.gu(5)
             Icon { anchors.centerIn: parent; name: "history"; width: units.gu(3); height: units.gu(3) }
-            onClicked: {
-                // TODO(nav): push ReceiveHistoryPage via Rust bridge.
-            }
+            onClicked: console.log("TODO: receive history page")
         }
 
         AbstractButton {
@@ -118,51 +169,50 @@ Page {
         }
     }
 
-    // ---------- Advanced info box ----------
+    // ---------------- Advanced info box ----------------
     Rectangle {
         anchors { top: parent.top; right: parent.right; margins: units.gu(2) }
-        width: units.gu(28)
-        height: advancedColumn.height + units.gu(2)
-        radius: appTheme ? appTheme.metrics.cardRadius : units.gu(0.6)
-        color: appTheme ? appTheme.colors.surface : "#ffffff"
-        border.color: appTheme ? appTheme.colors.divider : "#e0e0e0"
+        width: units.gu(30)
+        height: infoColumn.height + units.gu(2)
+        radius: page.appTheme ? page.appTheme.metrics.cardRadius : units.gu(0.6)
+        color: page.appTheme ? page.appTheme.colors.surface : "#ffffff"
+        border.color: page.appTheme ? page.appTheme.colors.divider : "#e0e0e0"
+        border.width: units.dp(1)
         visible: page._showAdvanced
         opacity: visible ? 1 : 0
         Behavior on opacity { NumberAnimation { duration: 200 } }
 
         Column {
-            id: advancedColumn
-            anchors { top: parent.top; left: parent.left; right: parent.right; margins: units.gu(1) }
+            id: infoColumn
+            anchors {
+                top: parent.top
+                left: parent.left
+                right: parent.right
+                margins: units.gu(1)
+            }
             spacing: units.gu(0.5)
 
-            Label { text: translator.tr("receiveTab.infoBox.alias"); fontSize: "small"; opacity: 0.6 }
+            Label { text: translator.tr("receiveTab.infoBox.alias"); fontSize: "x-small"; opacity: 0.6 }
             Label {
                 text: serverController.alias.length > 0 ? serverController.alias : "-"
-                wrapMode: Text.WrapAnywhere
                 fontSize: "small"
+                wrapMode: Text.WrapAnywhere
             }
 
-            Label { text: translator.tr("receiveTab.infoBox.ip"); fontSize: "small"; opacity: 0.6 }
+            Label { text: translator.tr("receiveTab.infoBox.ip"); fontSize: "x-small"; opacity: 0.6 }
             Label {
-                text: localIpsModel.rowCount() > 0 ? _ipsLabel() : translator.tr("general.unknown")
-                wrapMode: Text.WrapAnywhere
+                text: page._ipsLabel().length > 0
+                      ? page._ipsLabel()
+                      : translator.tr("general.unknown")
                 fontSize: "small"
+                wrapMode: Text.WrapAnywhere
             }
 
-            Label { text: translator.tr("receiveTab.infoBox.port"); fontSize: "small"; opacity: 0.6 }
+            Label { text: translator.tr("receiveTab.infoBox.port"); fontSize: "x-small"; opacity: 0.6 }
             Label {
                 text: serverController.running ? serverController.port.toString() : "-"
                 fontSize: "small"
             }
         }
-    }
-
-    function _ipsLabel() {
-        var parts = []
-        for (var i = 0; i < localIpsModel.rowCount(); i++) {
-            var ip = localIpsModel.data(localIpsModel.index(i, 0), 0)
-            parts.push("· " + ip)
-        }
-        return parts.join("  ")
     }
 }

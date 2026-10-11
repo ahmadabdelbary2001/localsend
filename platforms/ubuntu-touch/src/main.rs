@@ -18,7 +18,6 @@ use crate::application::discovery_service::{
 use crate::application::identity_service::DeviceIdentity;
 use crate::application::settings_service::SettingsService;
 use crate::application::server_service::IncomingFileEntry;
-use crate::application::discovery_service::DeviceSnapshot;
 use crate::bridge::app::AppController;
 use crate::bridge::discovery_controller::DiscoveryController;
 use crate::bridge::home_controller::HomeController;

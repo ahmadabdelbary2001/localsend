@@ -1,24 +1,37 @@
 import QtQuick 2.15
 import QtQuick.Layouts 1.15
 import Lomiri.Components 1.3
-import Lomiri.Content 1.3
 
 Rectangle {
     id: root
     property var appTheme
 
     anchors.fill: parent
-    color: Qt.rgba(0, 0, 0, 0.5)
+    color: Qt.rgba(0, 0, 0, 0.55)
     z: 100
 
-    // ---- Content Hub ----
-    ContentHub {
-        id: contentHub
-    }
+    // ContentHubPicker loaded lazily so a missing Lomiri.Content does
+    // not break the dialog itself.
+    Loader {
+        id: pickerLoader
+        active: false
+        source: "../pickers/ContentHubPicker.qml"
 
-    Component {
-        id: contentItemFactory
-        ContentItem {}
+        onLoaded: {
+            item.filesPicked.connect(function(paths) {
+                pickerLoader.active = false
+                console.log("Shared", paths.length, "file(s)")
+            })
+            item.pickCancelled.connect(function() {
+                pickerLoader.active = false
+            })
+            item.open()
+        }
+        onStatusChanged: {
+            if (status === Loader.Error) {
+                pickerLoader.active = false
+            }
+        }
     }
 
     Rectangle {
@@ -26,8 +39,8 @@ Rectangle {
         anchors.centerIn: parent
         width: Math.min(parent.width - units.gu(4), units.gu(60))
         height: Math.min(parent.height - units.gu(8), units.gu(75))
-        radius: appTheme ? appTheme.metrics.cardRadius : units.gu(0.6)
-        color: appTheme ? appTheme.colors.surface : "#ffffff"
+        radius: root.appTheme ? root.appTheme.metrics.cardRadius : units.gu(0.6)
+        color: root.appTheme ? root.appTheme.colors.surface : "#ffffff"
 
         ColumnLayout {
             anchors.fill: parent
@@ -38,24 +51,24 @@ Rectangle {
             Label {
                 Layout.fillWidth: true
                 text: {
-                    var p = serverController.incoming_phase
-                    if (p === "waiting")   return "Incoming transfer"
-                    if (p === "receiving") return "Receiving…"
-                    return "Transfer finished"
+                    var p = serverController.incomingPhase
+                    if (p === "waiting")   return qsTr("Incoming transfer")
+                    if (p === "receiving") return qsTr("Receiving…")
+                    return qsTr("Transfer finished")
                 }
                 fontSize: "large"
-                color: appTheme ? appTheme.colors.surfaceText : "#1B1D21"
+                color: root.appTheme ? root.appTheme.colors.surfaceText : "#1B1D21"
             }
 
             Label {
                 Layout.fillWidth: true
-                text: serverController.incoming_sender
+                text: serverController.incomingSender
                       + " · "
-                      + serverController.incoming_file_count
-                      + " file(s)"
+                      + serverController.incomingFileCount
+                      + " " + qsTr("file(s)")
                 fontSize: "small"
                 opacity: 0.7
-                color: appTheme ? appTheme.colors.surfaceTextMuted : "#5F6368"
+                color: root.appTheme ? root.appTheme.colors.surfaceTextMuted : "#5F6368"
                 elide: Text.ElideRight
             }
 
@@ -68,78 +81,59 @@ Rectangle {
                 spacing: units.gu(0.5)
                 model: incomingFilesModel
 
-                delegate: Rectangle {
+                delegate: ColumnLayout {
                     width: fileList.width
-                    height: units.gu(8)
-                    color: "transparent"
+                    spacing: units.gu(0.3)
 
                     RowLayout {
-                        anchors.fill: parent
-                        spacing: units.gu(1)
-
-                        ColumnLayout {
+                        Layout.fillWidth: true
+                        Label {
                             Layout.fillWidth: true
-                            spacing: units.gu(0.2)
-
-                            RowLayout {
-                                Layout.fillWidth: true
-                                Label {
-                                    Layout.fillWidth: true
-                                    text: model.fileName
-                                    fontSize: "small"
-                                    elide: Text.ElideRight
-                                    color: appTheme ? appTheme.colors.surfaceText : "#1B1D21"
-                                }
-                                Label {
-                                    text: _humanSize(model.size)
-                                    fontSize: "x-small"
-                                    opacity: 0.6
-                                    color: appTheme ? appTheme.colors.surfaceTextMuted : "#5F6368"
-                                }
-                            }
-
-                            Rectangle {
-                                Layout.fillWidth: true
-                                Layout.preferredHeight: units.dp(4)
-                                radius: units.dp(2)
-                                color: appTheme ? appTheme.colors.surfaceTint : "#ECEFF1"
-                                visible: model.status === "sending"
-                                         || model.status === "finished"
-                                         || model.status === "failed"
-
-                                Rectangle {
-                                    width: parent.width * Math.max(0, Math.min(1, model.progress))
-                                    height: parent.height
-                                    radius: parent.radius
-                                    color: model.status === "failed"
-                                           ? (appTheme ? appTheme.colors.danger : "#C0392B")
-                                           : (appTheme ? appTheme.colors.primary : "#00695C")
-                                }
-                            }
-
-                            Label {
-                                text: {
-                                    var s = model.status
-                                    if (s === "queue")    return "Waiting…"
-                                    if (s === "sending")  return Math.round(model.progress * 100) + "%"
-                                    if (s === "finished") return "Saved"
-                                    if (s === "failed")   return "Failed" + (model.error ? ": " + model.error : "")
-                                    return s
-                                }
-                                fontSize: "x-small"
-                                color: model.status === "failed"
-                                       ? (appTheme ? appTheme.colors.danger : "#C0392B")
-                                       : (appTheme ? appTheme.colors.surfaceTextMuted : "#5F6368")
-                            }
+                            text: model.fileName
+                            fontSize: "small"
+                            elide: Text.ElideRight
+                            color: root.appTheme ? root.appTheme.colors.surfaceText : "#1B1D21"
                         }
-
-                        // ---- Share button ----
-                        Button {
-                            visible: model.status === "finished"
-                                     && model.path.length > 0
-                            text: "Share"
-                            onClicked: root.shareFile(model.path, model.fileName)
+                        Label {
+                            text: _humanSize(model.size)
+                            fontSize: "x-small"
+                            opacity: 0.6
+                            color: root.appTheme ? root.appTheme.colors.surfaceTextMuted : "#5F6368"
                         }
+                    }
+
+                    Rectangle {
+                        Layout.fillWidth: true
+                        Layout.preferredHeight: units.dp(4)
+                        radius: units.dp(2)
+                        color: root.appTheme ? root.appTheme.colors.surfaceTint : "#ECEFF1"
+                        visible: model.status === "sending"
+                                 || model.status === "finished"
+                                 || model.status === "failed"
+
+                        Rectangle {
+                            width: parent.width * Math.max(0, Math.min(1, model.progress))
+                            height: parent.height
+                            radius: parent.radius
+                            color: model.status === "failed"
+                                   ? (root.appTheme ? root.appTheme.colors.danger : "#C0392B")
+                                   : (root.appTheme ? root.appTheme.colors.primary : "#00695C")
+                        }
+                    }
+
+                    Label {
+                        text: {
+                            var s = model.status
+                            if (s === "queue")    return qsTr("Waiting…")
+                            if (s === "sending")  return Math.round(model.progress * 100) + "%"
+                            if (s === "finished") return qsTr("Saved")
+                            if (s === "failed")   return qsTr("Failed") + (model.error ? ": " + model.error : "")
+                            return s
+                        }
+                        fontSize: "x-small"
+                        color: model.status === "failed"
+                               ? (root.appTheme ? root.appTheme.colors.danger : "#C0392B")
+                               : (root.appTheme ? root.appTheme.colors.surfaceTextMuted : "#5F6368")
                     }
                 }
             }
@@ -149,102 +143,43 @@ Rectangle {
                 Layout.fillWidth: true
                 spacing: units.gu(1)
 
-                // Share all — visible when at least one file is finished
-                Button {
-                    visible: serverController.incoming_phase === "done"
-                             && _finishedCount() > 0
-                    text: "Share all"
-                    color: appTheme ? appTheme.colors.primary : "#00695C"
-                    onClicked: root.shareAllFinished()
-                }
-
                 Item { Layout.fillWidth: true }
 
                 Button {
-                    text: "Decline"
-                    visible: serverController.incoming_phase === "waiting"
+                    text: qsTr("Decline")
+                    visible: serverController.incomingPhase === "waiting"
                     onClicked: serverController.decline_incoming()
                 }
 
                 Button {
-                    text: "Accept"
-                    color: appTheme ? appTheme.colors.primary : "#00695C"
-                    visible: serverController.incoming_phase === "waiting"
+                    text: qsTr("Accept")
+                    color: root.appTheme ? root.appTheme.colors.primary : "#00695C"
+                    visible: serverController.incomingPhase === "waiting"
                     onClicked: serverController.accept_incoming()
                 }
 
                 Button {
-                    text: "Close"
-                    visible: serverController.incoming_phase === "done"
+                    text: qsTr("Share")
+                    visible: serverController.incomingPhase === "done"
+                    onClicked: {
+                        pickerLoader.active = false
+                        pickerLoader.active = true
+                    }
+                }
+
+                Button {
+                    text: qsTr("Close")
+                    visible: serverController.incomingPhase === "done"
                     onClicked: serverController.dismiss_incoming()
                 }
             }
         }
     }
 
-    // ---- helpers ----
-
     function _humanSize(bytes) {
         if (bytes < 1024) return bytes + " B"
         if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + " KB"
         if (bytes < 1024 * 1024 * 1024) return (bytes / 1024 / 1024).toFixed(1) + " MB"
         return (bytes / 1024 / 1024 / 1024).toFixed(2) + " GB"
-    }
-
-    function _contentTypeFor(fileName) {
-        var i = fileName.lastIndexOf(".")
-        if (i < 0) return ContentType.Documents
-        var ext = fileName.substring(i + 1).toLowerCase()
-        if (["jpg","jpeg","png","gif","webp","bmp","heic","heif"].indexOf(ext) >= 0)
-            return ContentType.Pictures
-        if (["mp4","mov","mkv","avi","webm","m4v"].indexOf(ext) >= 0)
-            return ContentType.Videos
-        if (["mp3","wav","flac","ogg","m4a","aac","opus"].indexOf(ext) >= 0)
-            return ContentType.Music
-        if (["vcf","vcard"].indexOf(ext) >= 0)
-            return ContentType.Contacts
-        if (["txt","pdf","doc","docx","odt","rtf","md","epub"].indexOf(ext) >= 0)
-            return ContentType.Documents
-        return ContentType.Documents
-    }
-
-    function shareFile(path, fileName) {
-        if (!path || path.length === 0) return
-        var item = contentItemFactory.createObject(root, {
-            "source": "file://" + path,
-            "contentType": _contentTypeFor(fileName)
-        })
-        if (item) contentHub.export([item])
-    }
-
-    function shareAllFinished() {
-        var items = []
-        var n = incomingFilesModel.rowCount()
-        for (var i = 0; i < n; i++) {
-            var idx = incomingFilesModel.index(i, 0)
-            var status = incomingFilesModel.data(idx, 3)
-            var path = incomingFilesModel.data(idx, 4)
-            var name = incomingFilesModel.data(idx, 0)
-            if (status === "finished" && path && path.length > 0) {
-                var item = contentItemFactory.createObject(root, {
-                    "source": "file://" + path,
-                    "contentType": _contentTypeFor(name)
-                })
-                if (item) items.push(item)
-            }
-        }
-        if (items.length > 0) {
-            contentHub.export(items)
-        }
-    }
-
-    function _finishedCount() {
-        var n = incomingFilesModel.rowCount()
-        var c = 0
-        for (var i = 0; i < n; i++) {
-            var idx = incomingFilesModel.index(i, 0)
-            if (incomingFilesModel.data(idx, 3) === "finished") c++
-        }
-        return c
     }
 }
