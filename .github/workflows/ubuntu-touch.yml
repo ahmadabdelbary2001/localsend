@@ -154,6 +154,30 @@ jobs:
           fi
           echo "import statements OK"
 
+      - name: Verify QML imports resolve
+        run: |
+          set -euo pipefail
+          cd platforms/ubuntu-touch
+
+          # For every 'import "..."' in a QML file, the target must be
+          # an existing directory (or .js). Otherwise the referring
+          # file compiles but cannot find the types at runtime.
+          FAILED=0
+          while IFS=: read -r file lineno line; do
+            # extract the path between quotes
+            rel="$(echo "$line" | sed -n 's/.*import[[:space:]]*"\([^"]*\)".*/\1/p')"
+            [ -z "$rel" ] && continue
+            # .js files are legitimate file imports
+            case "$rel" in *.js) continue ;; esac
+            dir="$(dirname "$file")/$rel"
+            if [ ! -d "$dir" ]; then
+              echo "::error file=$file,line=$lineno::import target does not exist: $rel (resolved to $dir)"
+              FAILED=1
+            fi
+          done < <(grep -rEn '^[[:space:]]*import[[:space:]]+"[^"]+"' qml/ || true)
+
+          exit $FAILED
+
       - name: Lint QML sources
         run: |
           set -euxo pipefail

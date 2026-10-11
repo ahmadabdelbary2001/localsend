@@ -4,6 +4,7 @@ import QtQuick.Controls 2.15
 import Lomiri.Components 1.3
 
 import "../components"
+import "../dialogs"
 
 Page {
     id: page
