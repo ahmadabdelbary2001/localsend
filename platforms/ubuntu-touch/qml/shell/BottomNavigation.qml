@@ -12,14 +12,13 @@ Item {
 
     Rectangle {
         anchors.fill: parent
-        color: appTheme ? appTheme.colors.surface : "#ffffff"
+        color: nav.appTheme ? nav.appTheme.colors.surface : "#ffffff"
     }
 
-    // Top hairline
     Rectangle {
         anchors { top: parent.top; left: parent.left; right: parent.right }
         height: units.dp(1)
-        color: appTheme ? appTheme.colors.divider : "#e0e0e0"
+        color: nav.appTheme ? nav.appTheme.colors.divider : "#e0e0e0"
     }
 
     Row {
@@ -27,9 +26,9 @@ Item {
 
         Repeater {
             model: [
-                { labelKey: "receiveTab.title", icon: "transfer" },
-                { labelKey: "sendTab.title",    icon: "send"     },
-                { labelKey: "settingsTab.title",icon: "settings" }
+                { labelKey: "receiveTab.title",  icon: "transfer" },
+                { labelKey: "sendTab.title",     icon: "send"     },
+                { labelKey: "settingsTab.title", icon: "settings" }
             ]
 
             delegate: AbstractButton {
@@ -46,8 +45,8 @@ Item {
                         width: units.gu(3)
                         height: units.gu(3)
                         color: index === nav.currentIndex
-                               ? (appTheme ? appTheme.colors.primary : "#00695c")
-                               : (appTheme ? appTheme.colors.surfaceTextMuted : "#888")
+                               ? (nav.appTheme ? nav.appTheme.colors.primary : "#00695c")
+                               : (nav.appTheme ? nav.appTheme.colors.surfaceTextMuted : "#888")
                     }
 
                     Label {
@@ -55,8 +54,8 @@ Item {
                         text: translator.tr(modelData.labelKey)
                         fontSize: "x-small"
                         color: index === nav.currentIndex
-                               ? (appTheme ? appTheme.colors.primary : "#00695c")
-                               : (appTheme ? appTheme.colors.surfaceTextMuted : "#888")
+                               ? (nav.appTheme ? nav.appTheme.colors.primary : "#00695c")
+                               : (nav.appTheme ? nav.appTheme.colors.surfaceTextMuted : "#888")
                     }
                 }
 

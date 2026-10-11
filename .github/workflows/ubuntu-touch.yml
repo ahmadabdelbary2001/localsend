@@ -140,6 +140,38 @@ jobs:
           docker commit ut-sdk "$PROVISIONED_IMAGE"
           docker rm -f ut-sdk
 
+      - name: Lint QML sources
+        run: |
+          set -euxo pipefail
+          docker run --rm \
+            -v "$GITHUB_WORKSPACE":/src \
+            -w /src/platforms/ubuntu-touch \
+            "$PROVISIONED_IMAGE" \
+            bash -c '
+              set -e
+              export DEBIAN_FRONTEND=noninteractive
+              apt-get install -y --no-install-recommends qtdeclarative5-dev-tools >/dev/null
+
+              # qmllint is strict about missing context. Ignore
+              # "unqualified" errors caused by C++-registered types
+              # (translator, serverController, etc.) which only exist
+              # at runtime.
+              FAILED=0
+              for f in $(find qml -name "*.qml"); do
+                echo "--- $f"
+                qmllint "$f" 2>&1 | \
+                  grep -v "Unqualified access" | \
+                  grep -v "is not a type" | \
+                  grep -v "Cannot find property" | \
+                  grep -v "^$" > /tmp/lint.txt || true
+                if [ -s /tmp/lint.txt ]; then
+                  cat /tmp/lint.txt
+                  FAILED=1
+                fi
+              done
+              exit $FAILED
+            '
+
       - name: Build + assemble + package
         run: |
           set -euxo pipefail
