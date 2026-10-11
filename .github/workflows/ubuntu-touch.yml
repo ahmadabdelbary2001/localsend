@@ -139,6 +139,21 @@ jobs:
           docker commit ut-sdk "$PROVISIONED_IMAGE"
           docker rm -f ut-sdk
 
+      - name: Reject invalid import statements
+        run: |
+          set -euo pipefail
+          cd platforms/ubuntu-touch
+
+          # 'import "foo.qml"' means "find a module/directory named foo.qml",
+          # which never exists. QML supports file imports only for .js files.
+          # Such a line compiles fine (qmllint accepts it) but breaks
+          # loading at runtime, hanging the app on the Lomiri splash.
+          if grep -rEn '^[[:space:]]*import[[:space:]]+"[^"]+\.qml"' qml/; then
+            echo "::error::Found a .qml file import. QML components in the same directory do not need an import; remove the line."
+            exit 1
+          fi
+          echo "import statements OK"
+
       - name: Lint QML sources
         run: |
           set -euxo pipefail
