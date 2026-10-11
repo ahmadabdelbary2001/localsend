@@ -350,43 +350,38 @@ jobs:
           echo "Has trailing newline? $(printf '%s' "$OPENSTORE_API_KEY" | tail -c 1 | xxd)"
           echo "First 8 bytes hex: $(printf '%s' "$OPENSTORE_API_KEY" | head -c 8 | xxd)"
 
+
       - name: Publish to OpenStore
         env:
           OPENSTORE_API_KEY: ${{ secrets.OPENSTORE_API_KEY }}
           APP_ID: localsend.ahmadabdelbary
         run: |
           set -euo pipefail
+
           echo "Publishing ${CLICK} (${VERSION}, ${{ matrix.arch }})"
 
-          # Try 1: Bearer
-          echo "--- attempt 1: Authorization: Bearer ---"
-          if curl --fail-with-body -sS -L \
-              -X POST \
-              -H "Authorization: Bearer ${OPENSTORE_API_KEY}" \
-              -F "file=@${CLICK}" \
-              -F "changelog=Release ${GITHUB_REF_NAME} (${VERSION}, ${{ matrix.arch }})" \
-              "https://open-store.io/api/v3/manage/${APP_ID}/revision" \
-              | tee /tmp/openstore-response.txt; then
-            echo "Success"
-            cat /tmp/openstore-response.txt
-            exit 0
-          fi
-          echo "Bearer failed:"
-          cat /tmp/openstore-response.txt
+          # OpenStore's localapikey strategy reads "apikey"
+          # from req.body or req.query, not Authorization.
+          # The revision route authenticates before multer
+          # parses the multipart upload, so use the query string.
+          API_QUERY="$(python3 -c \
+            'import os, urllib.parse; print(urllib.parse.urlencode({"apikey": os.environ["OPENSTORE_API_KEY"]}))')"
 
-          # Try 2: token as-is (some OpenStore deployments use this)
-          echo "--- attempt 2: Authorization: token ---"
-          if curl --fail-with-body -sS -L \
-              -X POST \
-              -H "Authorization: ${OPENSTORE_API_KEY}" \
-              -F "file=@${CLICK}" \
-              -F "changelog=Release ${GITHUB_REF_NAME} (${VERSION}, ${{ matrix.arch }})" \
-              "https://open-store.io/api/v3/manage/${APP_ID}/revision" \
-              | tee /tmp/openstore-response.txt; then
-            echo "Success"
-            cat /tmp/openstore-response.txt
-            exit 0
+          RESPONSE_FILE="$(mktemp)"
+
+          HTTP_CODE="$(curl --silent --show-error \
+            --output "$RESPONSE_FILE" \
+            --write-out '%{http_code}' \
+            --request POST \
+            --form "file=@${CLICK}" \
+            --form "changelog=Release ${GITHUB_REF_NAME} (${VERSION}, ${{ matrix.arch }})" \
+            "https://open-store.io/api/v3/manage/${APP_ID}/revision?${API_QUERY}")"
+
+          if [[ ! "$HTTP_CODE" =~ ^2[0-9][0-9]$ ]]; then
+            echo "::error::OpenStore upload failed with HTTP ${HTTP_CODE}"
+            cat "$RESPONSE_FILE"
+            exit 1
           fi
-          echo "Both attempts failed:"
-          cat /tmp/openstore-response.txt
-          exit 1
+
+          cat "$RESPONSE_FILE"
+          echo "OpenStore upload completed for ${VERSION}/${{ matrix.arch }}"
