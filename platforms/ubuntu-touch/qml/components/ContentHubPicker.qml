@@ -1,5 +1,5 @@
 import QtQuick 2.15
-import Lomiri.Content 1.3
+import Lomiri.Content 1.0
 
 Item {
     id: root

@@ -2,23 +2,40 @@ import QtQuick 2.15
 import QtQuick.Layouts 1.15
 import Lomiri.Components 1.3
 
-import "../components"
-
 Page {
     id: page
     property var appTheme
+    property string pendingFingerprint: ""
 
-    ContentHubPicker {
-        id: picker
-        onFilesPicked: function(paths) {
-            if (typeof pendingFingerprint !== "undefined" && pendingFingerprint) {
-                sendController.send_files(pendingFingerprint, JSON.stringify(paths))
-                pendingFingerprint = ""
+    // ContentHubPicker is loaded on demand. If Lomiri.Content is not
+    // available on this device, only file picking fails — the rest of
+    // the app keeps working.
+    Loader {
+        id: pickerLoader
+        active: false
+        source: "../components/ContentHubPicker.qml"
+
+        onLoaded: {
+            item.filesPicked.connect(function(paths) {
+                if (page.pendingFingerprint && page.pendingFingerprint.length > 0) {
+                    sendController.send_files(page.pendingFingerprint, JSON.stringify(paths))
+                    page.pendingFingerprint = ""
+                }
+            })
+            item.pickCancelled.connect(function() {
+                page.pendingFingerprint = ""
+            })
+            item.open()
+        }
+
+        onStatusChanged: {
+            if (status === Loader.Error) {
+                console.warn("ContentHubPicker unavailable: file picking disabled")
+                page.pendingFingerprint = ""
+                pickerLoader.active = false
             }
         }
     }
-
-    property string pendingFingerprint: ""
 
     ColumnLayout {
         anchors {
@@ -63,7 +80,7 @@ Page {
 
             delegate: DeviceCard {
                 width: list.width
-                theme: page.theme
+                appTheme: page.appTheme
                 fingerprint: model.fingerprint
                 alias: model.alias
                 deviceModel: model.deviceModel
@@ -74,7 +91,8 @@ Page {
 
                 onTapped: {
                     page.pendingFingerprint = model.fingerprint
-                    picker.open()
+                    pickerLoader.active = false
+                    pickerLoader.active = true
                 }
             }
         }
