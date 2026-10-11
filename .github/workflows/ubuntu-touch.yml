@@ -169,6 +169,20 @@ jobs:
           fi
           echo "Lomiri compatibility grep OK"
 
+      - name: Reject nested QtObject inside readonly property
+        run: |
+          set -euo pipefail
+          cd platforms/ubuntu-touch
+
+          # Qt 5.15 does not reliably materialize an inline QtObject
+          # assigned to a readonly property, so 'colors'/'metrics' end
+          # up undefined. Use JS object literals instead.
+          if grep -rEn 'readonly[[:space:]]+property[[:space:]]+QtObject[[:space:]]+[A-Za-z_]+[[:space:]]*:[[:space:]]*QtObject[[:space:]]*\{' qml/; then
+            echo "::error::Inline QtObject in readonly property is unreliable on Qt 5.15. Use a JS object literal ('readonly property var x: ({ ... })')."
+            exit 1
+          fi
+          echo "nested QtObject grep OK"
+
       - name: Verify QML imports resolve
         run: |
           set -euo pipefail
