@@ -2,6 +2,7 @@
 pub mod app;
 pub mod discovery_controller;
 pub mod favorites_controller;
+pub mod history_controller;
 pub mod home_controller;
 pub mod send_controller;
 pub mod server_controller;

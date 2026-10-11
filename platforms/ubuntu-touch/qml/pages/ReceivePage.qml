@@ -2,6 +2,8 @@ import QtQuick 2.15
 import QtQuick.Layouts 1.15
 import Lomiri.Components 1.3
 
+import "../dialogs"
+
 Page {
     id: page
     property var appTheme
@@ -159,7 +161,7 @@ Page {
             visible: !page._showAdvanced && page._showHistoryButton
             width: units.gu(5); height: units.gu(5)
             Icon { anchors.centerIn: parent; name: "history"; width: units.gu(3); height: units.gu(3) }
-            onClicked: console.log("TODO: receive history page")
+            onClicked: historyDialog.open()
         }
 
         AbstractButton {
@@ -214,5 +216,10 @@ Page {
                 fontSize: "small"
             }
         }
+    }
+
+    HistoryDialog {
+        id: historyDialog
+        appTheme: page.appTheme
     }
 }
