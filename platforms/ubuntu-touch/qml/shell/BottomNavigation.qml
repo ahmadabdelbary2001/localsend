@@ -47,7 +47,7 @@ Item {
                         height: units.gu(3)
                         color: index === nav.currentIndex
                                ? (theme ? theme.colors.primary : "#00695c")
-                               : (theme ? theme.colors.onSurfaceMuted : "#888")
+                               : (theme ? theme.colors.surfaceTextMuted : "#888")
                     }
 
                     Label {
@@ -56,7 +56,7 @@ Item {
                         fontSize: "x-small"
                         color: index === nav.currentIndex
                                ? (theme ? theme.colors.primary : "#00695c")
-                               : (theme ? theme.colors.onSurfaceMuted : "#888")
+                               : (theme ? theme.colors.surfaceTextMuted : "#888")
                     }
                 }
 

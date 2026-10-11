@@ -28,9 +28,9 @@ QtObject {
                                             : (dark ? "#1B1D21" : "#FFFFFF")
     readonly property color surfaceTint:    dark ? "#23262B" : "#ECEFF1"
     readonly property color primary:        dark ? _primaryLight : _primaryDark
-    readonly property color onPrimary:      "#FFFFFF"
-    readonly property color onSurface:      dark ? "#F2F2F2" : "#1B1D21"
-    readonly property color onSurfaceMuted: dark ? "#9AA0A6" : "#5F6368"
+    readonly property color primaryText:      "#FFFFFF"
+    readonly property color surfaceText:      dark ? "#F2F2F2" : "#1B1D21"
+    readonly property color surfaceTextMuted: dark ? "#9AA0A6" : "#5F6368"
     readonly property color divider:        dark ? "#2A2D31" : "#E0E0E0"
     readonly property color danger:         "#C0392B"
     readonly property color warning:        "#FF9800"

@@ -53,7 +53,7 @@ Rectangle {
                 text: card.alias
                 fontSize: "medium"
                 elide: Text.ElideRight
-                color: theme ? theme.colors.onSurface : "#1B1D21"
+                color: theme ? theme.colors.surfaceText : "#1B1D21"
             }
 
             Label {

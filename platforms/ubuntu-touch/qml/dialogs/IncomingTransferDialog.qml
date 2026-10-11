@@ -44,7 +44,7 @@ Rectangle {
                     return "Transfer finished"
                 }
                 fontSize: "large"
-                color: theme ? theme.colors.onSurface : "#1B1D21"
+                color: theme ? theme.colors.surfaceText : "#1B1D21"
             }
 
             Label {
@@ -55,7 +55,7 @@ Rectangle {
                       + " file(s)"
                 fontSize: "small"
                 opacity: 0.7
-                color: theme ? theme.colors.onSurfaceMuted : "#5F6368"
+                color: theme ? theme.colors.surfaceTextMuted : "#5F6368"
                 elide: Text.ElideRight
             }
 
@@ -88,13 +88,13 @@ Rectangle {
                                     text: model.fileName
                                     fontSize: "small"
                                     elide: Text.ElideRight
-                                    color: theme ? theme.colors.onSurface : "#1B1D21"
+                                    color: theme ? theme.colors.surfaceText : "#1B1D21"
                                 }
                                 Label {
                                     text: _humanSize(model.size)
                                     fontSize: "x-small"
                                     opacity: 0.6
-                                    color: theme ? theme.colors.onSurfaceMuted : "#5F6368"
+                                    color: theme ? theme.colors.surfaceTextMuted : "#5F6368"
                                 }
                             }
 
@@ -129,7 +129,7 @@ Rectangle {
                                 fontSize: "x-small"
                                 color: model.status === "failed"
                                        ? (theme ? theme.colors.danger : "#C0392B")
-                                       : (theme ? theme.colors.onSurfaceMuted : "#5F6368")
+                                       : (theme ? theme.colors.surfaceTextMuted : "#5F6368")
                             }
                         }
 

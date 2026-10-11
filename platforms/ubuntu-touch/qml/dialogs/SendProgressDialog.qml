@@ -27,7 +27,7 @@ Rectangle {
                       ? (sendController.failed_count > 0 ? "Send finished with errors" : "Send finished")
                       : "Sending…"
                 fontSize: "large"
-                color: theme ? theme.colors.onSurface : "#1B1D21"
+                color: theme ? theme.colors.surfaceText : "#1B1D21"
             }
 
             Label {
@@ -35,7 +35,7 @@ Rectangle {
                 text: sendController.target_alias + " · " + sendController.finished_count + " / " + sendController.total_count
                 fontSize: "small"
                 opacity: 0.7
-                color: theme ? theme.colors.onSurfaceMuted : "#5F6368"
+                color: theme ? theme.colors.surfaceTextMuted : "#5F6368"
             }
 
             ListView {
