@@ -105,10 +105,4 @@ Page {
         list.model = deviceListModel
     }
 
-    Connections {
-        target: discoveryController
-        function onStateChanged() {
-            page.refreshModel()
-        }
-    }
 }

@@ -16,8 +16,6 @@ pub fn register() {
             "qml/pages/SendPage.qml" as "pages/SendPage.qml",
             "qml/pages/SettingsPage.qml" as "pages/SettingsPage.qml",
             "qml/theme/Theme.qml" as "theme/Theme.qml",
-            "qml/theme/Colors.qml" as "theme/Colors.qml",
-            "qml/theme/Metrics.qml" as "theme/Metrics.qml",
             "qml/pickers/ContentHubPicker.qml" as "pickers/ContentHubPicker.qml",
             "qml/components/DeviceCard.qml" as "components/DeviceCard.qml",
             "qml/dialogs/IncomingTransferDialog.qml" as "dialogs/IncomingTransferDialog.qml",
