@@ -101,16 +101,15 @@ impl FavoritesService {
     }
 
     pub fn remove_by_fingerprint(&self, fingerprint: &str) -> bool {
-        let mut removed = false;
-        {
+        let removed = {
             let mut g = match self.state.lock() {
                 Ok(g) => g,
                 Err(p) => p.into_inner(),
             };
             let before = g.len();
             g.retain(|f| f.fingerprint != fingerprint);
-            removed = g.len() != before;
-        }
+            g.len() != before
+        };
         if removed {
             let _ = self.save();
         }

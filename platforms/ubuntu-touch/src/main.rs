@@ -103,6 +103,7 @@ fn main() -> ExitCode {
     let discovery_controller = RefCell::new(DiscoveryController::new(
         discovery_handle.clone(),
     ));
+    let favorites_controller = RefCell::new(FavoritesController::new(favorites));
 
     // Start server first.
     {
@@ -239,7 +240,6 @@ fn main() -> ExitCode {
         }
     }
 
-    let favorites_controller = RefCell::new(FavoritesController::new(favorites));
 
     let mut engine = QmlEngine::new();
 
