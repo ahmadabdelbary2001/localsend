@@ -6,8 +6,8 @@ RowLayout {
     id: root
     property var appTheme
     property string label: ""
-    property alias text: field.text
     property string placeholder: ""
+    property alias text: field.text
     signal edited(string value)
 
     Layout.fillWidth: true
@@ -25,6 +25,14 @@ RowLayout {
         id: field
         Layout.preferredWidth: units.gu(15)
         placeholderText: root.placeholder
-        onEditingFinished: root.edited(text)
+        onTextChanged: debounce.restart()
+    }
+
+    // Emits `edited` 600ms after the user stops typing.
+    Timer {
+        id: debounce
+        interval: 600
+        repeat: false
+        onTriggered: root.edited(field.text)
     }
 }
