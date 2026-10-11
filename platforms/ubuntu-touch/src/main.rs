@@ -18,6 +18,7 @@ use crate::application::discovery_service::{
 use crate::application::identity_service::DeviceIdentity;
 use crate::application::settings_service::SettingsService;
 use crate::application::server_service::IncomingFileEntry;
+use crate::application::favorites_service::FavoritesService;
 use crate::bridge::app::AppController;
 use crate::bridge::discovery_controller::DiscoveryController;
 use crate::bridge::home_controller::HomeController;
@@ -25,6 +26,7 @@ use crate::bridge::server_controller::ServerController;
 use crate::bridge::settings_controller::SettingsController;
 use crate::bridge::translator::Translator;
 use crate::bridge::send_controller::{OutgoingEntry, SendController};
+use crate::bridge::favorites_controller::FavoritesController;
 use crate::model::local_ips_model::LocalIpsModel;
 use crate::model::device_model::DeviceListModel;
 use crate::model::incoming_files_model::IncomingFilesModel;
@@ -58,6 +60,14 @@ fn main() -> ExitCode {
     // Shared discovery service. Both ServerController (to feed peers that
     // register with us) and DiscoveryController (to expose to QML) hold it.
     let discovery_handle = Arc::new(DiscoveryServiceHandle::spawn());
+
+        let favorites = match FavoritesService::load_or_default() {
+        Ok(s) => Arc::new(s),
+        Err(e) => {
+            log::error!("failed to load favorites: {e}");
+            return ExitCode::FAILURE;
+        }
+    };
 
     resources::register();
 
@@ -177,6 +187,10 @@ fn main() -> ExitCode {
                 let mut im = incoming_files_model.borrow_mut();
                 im.refresh();
             }
+            {
+                let mut fc = favorites_controller.borrow_mut();
+                fc.refresh();
+            }
 
             // Fire TEST_SEND once, after 10 ticks (~5s) or when the target is visible.
             if !test_send_fired {
@@ -225,6 +239,8 @@ fn main() -> ExitCode {
         }
     }
 
+    let favorites_controller = RefCell::new(FavoritesController::new(favorites));
+
     let mut engine = QmlEngine::new();
 
     unsafe {
@@ -239,6 +255,7 @@ fn main() -> ExitCode {
         engine.set_object_property("incomingFilesModel".into(), QObjectPinned::new(&incoming_files_model));
         engine.set_object_property("outgoingFilesModel".into(), QObjectPinned::new(&outgoing_files_model));
         engine.set_object_property("sendController".into(), QObjectPinned::new(&send_controller));
+        engine.set_object_property("favoritesController".into(), QObjectPinned::new(&favorites_controller));
     }
 
     engine.load_file("qrc:/qml/Main.qml".into());
