@@ -156,26 +156,27 @@ Page {
                     }
                 }
 
+                SettingsTextField {
+                    appTheme: page.appTheme
+                    label: translator.tr("settingsTab.network.alias")
+                    text: settingsController.alias
+                    onEdited: settingsController.set_alias(value)
+                }
+
                 RowLayout {
                     Layout.fillWidth: true
                     spacing: units.gu(1)
 
-                    Label {
-                        Layout.fillWidth: true
-                        text: translator.tr("settingsTab.network.alias")
-                        fontSize: "small"
-                        color: page.appTheme ? page.appTheme.colors.surfaceText : "#1B1D21"
-                    }
-
-                    TextField {
-                        Layout.preferredWidth: units.gu(15)
-                        text: settingsController.alias
-                        onEditingFinished: settingsController.set_alias(text)
-                    }
+                    Item { Layout.fillWidth: true }
 
                     Button {
                         text: "🎲"
                         onClicked: settingsController.random_alias()
+                    }
+
+                    Button {
+                        text: "🖥"
+                        onClicked: settingsController.use_system_name()
                     }
                 }
 

@@ -154,6 +154,21 @@ jobs:
           fi
           echo "import statements OK"
 
+      - name: Reject QML properties missing on Lomiri components
+        run: |
+          set -euo pipefail
+          cd platforms/ubuntu-touch
+
+          # Lomiri.Components overrides several QtQuick.Controls types,
+          # and the override drops signals/properties like 'editingFinished'.
+          # These classes of mistake compile but fail at load time.
+          BAD="onEditingFinished"
+          if grep -rEn "$BAD" qml/; then
+            echo "::error::Lomiri TextField has no editingFinished. Use a Timer (see SettingsTextField.qml)."
+            exit 1
+          fi
+          echo "Lomiri compatibility grep OK"
+
       - name: Verify QML imports resolve
         run: |
           set -euo pipefail
