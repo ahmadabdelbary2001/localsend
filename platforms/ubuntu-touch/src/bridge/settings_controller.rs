@@ -10,6 +10,23 @@ use qmetaobject::prelude::*;
 
 use crate::application::settings_service::SettingsService;
 
+// Word lists for random alias generation (Adjective + Fruit).
+const ADJECTIVES: &[&str] = &[
+    "Adorable", "Beautiful", "Big", "Bright", "Clean", "Clever", "Cool",
+    "Cute", "Cunning", "Determined", "Energetic", "Efficient", "Fantastic",
+    "Fast", "Fine", "Fresh", "Good", "Gorgeous", "Great", "Handsome",
+    "Hot", "Kind", "Lovely", "Mystic", "Neat", "Nice", "Patient", "Pretty",
+    "Powerful", "Rich", "Secret", "Smart", "Solid", "Special", "Strategic",
+    "Strong", "Tidy", "Wise",
+];
+
+const FRUITS: &[&str] = &[
+    "Apple", "Avocado", "Banana", "Blackberry", "Blueberry", "Broccoli",
+    "Carrot", "Cherry", "Coconut", "Grape", "Lemon", "Lettuce", "Mango",
+    "Melon", "Mushroom", "Onion", "Orange", "Papaya", "Peach", "Pear",
+    "Pineapple", "Potato", "Pumpkin", "Raspberry", "Strawberry", "Tomato",
+];
+
 #[derive(QObject)]
 pub struct SettingsController {
     base: qt_base_class!(trait QObject),
@@ -56,6 +73,8 @@ pub struct SettingsController {
     set_receive_pin: qt_method!(fn(&mut self, v: QString)),
     set_auto_finish: qt_method!(fn(&mut self, v: bool)),
     set_save_to_history: qt_method!(fn(&mut self, v: bool)),
+    random_alias: qt_method!(fn(&mut self)),
+    use_system_name: qt_method!(fn(&mut self)),
 }
 
 impl SettingsController {
@@ -100,6 +119,8 @@ impl SettingsController {
             set_receive_pin: Default::default(),
             set_auto_finish: Default::default(),
             set_save_to_history: Default::default(),
+            random_alias: Default::default(),
+            use_system_name: Default::default(),
         };
         // silence: use once so field never flagged
         this.changed = Default::default();
@@ -256,5 +277,26 @@ impl SettingsController {
         self.service.update(|st| st.save_to_history = v);
         self.save_to_history = v;
         self.changed();
+    }
+
+    fn random_alias(&mut self) {
+        let seed = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map(|d| d.as_nanos() as usize)
+            .unwrap_or(0);
+        let adj = ADJECTIVES[seed % ADJECTIVES.len()];
+        let fruit = FRUITS[(seed / ADJECTIVES.len()) % FRUITS.len()];
+        let alias = format!("{adj} {fruit}");
+        self.set_alias(QString::from(alias));
+    }
+
+    fn use_system_name(&mut self) {
+        let name = std::fs::read_to_string("/proc/sys/kernel/hostname")
+            .or_else(|_| std::fs::read_to_string("/etc/hostname"))
+            .ok()
+            .map(|s| s.trim().to_string())
+            .filter(|s| !s.is_empty())
+            .unwrap_or_else(|| "LocalSend".to_string());
+        self.set_alias(QString::from(name));
     }
 }

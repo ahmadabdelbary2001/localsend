@@ -20,6 +20,11 @@ pub fn register() {
             "qml/components/DeviceCard.qml" as "components/DeviceCard.qml",
             "qml/dialogs/IncomingTransferDialog.qml" as "dialogs/IncomingTransferDialog.qml",
             "qml/dialogs/SendProgressDialog.qml" as "dialogs/SendProgressDialog.qml",
+            "qml/components/SettingsSection.qml"   as "components/SettingsSection.qml",
+            "qml/components/SettingsSwitch.qml"    as "components/SettingsSwitch.qml",
+            "qml/components/SettingsButton.qml"    as "components/SettingsButton.qml",
+            "qml/components/SettingsTextField.qml" as "components/SettingsTextField.qml",
+            "qml/dialogs/LanguageDialog.qml"       as "dialogs/LanguageDialog.qml",
             "assets/logo.png" as "assets/logo.png",
         }
     );
