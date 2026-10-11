@@ -6,7 +6,7 @@ import "../pages"
 
 Page {
     id: shell
-    property var theme
+    property var appTheme
 
     // Minimal header; pages own their own titles.
     header: null
@@ -33,14 +33,14 @@ Page {
             }
         }
 
-        ReceivePage  { theme: shell.theme }
-        SendPage     { theme: shell.theme }
-        SettingsPage { theme: shell.theme }
+        ReceivePage  { appTheme: shell.appTheme }
+        SendPage     { appTheme: shell.appTheme }
+        SettingsPage { appTheme: shell.appTheme }
     }
 
     BottomNavigation {
         id: nav
-        theme: shell.theme
+        appTheme: shell.appTheme
         anchors {
             left: parent.left
             right: parent.right

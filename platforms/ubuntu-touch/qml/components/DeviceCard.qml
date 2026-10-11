@@ -4,7 +4,7 @@ import Lomiri.Components 1.3
 
 Rectangle {
     id: card
-    property var theme
+    property var appTheme
 
     property string fingerprint: ""
     property string alias: ""
@@ -17,9 +17,9 @@ Rectangle {
     signal tapped()
 
     height: units.gu(9)
-    radius: theme ? theme.metrics.cardRadius : units.gu(0.6)
-    color: theme ? theme.colors.surface : "#ffffff"
-    border.color: theme ? theme.colors.divider : "#e0e0e0"
+    radius: appTheme ? appTheme.metrics.cardRadius : units.gu(0.6)
+    color: appTheme ? appTheme.colors.surface : "#ffffff"
+    border.color: appTheme ? appTheme.colors.divider : "#e0e0e0"
     border.width: units.dp(1)
 
     RowLayout {
@@ -32,7 +32,7 @@ Rectangle {
             Layout.preferredWidth: units.gu(6)
             Layout.preferredHeight: units.gu(6)
             radius: units.gu(3)
-            color: theme ? theme.colors.surfaceTint : "#ECEFF1"
+            color: appTheme ? appTheme.colors.surfaceTint : "#ECEFF1"
 
             Label {
                 anchors.centerIn: parent
@@ -40,7 +40,7 @@ Rectangle {
                       ? card.deviceType.charAt(0).toUpperCase()
                       : "?"
                 fontSize: "x-large"
-                color: theme ? theme.colors.primary : "#00695C"
+                color: appTheme ? appTheme.colors.primary : "#00695C"
             }
         }
 
@@ -53,7 +53,7 @@ Rectangle {
                 text: card.alias
                 fontSize: "medium"
                 elide: Text.ElideRight
-                color: theme ? theme.colors.surfaceText : "#1B1D21"
+                color: appTheme ? appTheme.colors.surfaceText : "#1B1D21"
             }
 
             Label {

@@ -5,7 +5,7 @@ import Lomiri.Content 1.3
 
 Rectangle {
     id: root
-    property var theme
+    property var appTheme
 
     anchors.fill: parent
     color: Qt.rgba(0, 0, 0, 0.5)
@@ -26,8 +26,8 @@ Rectangle {
         anchors.centerIn: parent
         width: Math.min(parent.width - units.gu(4), units.gu(60))
         height: Math.min(parent.height - units.gu(8), units.gu(75))
-        radius: theme ? theme.metrics.cardRadius : units.gu(0.6)
-        color: theme ? theme.colors.surface : "#ffffff"
+        radius: appTheme ? appTheme.metrics.cardRadius : units.gu(0.6)
+        color: appTheme ? appTheme.colors.surface : "#ffffff"
 
         ColumnLayout {
             anchors.fill: parent
@@ -44,7 +44,7 @@ Rectangle {
                     return "Transfer finished"
                 }
                 fontSize: "large"
-                color: theme ? theme.colors.surfaceText : "#1B1D21"
+                color: appTheme ? appTheme.colors.surfaceText : "#1B1D21"
             }
 
             Label {
@@ -55,7 +55,7 @@ Rectangle {
                       + " file(s)"
                 fontSize: "small"
                 opacity: 0.7
-                color: theme ? theme.colors.surfaceTextMuted : "#5F6368"
+                color: appTheme ? appTheme.colors.surfaceTextMuted : "#5F6368"
                 elide: Text.ElideRight
             }
 
@@ -88,13 +88,13 @@ Rectangle {
                                     text: model.fileName
                                     fontSize: "small"
                                     elide: Text.ElideRight
-                                    color: theme ? theme.colors.surfaceText : "#1B1D21"
+                                    color: appTheme ? appTheme.colors.surfaceText : "#1B1D21"
                                 }
                                 Label {
                                     text: _humanSize(model.size)
                                     fontSize: "x-small"
                                     opacity: 0.6
-                                    color: theme ? theme.colors.surfaceTextMuted : "#5F6368"
+                                    color: appTheme ? appTheme.colors.surfaceTextMuted : "#5F6368"
                                 }
                             }
 
@@ -102,7 +102,7 @@ Rectangle {
                                 Layout.fillWidth: true
                                 Layout.preferredHeight: units.dp(4)
                                 radius: units.dp(2)
-                                color: theme ? theme.colors.surfaceTint : "#ECEFF1"
+                                color: appTheme ? appTheme.colors.surfaceTint : "#ECEFF1"
                                 visible: model.status === "sending"
                                          || model.status === "finished"
                                          || model.status === "failed"
@@ -112,8 +112,8 @@ Rectangle {
                                     height: parent.height
                                     radius: parent.radius
                                     color: model.status === "failed"
-                                           ? (theme ? theme.colors.danger : "#C0392B")
-                                           : (theme ? theme.colors.primary : "#00695C")
+                                           ? (appTheme ? appTheme.colors.danger : "#C0392B")
+                                           : (appTheme ? appTheme.colors.primary : "#00695C")
                                 }
                             }
 
@@ -128,8 +128,8 @@ Rectangle {
                                 }
                                 fontSize: "x-small"
                                 color: model.status === "failed"
-                                       ? (theme ? theme.colors.danger : "#C0392B")
-                                       : (theme ? theme.colors.surfaceTextMuted : "#5F6368")
+                                       ? (appTheme ? appTheme.colors.danger : "#C0392B")
+                                       : (appTheme ? appTheme.colors.surfaceTextMuted : "#5F6368")
                             }
                         }
 
@@ -154,7 +154,7 @@ Rectangle {
                     visible: serverController.incoming_phase === "done"
                              && _finishedCount() > 0
                     text: "Share all"
-                    color: theme ? theme.colors.primary : "#00695C"
+                    color: appTheme ? appTheme.colors.primary : "#00695C"
                     onClicked: root.shareAllFinished()
                 }
 
@@ -168,7 +168,7 @@ Rectangle {
 
                 Button {
                     text: "Accept"
-                    color: theme ? theme.colors.primary : "#00695C"
+                    color: appTheme ? appTheme.colors.primary : "#00695C"
                     visible: serverController.incoming_phase === "waiting"
                     onClicked: serverController.accept_incoming()
                 }

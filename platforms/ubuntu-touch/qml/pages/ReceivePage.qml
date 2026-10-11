@@ -4,7 +4,7 @@ import Lomiri.Components 1.3
 
 Page {
     id: page
-    property var theme
+    property var appTheme
 
     // UI-only state that mirrors receive_tab.dart
     property bool _showAdvanced: false
@@ -123,9 +123,9 @@ Page {
         anchors { top: parent.top; right: parent.right; margins: units.gu(2) }
         width: units.gu(28)
         height: advancedColumn.height + units.gu(2)
-        radius: theme ? theme.metrics.cardRadius : units.gu(0.6)
-        color: theme ? theme.colors.surface : "#ffffff"
-        border.color: theme ? theme.colors.divider : "#e0e0e0"
+        radius: appTheme ? appTheme.metrics.cardRadius : units.gu(0.6)
+        color: appTheme ? appTheme.colors.surface : "#ffffff"
+        border.color: appTheme ? appTheme.colors.divider : "#e0e0e0"
         visible: page._showAdvanced
         opacity: visible ? 1 : 0
         Behavior on opacity { NumberAnimation { duration: 200 } }

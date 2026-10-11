@@ -5,21 +5,21 @@ Item {
     id: nav
     implicitHeight: units.gu(7)
 
-    property var theme
+    property var appTheme
     property int currentIndex: 0
 
     signal tabSelected(int index)
 
     Rectangle {
         anchors.fill: parent
-        color: theme ? theme.colors.surface : "#ffffff"
+        color: appTheme ? appTheme.colors.surface : "#ffffff"
     }
 
     // Top hairline
     Rectangle {
         anchors { top: parent.top; left: parent.left; right: parent.right }
         height: units.dp(1)
-        color: theme ? theme.colors.divider : "#e0e0e0"
+        color: appTheme ? appTheme.colors.divider : "#e0e0e0"
     }
 
     Row {
@@ -46,8 +46,8 @@ Item {
                         width: units.gu(3)
                         height: units.gu(3)
                         color: index === nav.currentIndex
-                               ? (theme ? theme.colors.primary : "#00695c")
-                               : (theme ? theme.colors.surfaceTextMuted : "#888")
+                               ? (appTheme ? appTheme.colors.primary : "#00695c")
+                               : (appTheme ? appTheme.colors.surfaceTextMuted : "#888")
                     }
 
                     Label {
@@ -55,8 +55,8 @@ Item {
                         text: translator.tr(modelData.labelKey)
                         fontSize: "x-small"
                         color: index === nav.currentIndex
-                               ? (theme ? theme.colors.primary : "#00695c")
-                               : (theme ? theme.colors.surfaceTextMuted : "#888")
+                               ? (appTheme ? appTheme.colors.primary : "#00695c")
+                               : (appTheme ? appTheme.colors.surfaceTextMuted : "#888")
                     }
                 }
 

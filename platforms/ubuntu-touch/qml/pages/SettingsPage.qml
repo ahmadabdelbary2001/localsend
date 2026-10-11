@@ -4,7 +4,7 @@ import Lomiri.Components 1.3
 
 Page {
     id: page
-    property var theme
+    property var appTheme
 
     ColumnLayout {
         anchors.centerIn: parent

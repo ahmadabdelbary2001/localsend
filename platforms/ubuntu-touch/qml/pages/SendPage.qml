@@ -6,7 +6,7 @@ import "../components"
 
 Page {
     id: page
-    property var theme
+    property var appTheme
 
     ContentHubPicker {
         id: picker

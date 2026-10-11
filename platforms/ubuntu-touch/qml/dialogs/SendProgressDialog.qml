@@ -4,7 +4,7 @@ import Lomiri.Components 1.3
 
 Rectangle {
     id: root
-    property var theme
+    property var appTheme
     anchors.fill: parent
     color: Qt.rgba(0, 0, 0, 0.5)
     z: 101
@@ -13,8 +13,8 @@ Rectangle {
         anchors.centerIn: parent
         width: Math.min(parent.width - units.gu(4), units.gu(60))
         height: Math.min(parent.height - units.gu(8), units.gu(75))
-        radius: theme ? theme.metrics.cardRadius : units.gu(0.6)
-        color: theme ? theme.colors.surface : "#ffffff"
+        radius: appTheme ? appTheme.metrics.cardRadius : units.gu(0.6)
+        color: appTheme ? appTheme.colors.surface : "#ffffff"
 
         ColumnLayout {
             anchors.fill: parent
@@ -27,7 +27,7 @@ Rectangle {
                       ? (sendController.failed_count > 0 ? "Send finished with errors" : "Send finished")
                       : "Sending…"
                 fontSize: "large"
-                color: theme ? theme.colors.surfaceText : "#1B1D21"
+                color: appTheme ? appTheme.colors.surfaceText : "#1B1D21"
             }
 
             Label {
@@ -35,7 +35,7 @@ Rectangle {
                 text: sendController.target_alias + " · " + sendController.finished_count + " / " + sendController.total_count
                 fontSize: "small"
                 opacity: 0.7
-                color: theme ? theme.colors.surfaceTextMuted : "#5F6368"
+                color: appTheme ? appTheme.colors.surfaceTextMuted : "#5F6368"
             }
 
             ListView {
@@ -56,14 +56,14 @@ Rectangle {
                         Layout.fillWidth: true
                         Layout.preferredHeight: units.dp(4)
                         radius: units.dp(2)
-                        color: theme ? theme.colors.surfaceTint : "#ECEFF1"
+                        color: appTheme ? appTheme.colors.surfaceTint : "#ECEFF1"
                         Rectangle {
                             width: parent.width * Math.max(0, Math.min(1, model.progress))
                             height: parent.height
                             radius: parent.radius
                             color: model.status === "failed"
-                                   ? (theme ? theme.colors.danger : "#C0392B")
-                                   : (theme ? theme.colors.primary : "#00695C")
+                                   ? (appTheme ? appTheme.colors.danger : "#C0392B")
+                                   : (appTheme ? appTheme.colors.primary : "#00695C")
                         }
                     }
                 }
@@ -80,7 +80,7 @@ Rectangle {
                 Button {
                     text: "Close"
                     visible: sendController.done
-                    color: theme ? theme.colors.primary : "#00695C"
+                    color: appTheme ? appTheme.colors.primary : "#00695C"
                     onClicked: sendController.dismiss()
                 }
             }

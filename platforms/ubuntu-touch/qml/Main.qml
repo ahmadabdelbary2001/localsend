@@ -26,19 +26,19 @@ MainView {
             anchors.fill: parent
             active: serverController.incoming_active
             source: "dialogs/IncomingTransferDialog.qml"
-            onLoaded: item.theme = theme
+            onLoaded: item.appTheme = theme
         }
         Loader {
             anchors.fill: parent
             active: sendController.active
             source: "dialogs/SendProgressDialog.qml"
-            onLoaded: item.theme = theme
+            onLoaded: item.appTheme = theme
         }
     }
 
     Component {
         id: shellComponent
-        AppShell { theme: theme }
+        AppShell { appTheme: theme }
     }
 
     Component.onCompleted: {
