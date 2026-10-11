@@ -2,6 +2,8 @@ import QtQuick 2.15
 import QtQuick.Layouts 1.15
 import Lomiri.Components 1.3
 
+import "../components"
+
 Page {
     id: page
     property var appTheme
@@ -13,7 +15,7 @@ Page {
     Loader {
         id: pickerLoader
         active: false
-        source: "../components/ContentHubPicker.qml"
+        source: "../pickers/ContentHubPicker.qml"
 
         onLoaded: {
             item.filesPicked.connect(function(paths) {
@@ -52,7 +54,7 @@ Page {
                 fontSize: "medium"
             }
             Button {
-                text: discoveryController.scanning ? "…" : translator.tr("sendTab.scan")
+                text: discoveryController.scanning ? "..." : translator.tr("sendTab.scan")
                 enabled: !discoveryController.scanning
                 onClicked: {
                     discoveryController.scan_now()
@@ -66,7 +68,7 @@ Page {
             visible: deviceListModel.rowCount() === 0
             Layout.alignment: Qt.AlignHCenter
             Layout.topMargin: units.gu(6)
-            text: "(no devices found yet — tap Scan)"
+            text: "(no devices found yet - tap Scan)"
             opacity: 0.5
         }
 
