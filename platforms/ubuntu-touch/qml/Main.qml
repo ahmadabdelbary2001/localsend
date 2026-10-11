@@ -1,4 +1,5 @@
 import QtQuick 2.15
+import QtQuick.Controls 2.15
 import Lomiri.Components 1.3
 
 import "shell"
@@ -22,18 +23,6 @@ MainView {
     PageStack {
         id: mainStack
         Component.onCompleted: push(shellComponent)
-        Loader {
-            anchors.fill: parent
-            active: serverController.incoming_active
-            source: "dialogs/IncomingTransferDialog.qml"
-            onLoaded: item.appTheme = theme
-        }
-        Loader {
-            anchors.fill: parent
-            active: sendController.active
-            source: "dialogs/SendProgressDialog.qml"
-            onLoaded: item.appTheme = theme
-        }
     }
 
     Component {
@@ -41,29 +30,45 @@ MainView {
         AppShell { appTheme: theme }
     }
 
-    Component.onCompleted: {
-        if (typeof appController !== "undefined") {
-            appController.initialize()
-        }
-        // Server startup now happens in Rust before QML loads.
-        // The timer below only polls for events.
+    // Incoming transfer dialog (auto-shown when a session is pending)
+    Loader {
+        id: incomingLoader
+        anchors.fill: parent
+        active: serverController.incomingActive
+        source: active ? "dialogs/IncomingTransferDialog.qml" : ""
+        onLoaded: item.appTheme = theme
     }
 
-    // Drains server events on the Qt thread.
+    // Outgoing send progress dialog (auto-shown while a session is active)
+    Loader {
+        id: outgoingLoader
+        anchors.fill: parent
+        active: sendController.active
+        source: active ? "dialogs/SendProgressDialog.qml" : ""
+        onLoaded: item.appTheme = theme
+    }
+
+    // Single Timer drives all polling. Each block touches exactly one
+    // controller or model, so no RefCell is borrowed twice.
     Timer {
         interval: 250
         running: true
         repeat: true
         triggeredOnStart: true
+
         onTriggered: {
-            if (typeof serverController !== "undefined") serverController.poll()
-            if (typeof discoveryController !== "undefined") discoveryController.poll()
-            if (typeof deviceListModel !== "undefined") {
-                deviceListModel.refresh()
-            }
-            if (typeof incomingFilesModel !== "undefined") incomingFilesModel.refresh()
-            if (typeof sendController !== "undefined") sendController.poll()
-            if (typeof outgoingFilesModel !== "undefined") outgoingFilesModel.refresh()
+            if (typeof serverController !== "undefined")     serverController.poll()
+            if (typeof discoveryController !== "undefined")  discoveryController.poll()
+            if (typeof sendController !== "undefined")       sendController.poll()
+            if (typeof deviceListModel !== "undefined")      deviceListModel.refresh()
+            if (typeof incomingFilesModel !== "undefined")   incomingFilesModel.refresh()
+            if (typeof outgoingFilesModel !== "undefined")   outgoingFilesModel.refresh()
+        }
+    }
+
+    Component.onCompleted: {
+        if (typeof appController !== "undefined") {
+            appController.initialize()
         }
     }
 }
