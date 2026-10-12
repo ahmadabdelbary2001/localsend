@@ -19,7 +19,8 @@ pub struct FavoritesController {
     count: qt_property!(i32; NOTIFY changed),
     changed: qt_signal!(),
 
-    add_or_update: qt_method!(fn(&mut self, fingerprint: QString, ip: QString, port: u32, alias: QString)),
+    add_or_update:
+        qt_method!(fn(&mut self, fingerprint: QString, ip: QString, port: u32, alias: QString)),
     remove: qt_method!(fn(&mut self, fingerprint: QString)),
     rename: qt_method!(fn(&mut self, fingerprint: QString, alias: QString)),
     is_favorite: qt_method!(fn(&self, fingerprint: QString) -> bool),
@@ -68,7 +69,10 @@ impl FavoritesController {
     }
 
     fn rename(&mut self, fingerprint: QString, alias: QString) {
-        if self.service.update_alias(&fingerprint.to_string(), alias.to_string()) {
+        if self
+            .service
+            .update_alias(&fingerprint.to_string(), alias.to_string())
+        {
             self.reload();
         }
     }

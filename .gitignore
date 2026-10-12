@@ -32,3 +32,5 @@ platforms/ubuntu-touch/.clickable/
 
 # CI-only staging for clickable
 platforms/ubuntu-touch/prebuilt/
+*.bak-*
+*.orig

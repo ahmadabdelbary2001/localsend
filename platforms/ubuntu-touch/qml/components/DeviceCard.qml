@@ -19,9 +19,17 @@ Rectangle {
     signal toggleFavorite()
 
     height: units.gu(9)
-    radius: appTheme ? appTheme.metrics.cardRadius : units.gu(0.6)
-    color: appTheme ? appTheme.colors.surface : "#ffffff"
-    border.color: appTheme ? appTheme.colors.divider : "#e0e0e0"
+    radius: appTheme && appTheme.metrics
+            ? appTheme.metrics.cardRadius
+            : units.gu(0.6)
+
+    color: appTheme && appTheme.colors
+        ? appTheme.colors.surface
+        : "#ffffff"
+
+    border.color: appTheme && appTheme.colors
+                ? appTheme.colors.divider
+                : "#e0e0e0"
     border.width: units.dp(1)
     opacity: card.offline ? 0.6 : 1.0
 
@@ -34,7 +42,7 @@ Rectangle {
             Layout.preferredWidth: units.gu(6)
             Layout.preferredHeight: units.gu(6)
             radius: units.gu(3)
-            color: appTheme ? appTheme.colors.surfaceTint : "#ECEFF1"
+            color: appTheme && appTheme.colors ? appTheme.colors.surfaceTint : "#ECEFF1"
 
             Label {
                 anchors.centerIn: parent
@@ -42,7 +50,7 @@ Rectangle {
                       ? card.deviceType.charAt(0).toUpperCase()
                       : "?"
                 fontSize: "x-large"
-                color: appTheme ? appTheme.colors.primary : "#00695C"
+                color: appTheme && appTheme.colors ? appTheme.colors.primary : "#00695C"
             }
         }
 
@@ -55,7 +63,7 @@ Rectangle {
                 text: card.alias
                 fontSize: "medium"
                 elide: Text.ElideRight
-                color: appTheme ? appTheme.colors.surfaceText : "#1B1D21"
+                color: appTheme && appTheme.colors ? appTheme.colors.surfaceText : "#1B1D21"
             }
 
             Label {
@@ -64,7 +72,7 @@ Rectangle {
                 fontSize: "x-small"
                 opacity: 0.7
                 elide: Text.ElideRight
-                color: appTheme ? appTheme.colors.surfaceTextMuted : "#5F6368"
+                color: appTheme && appTheme.colors ? appTheme.colors.surfaceTextMuted : "#5F6368"
             }
 
             Label {
@@ -73,7 +81,7 @@ Rectangle {
                 fontSize: "x-small"
                 opacity: 0.5
                 elide: Text.ElideRight
-                color: appTheme ? appTheme.colors.surfaceTextMuted : "#5F6368"
+                color: appTheme && appTheme.colors ? appTheme.colors.surfaceTextMuted : "#5F6368"
             }
         }
 
@@ -83,8 +91,8 @@ Rectangle {
             Layout.preferredHeight: units.gu(3)
             name: card.isFavorite ? "starred" : "non-starred"
             color: card.isFavorite
-                   ? (appTheme ? appTheme.colors.primary : "#00695C")
-                   : (appTheme ? appTheme.colors.surfaceTextMuted : "#888")
+                   ? (appTheme && appTheme.colors ? appTheme.colors.primary : "#00695C")
+                   : (appTheme && appTheme.colors ? appTheme.colors.surfaceTextMuted : "#888")
 
             MouseArea {
                 anchors.fill: parent

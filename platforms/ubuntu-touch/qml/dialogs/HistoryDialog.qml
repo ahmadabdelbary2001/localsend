@@ -23,7 +23,7 @@ Dialog {
                 Layout.fillWidth: true
                 text: historyController.count + " " + qsTr("entries")
                 fontSize: "small"
-                color: root.appTheme ? root.appTheme.colors.surfaceTextMuted : "#5F6368"
+                color: root.appTheme && root.appTheme.colors ? root.appTheme.colors.surfaceTextMuted : "#5F6368"
             }
 
             Button {
@@ -40,7 +40,7 @@ Dialog {
             text: translator.tr("receiveHistoryPage.empty")
             fontSize: "medium"
             horizontalAlignment: Text.AlignHCenter
-            color: root.appTheme ? root.appTheme.colors.surfaceTextMuted : "#5F6368"
+            color: root.appTheme && root.appTheme.colors ? root.appTheme.colors.surfaceTextMuted : "#5F6368"
         }
 
         ListView {
@@ -56,9 +56,9 @@ Dialog {
                 height: units.gu(7)
                 ListItemLayout {
                     title.text: model.fileName
-                    title.color: root.appTheme ? root.appTheme.colors.surfaceText : "#1B1D21"
+                    title.color: root.appTheme && root.appTheme.colors ? root.appTheme.colors.surfaceText : "#1B1D21"
                     subtitle.text: model.senderAlias + "  ·  " + _humanSize(model.fileSize)
-                    subtitle.color: root.appTheme ? root.appTheme.colors.surfaceTextMuted : "#5F6368"
+                    subtitle.color: root.appTheme && root.appTheme.colors ? root.appTheme.colors.surfaceTextMuted : "#5F6368"
                 }
                 trailingActions: ListItemActions {
                     actions: [

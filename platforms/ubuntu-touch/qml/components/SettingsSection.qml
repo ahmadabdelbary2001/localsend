@@ -10,9 +10,9 @@ Rectangle {
 
     Layout.fillWidth: true
     implicitHeight: mainColumn.implicitHeight + units.gu(3)
-    radius: appTheme ? appTheme.metrics.cardRadius : units.gu(0.6)
-    color: appTheme ? appTheme.colors.surface : "#ffffff"
-    border.color: appTheme ? appTheme.colors.divider : "#e0e0e0"
+    radius: appTheme && appTheme.metrics ? appTheme.metrics.cardRadius : units.gu(0.6)
+    color: appTheme && appTheme.colors ? appTheme.colors.surface : "#ffffff"
+    border.color: appTheme && appTheme.colors ? appTheme.colors.divider : "#e0e0e0"
     border.width: units.dp(1)
 
     Column {
@@ -28,7 +28,7 @@ Rectangle {
         Label {
             text: root.title
             fontSize: "medium"
-            color: appTheme ? appTheme.colors.surfaceText : "#1B1D21"
+            color: appTheme && appTheme.colors ? appTheme.colors.surfaceText : "#1B1D21"
         }
 
         Column {

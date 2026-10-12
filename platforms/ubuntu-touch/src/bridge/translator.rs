@@ -216,14 +216,10 @@ mod tests {
             tr_args: Default::default(),
             strings: HashMap::new(),
         };
-        t.strings
-            .insert("x".into(), "Files: {files} / {n}".into());
+        t.strings.insert("x".into(), "Files: {files} / {n}".into());
 
         // tr_args returns a QString; compare content.
-        let out = t.tr_args(
-            QString::from("x"),
-            QString::from(r#"{"files":3,"n":10}"#),
-        );
+        let out = t.tr_args(QString::from("x"), QString::from(r#"{"files":3,"n":10}"#));
         assert_eq!(out.to_string(), "Files: 3 / 10");
     }
 }

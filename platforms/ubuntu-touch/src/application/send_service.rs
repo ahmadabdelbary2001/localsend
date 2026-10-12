@@ -64,11 +64,29 @@ pub enum SendEvent {
         remote_session_id: String,
         accepted: Vec<String>,
     },
-    FileStarted { session_id: String, file_id: String },
-    FileProgress { session_id: String, file_id: String, progress: f64 },
-    FileDone { session_id: String, file_id: String },
-    FileFailed { session_id: String, file_id: String, error: String },
-    Finished { session_id: String, ok: bool, error: Option<String> },
+    FileStarted {
+        session_id: String,
+        file_id: String,
+    },
+    FileProgress {
+        session_id: String,
+        file_id: String,
+        progress: f64,
+    },
+    FileDone {
+        session_id: String,
+        file_id: String,
+    },
+    FileFailed {
+        session_id: String,
+        file_id: String,
+        error: String,
+    },
+    Finished {
+        session_id: String,
+        ok: bool,
+        error: Option<String>,
+    },
     Log(String),
 }
 
@@ -143,10 +161,19 @@ async fn send_task(
                 let sid = session_id.clone();
                 tokio::spawn(async move {
                     let r = do_send(
-                        identity, sid.clone(), target, files,
-                        sender_alias, sender_port, sender_https, sender_fingerprint,
-                        pin, evt_tx.clone(), cancel_rx,
-                    ).await;
+                        identity,
+                        sid.clone(),
+                        target,
+                        files,
+                        sender_alias,
+                        sender_port,
+                        sender_https,
+                        sender_fingerprint,
+                        pin,
+                        evt_tx.clone(),
+                        cancel_rx,
+                    )
+                    .await;
                     if let Err(e) = r {
                         let _ = evt_tx.send(SendEvent::Finished {
                             session_id: sid,
@@ -185,7 +212,8 @@ async fn do_send(
         &identity.certificate_pem,
         Some(target.fingerprint.clone()),
         None,
-    ).context("create client")?;
+    )
+    .context("create client")?;
 
     let register = RegisterDtoV2 {
         alias: sender_alias,
@@ -194,7 +222,11 @@ async fn do_send(
         device_type: Some(DeviceType::Desktop),
         fingerprint: sender_fingerprint,
         port: sender_port,
-        protocol: if sender_https { ProtocolType::Https } else { ProtocolType::Http },
+        protocol: if sender_https {
+            ProtocolType::Https
+        } else {
+            ProtocolType::Http
+        },
         download: false,
     };
 
@@ -260,7 +292,9 @@ async fn do_send(
     });
 
     for f in files {
-        let Some(token) = accepted_files.get(&f.file_id) else { continue };
+        let Some(token) = accepted_files.get(&f.file_id) else {
+            continue;
+        };
         let _ = evt_tx.send(SendEvent::FileStarted {
             session_id: session_id.clone(),
             file_id: f.file_id.clone(),
@@ -339,10 +373,14 @@ fn guess_file_type(name: &str) -> &'static str {
         .map(|s| s.to_ascii_lowercase())
         .unwrap_or_default();
     match ext.as_str() {
-        "jpg" | "jpeg" | "png" | "gif" | "webp" | "bmp" | "heic" | "heif" | "tiff" | "svg" => "image",
+        "jpg" | "jpeg" | "png" | "gif" | "webp" | "bmp" | "heic" | "heif" | "tiff" | "svg" => {
+            "image"
+        }
         "mp4" | "mov" | "mkv" | "avi" | "webm" | "m4v" | "flv" | "wmv" => "video",
         "mp3" | "wav" | "flac" | "ogg" | "m4a" | "aac" | "opus" => "audio",
-        "txt" | "md" | "pdf" | "doc" | "docx" | "odt" | "rtf" | "json" | "xml" | "html" | "csv" => "text",
+        "txt" | "md" | "pdf" | "doc" | "docx" | "odt" | "rtf" | "json" | "xml" | "html" | "csv" => {
+            "text"
+        }
         "apk" => "apk",
         _ => "other",
     }

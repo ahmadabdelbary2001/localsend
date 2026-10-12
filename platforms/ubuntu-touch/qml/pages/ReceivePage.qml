@@ -52,13 +52,13 @@ Page {
                 Layout.preferredWidth: units.gu(18)
                 Layout.preferredHeight: units.gu(18)
                 radius: width / 2
-                color: page.appTheme ? page.appTheme.colors.surfaceTint : "#ECEFF1"
+                color: page.appTheme && page.appTheme.colors ? page.appTheme.colors.surfaceTint : "#ECEFF1"
 
                 Label {
                     anchors.centerIn: parent
                     text: "LS"
                     fontSize: "xx-large"
-                    color: page.appTheme ? page.appTheme.colors.primary : "#00695C"
+                    color: page.appTheme && page.appTheme.colors ? page.appTheme.colors.primary : "#00695C"
                 }
 
                 RotationAnimator on rotation {
@@ -77,7 +77,7 @@ Page {
                       ? serverController.alias
                       : settingsController.alias
                 fontSize: "xx-large"
-                color: page.appTheme ? page.appTheme.colors.surfaceText : "#1B1D21"
+                color: page.appTheme && page.appTheme.colors ? page.appTheme.colors.surfaceText : "#1B1D21"
                 elide: Text.ElideRight
                 horizontalAlignment: Text.AlignHCenter
             }
@@ -92,8 +92,8 @@ Page {
                     height: width
                     radius: width / 2
                     color: serverController.running
-                           ? (page.appTheme ? page.appTheme.colors.primary : "#00695C")
-                           : (page.appTheme ? page.appTheme.colors.surfaceTextMuted : "#888")
+                           ? (page.appTheme && page.appTheme.colors ? page.appTheme.colors.primary : "#00695C")
+                           : (page.appTheme && page.appTheme.colors ? page.appTheme.colors.surfaceTextMuted : "#888")
                 }
 
                 Label {
@@ -101,7 +101,7 @@ Page {
                           ? translator.tr("general.online")
                           : translator.tr("general.offline")
                     fontSize: "medium"
-                    color: page.appTheme ? page.appTheme.colors.surfaceTextMuted : "#5F6368"
+                    color: page.appTheme && page.appTheme.colors ? page.appTheme.colors.surfaceTextMuted : "#5F6368"
                 }
             }
 
@@ -112,7 +112,7 @@ Page {
                 text: page._ipsLabel()
                 visible: serverController.running && text.length > 0
                 fontSize: "small"
-                color: page.appTheme ? page.appTheme.colors.surfaceTextMuted : "#5F6368"
+                color: page.appTheme && page.appTheme.colors ? page.appTheme.colors.surfaceTextMuted : "#5F6368"
                 horizontalAlignment: Text.AlignHCenter
                 wrapMode: Text.Wrap
             }
@@ -135,8 +135,8 @@ Page {
                       ? translator.tr("general.stop")
                       : translator.tr("general.start")
                 color: serverController.running
-                       ? (page.appTheme ? page.appTheme.colors.danger : "#C0392B")
-                       : (page.appTheme ? page.appTheme.colors.primary : "#00695C")
+                       ? (page.appTheme && page.appTheme.colors ? page.appTheme.colors.danger : "#C0392B")
+                       : (page.appTheme && page.appTheme.colors ? page.appTheme.colors.primary : "#00695C")
                 onClicked: {
                     if (serverController.running) {
                         serverController.stop()
@@ -176,9 +176,9 @@ Page {
         anchors { top: parent.top; right: parent.right; margins: units.gu(2) }
         width: units.gu(30)
         height: infoColumn.height + units.gu(2)
-        radius: page.appTheme ? page.appTheme.metrics.cardRadius : units.gu(0.6)
-        color: page.appTheme ? page.appTheme.colors.surface : "#ffffff"
-        border.color: page.appTheme ? page.appTheme.colors.divider : "#e0e0e0"
+        radius: page.appTheme && page.appTheme.metrics ? page.appTheme.metrics.cardRadius : units.gu(0.6)
+        color: page.appTheme && page.appTheme.colors ? page.appTheme.colors.surface : "#ffffff"
+        border.color: page.appTheme && page.appTheme.colors ? page.appTheme.colors.divider : "#e0e0e0"
         border.width: units.dp(1)
         visible: page._showAdvanced
         opacity: visible ? 1 : 0

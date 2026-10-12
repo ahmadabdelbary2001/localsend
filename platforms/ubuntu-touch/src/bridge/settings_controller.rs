@@ -12,19 +12,73 @@ use crate::application::settings_service::SettingsService;
 
 // Word lists for random alias generation (Adjective + Fruit).
 const ADJECTIVES: &[&str] = &[
-    "Adorable", "Beautiful", "Big", "Bright", "Clean", "Clever", "Cool",
-    "Cute", "Cunning", "Determined", "Energetic", "Efficient", "Fantastic",
-    "Fast", "Fine", "Fresh", "Good", "Gorgeous", "Great", "Handsome",
-    "Hot", "Kind", "Lovely", "Mystic", "Neat", "Nice", "Patient", "Pretty",
-    "Powerful", "Rich", "Secret", "Smart", "Solid", "Special", "Strategic",
-    "Strong", "Tidy", "Wise",
+    "Adorable",
+    "Beautiful",
+    "Big",
+    "Bright",
+    "Clean",
+    "Clever",
+    "Cool",
+    "Cute",
+    "Cunning",
+    "Determined",
+    "Energetic",
+    "Efficient",
+    "Fantastic",
+    "Fast",
+    "Fine",
+    "Fresh",
+    "Good",
+    "Gorgeous",
+    "Great",
+    "Handsome",
+    "Hot",
+    "Kind",
+    "Lovely",
+    "Mystic",
+    "Neat",
+    "Nice",
+    "Patient",
+    "Pretty",
+    "Powerful",
+    "Rich",
+    "Secret",
+    "Smart",
+    "Solid",
+    "Special",
+    "Strategic",
+    "Strong",
+    "Tidy",
+    "Wise",
 ];
 
 const FRUITS: &[&str] = &[
-    "Apple", "Avocado", "Banana", "Blackberry", "Blueberry", "Broccoli",
-    "Carrot", "Cherry", "Coconut", "Grape", "Lemon", "Lettuce", "Mango",
-    "Melon", "Mushroom", "Onion", "Orange", "Papaya", "Peach", "Pear",
-    "Pineapple", "Potato", "Pumpkin", "Raspberry", "Strawberry", "Tomato",
+    "Apple",
+    "Avocado",
+    "Banana",
+    "Blackberry",
+    "Blueberry",
+    "Broccoli",
+    "Carrot",
+    "Cherry",
+    "Coconut",
+    "Grape",
+    "Lemon",
+    "Lettuce",
+    "Mango",
+    "Melon",
+    "Mushroom",
+    "Onion",
+    "Orange",
+    "Papaya",
+    "Peach",
+    "Pear",
+    "Pineapple",
+    "Potato",
+    "Pumpkin",
+    "Raspberry",
+    "Strawberry",
+    "Tomato",
 ];
 
 #[derive(QObject)]
@@ -147,7 +201,10 @@ impl SettingsController {
 
     fn set_color_mode(&mut self, v: QString) {
         let s = v.to_string();
-        if !matches!(s.as_str(), "system" | "localsend" | "oled" | "yaru" | "custom") {
+        if !matches!(
+            s.as_str(),
+            "system" | "localsend" | "oled" | "yaru" | "custom"
+        ) {
             log::warn!("set_color_mode: invalid value '{s}'");
             return;
         }

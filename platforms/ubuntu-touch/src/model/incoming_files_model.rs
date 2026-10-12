@@ -51,10 +51,10 @@ impl QAbstractListModel for IncomingFilesModel {
             return QVariant::default();
         };
         match role {
-            0 => QString::from(e.file_name.clone()).into(),       // fileName
-            1 => QVariant::from(e.size as i64),                    // size
-            2 => QVariant::from(e.progress),                       // progress
-            3 => QString::from(e.status.clone()).into(),           // status
+            0 => QString::from(e.file_name.clone()).into(), // fileName
+            1 => QVariant::from(e.size as i64),             // size
+            2 => QVariant::from(e.progress),                // progress
+            3 => QString::from(e.status.clone()).into(),    // status
             4 => QString::from(e.path.clone().unwrap_or_default()).into(), // path
             5 => QString::from(e.error.clone().unwrap_or_default()).into(), // error
             _ => QVariant::default(),

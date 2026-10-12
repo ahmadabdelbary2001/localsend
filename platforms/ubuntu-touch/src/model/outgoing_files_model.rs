@@ -33,8 +33,13 @@ impl QAbstractListModel for OutgoingFilesModel {
 
     fn data(&self, index: QModelIndex, role: i32) -> QVariant {
         let i = index.row() as usize;
-        let g = match self.entries.read() { Ok(g) => g, Err(_) => return QVariant::default() };
-        let Some(e) = g.get(i) else { return QVariant::default() };
+        let g = match self.entries.read() {
+            Ok(g) => g,
+            Err(_) => return QVariant::default(),
+        };
+        let Some(e) = g.get(i) else {
+            return QVariant::default();
+        };
         match role {
             0 => QString::from(e.name.clone()).into(),
             1 => QVariant::from(e.size as i64),

@@ -22,15 +22,17 @@ pub struct DiscoveryController {
     state_changed: qt_signal!(),
     log_message: qt_signal!(message: QString),
 
-    start: qt_method!(fn(
-        &mut self,
-        alias: QString,
-        port: u32,
-        https: bool,
-        fingerprint: QString,
-        cert_pem: QString,
-        private_key_pem: QString
-    )),
+    start: qt_method!(
+        fn(
+            &mut self,
+            alias: QString,
+            port: u32,
+            https: bool,
+            fingerprint: QString,
+            cert_pem: QString,
+            private_key_pem: QString,
+        )
+    ),
     scan_now: qt_method!(fn(&mut self)),
     stop: qt_method!(fn(&mut self)),
     poll: qt_method!(fn(&mut self)),

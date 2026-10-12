@@ -28,7 +28,7 @@ use localsend::http::server::common::save::FileUploadTarget;
 use localsend::http::server::v2::{PrepareUploadDecisionV2, ServerEventV2};
 use localsend::http::server::web::{WebConfig, WebI18n, WebMode, WebPages};
 use localsend::http::server::{
-    start_with_port, ServerConfigV2, ServerHandle as CoreServerHandle, TlsConfig,
+    ServerConfigV2, ServerHandle as CoreServerHandle, TlsConfig, start_with_port,
 };
 use localsend::http::state::ClientInfo;
 use localsend::model::discovery::DeviceType;
@@ -68,8 +68,8 @@ pub struct IncomingFileEntry {
     pub file_id: String,
     pub file_name: String,
     pub size: u64,
-    pub progress: f64,   // 0.0 .. 1.0
-    pub status: String,  // "queue" | "sending" | "finished" | "failed"
+    pub progress: f64,  // 0.0 .. 1.0
+    pub status: String, // "queue" | "sending" | "finished" | "failed"
     pub path: Option<String>,
     pub error: Option<String>,
 }
@@ -376,9 +376,7 @@ fn handle_core_event(
             };
 
             if target_tx.send(target).is_err() {
-                let _ = evt_tx.send(ServerEvent::Log(format!(
-                    "target_tx closed for {file_id}"
-                )));
+                let _ = evt_tx.send(ServerEvent::Log(format!("target_tx closed for {file_id}")));
                 return;
             }
 
@@ -571,8 +569,8 @@ async fn start_one(
 // -------------------- filesystem helpers --------------------
 
 fn destination_dir() -> PathBuf {
-    let base = filesystem::app_data_dir()
-        .unwrap_or_else(|| PathBuf::from("/tmp/localsend-received"));
+    let base =
+        filesystem::app_data_dir().unwrap_or_else(|| PathBuf::from("/tmp/localsend-received"));
     let dir = base.join("received");
     let _ = std::fs::create_dir_all(&dir);
     dir
@@ -594,10 +592,7 @@ fn unique_path(dir: &Path, name: &str) -> PathBuf {
         return candidate;
     }
     let path = Path::new(name);
-    let stem = path
-        .file_stem()
-        .and_then(|s| s.to_str())
-        .unwrap_or(name);
+    let stem = path.file_stem().and_then(|s| s.to_str()).unwrap_or(name);
     let ext = path.extension().and_then(|s| s.to_str());
     let mut n = 1u32;
     loop {

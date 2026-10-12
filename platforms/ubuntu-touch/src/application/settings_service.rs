@@ -165,8 +165,7 @@ impl SettingsService {
                 Ok(g) => g,
                 Err(p) => p.into_inner(),
             };
-            serde_json::to_string_pretty(&*guard)
-                .map_err(|e| std::io::Error::other(e))?
+            serde_json::to_string_pretty(&*guard).map_err(|e| std::io::Error::other(e))?
         };
         std::fs::write(&self.path, data)
     }

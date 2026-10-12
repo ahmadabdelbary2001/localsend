@@ -5,7 +5,7 @@
 // Stored at ~/.config/localsend.ahmadabdelbary/{certificate,private_key,public_key}.pem
 // and fingerprint.txt.
 
-use anyhow::{anyhow, Context, Result};
+use anyhow::{Context, Result, anyhow};
 
 use crate::platform::filesystem;
 
@@ -18,8 +18,7 @@ pub struct DeviceIdentity {
 
 impl DeviceIdentity {
     pub fn load_or_generate() -> Result<Self> {
-        let dir = filesystem::app_config_dir()
-            .ok_or_else(|| anyhow!("no config dir available"))?;
+        let dir = filesystem::app_config_dir().ok_or_else(|| anyhow!("no config dir available"))?;
         std::fs::create_dir_all(&dir)?;
 
         let cert_path = dir.join("certificate.pem");

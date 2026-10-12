@@ -39,7 +39,10 @@ fn dirs_home() -> Option<PathBuf> {
 
 /// Ensure standard app-private dirs exist. Call once at startup.
 pub fn ensure_dirs() -> std::io::Result<()> {
-    for d in [app_config_dir(), app_data_dir(), app_cache_dir()].into_iter().flatten() {
+    for d in [app_config_dir(), app_data_dir(), app_cache_dir()]
+        .into_iter()
+        .flatten()
+    {
         std::fs::create_dir_all(d)?;
     }
     Ok(())

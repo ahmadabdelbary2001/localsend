@@ -7,22 +7,22 @@
 // devices that were confirmed outside of discovery (e.g. peers that
 // registered with our HTTP server).
 
-use std::sync::{Arc, Mutex};
 use std::sync::RwLock;
+use std::sync::{Arc, Mutex};
 use std::thread;
 
 use anyhow::Result;
 use tokio::sync::{mpsc, oneshot};
 
 use localsend::discovery::{
-    self, DeviceChannel, DeviceIdentity as CoreDeviceIdentity, DiscoveredDevice,
-    DiscoveryConfig, DiscoveryEvent as CoreDiscoveryEvent, DiscoveryHandle as CoreDiscoveryHandle,
-    HttpChannel, StatefulDevice,
+    self, DeviceChannel, DeviceIdentity as CoreDeviceIdentity, DiscoveredDevice, DiscoveryConfig,
+    DiscoveryEvent as CoreDiscoveryEvent, DiscoveryHandle as CoreDiscoveryHandle, HttpChannel,
+    StatefulDevice,
 };
 use localsend::model::discovery::{DeviceType, ProtocolType};
 use localsend::multicast::{
-    MulticastDevice, DEFAULT_MULTICAST_GROUP, DEFAULT_MULTICAST_GROUP_V6,
-    DEFAULT_PORT as DEFAULT_MULTICAST_PORT,
+    DEFAULT_MULTICAST_GROUP, DEFAULT_MULTICAST_GROUP_V6, DEFAULT_PORT as DEFAULT_MULTICAST_PORT,
+    MulticastDevice,
 };
 use localsend::util::interface::InterfaceFilter;
 
@@ -90,8 +90,8 @@ impl DiscoveryServiceHandle {
                 {
                     Ok(rt) => rt,
                     Err(e) => {
-                        let _ = evt_tx
-                            .send(DiscoveryEvent::Log(format!("runtime init failed: {e}")));
+                        let _ =
+                            evt_tx.send(DiscoveryEvent::Log(format!("runtime init failed: {e}")));
                         return;
                     }
                 };
@@ -111,8 +111,7 @@ impl DiscoveryServiceHandle {
                                 match start_one(params, evt_tx.clone()).await {
                                     Ok(rd) => {
                                         let snaps = snapshot(&rd.handle);
-                                        let _ =
-                                            evt_tx.send(DiscoveryEvent::DevicesChanged(snaps));
+                                        let _ = evt_tx.send(DiscoveryEvent::DevicesChanged(snaps));
                                         running = Some(rd);
                                     }
                                     Err(e) => {
@@ -142,8 +141,7 @@ impl DiscoveryServiceHandle {
                             DiscoveryCommand::Stop => {
                                 if let Some(rd) = running.take() {
                                     rd.stop().await;
-                                    let _ = evt_tx
-                                        .send(DiscoveryEvent::DevicesChanged(Vec::new()));
+                                    let _ = evt_tx.send(DiscoveryEvent::DevicesChanged(Vec::new()));
                                 }
                             }
                             DiscoveryCommand::Shutdown => break,
@@ -267,22 +265,17 @@ async fn start_one(
                         "discovered: {} ({})",
                         device.alias, device.fingerprint
                     )));
-                    let _ = evt_tx.send(DiscoveryEvent::DevicesChanged(snapshot(
-                        &handle_for_task,
-                    )));
+                    let _ = evt_tx.send(DiscoveryEvent::DevicesChanged(snapshot(&handle_for_task)));
                 }
                 CoreDiscoveryEvent::Updated { device } => {
                     let _ = evt_tx.send(DiscoveryEvent::Log(format!(
                         "updated: {} ({})",
                         device.alias, device.fingerprint
                     )));
-                    let _ = evt_tx.send(DiscoveryEvent::DevicesChanged(snapshot(
-                        &handle_for_task,
-                    )));
+                    let _ = evt_tx.send(DiscoveryEvent::DevicesChanged(snapshot(&handle_for_task)));
                 }
                 CoreDiscoveryEvent::MulticastFailed => {
-                    let _ = evt_tx
-                        .send(DiscoveryEvent::Log("multicast sockets failed".into()));
+                    let _ = evt_tx.send(DiscoveryEvent::Log("multicast sockets failed".into()));
                 }
             }
         }
@@ -296,7 +289,11 @@ async fn start_one(
 }
 
 fn snapshot(handle: &CoreDiscoveryHandle) -> Vec<DeviceSnapshot> {
-    handle.devices().into_iter().map(stateful_to_snapshot).collect()
+    handle
+        .devices()
+        .into_iter()
+        .map(stateful_to_snapshot)
+        .collect()
 }
 
 fn stateful_to_snapshot(sd: StatefulDevice) -> DeviceSnapshot {

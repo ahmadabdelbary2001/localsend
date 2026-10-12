@@ -16,7 +16,7 @@ RowLayout {
     Label {
         Layout.fillWidth: true
         text: root.label
-        color: appTheme ? appTheme.colors.surfaceText : "#1B1D21"
+        color: appTheme && appTheme.colors ? appTheme.colors.surfaceText : "#1B1D21"
         fontSize: "small"
         wrapMode: Text.Wrap
     }

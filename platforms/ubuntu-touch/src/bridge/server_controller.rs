@@ -5,7 +5,7 @@ use std::sync::{Arc, RwLock};
 use qmetaobject::prelude::*;
 
 use crate::application::discovery_service::{
-    build_discovered_device, DiscoveryCommand, DiscoveryServiceHandle,
+    DiscoveryCommand, DiscoveryServiceHandle, build_discovered_device,
 };
 use crate::application::identity_service::DeviceIdentity;
 use crate::application::server_service::{
@@ -133,7 +133,9 @@ impl ServerController {
     }
 
     pub fn accept_incoming(&mut self) {
-        let Some(s) = self.current_session.clone() else { return };
+        let Some(s) = self.current_session.clone() else {
+            return;
+        };
         if let Some(h) = &self.handle {
             h.send(ServerCommand::AcceptUpload {
                 session_id: s.session_id.clone(),
@@ -144,7 +146,9 @@ impl ServerController {
     }
 
     pub fn decline_incoming(&mut self) {
-        let Some(s) = self.current_session.clone() else { return };
+        let Some(s) = self.current_session.clone() else {
+            return;
+        };
         if let Some(h) = &self.handle {
             h.send(ServerCommand::DeclineUpload {
                 session_id: s.session_id.clone(),
@@ -242,7 +246,9 @@ impl ServerController {
                     }
                     self.entries_changed();
                 }
-                ServerEvent::FileUploadProgress { file_id, progress, .. } => {
+                ServerEvent::FileUploadProgress {
+                    file_id, progress, ..
+                } => {
                     if let Ok(mut g) = self.entries.write() {
                         if let Some(e) = g.iter_mut().find(|e| e.file_id == file_id) {
                             e.progress = progress;
@@ -250,7 +256,12 @@ impl ServerController {
                     }
                     self.entries_changed();
                 }
-                ServerEvent::FileUploadResult { file_id, path, error, .. } => {
+                ServerEvent::FileUploadResult {
+                    file_id,
+                    path,
+                    error,
+                    ..
+                } => {
                     if let Ok(mut g) = self.entries.write() {
                         if let Some(e) = g.iter_mut().find(|e| e.file_id == file_id) {
                             e.progress = 1.0;

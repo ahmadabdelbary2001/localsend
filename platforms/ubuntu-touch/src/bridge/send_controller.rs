@@ -152,7 +152,11 @@ impl SendController {
             *g = entries;
         }
 
-        let protocol = if device.https { ProtocolType::Https } else { ProtocolType::Http };
+        let protocol = if device.https {
+            ProtocolType::Https
+        } else {
+            ProtocolType::Http
+        };
         let target = SendTarget {
             fingerprint: device.fingerprint.clone(),
             host: device.ip.clone(),
@@ -230,7 +234,9 @@ impl SendController {
                     }
                     self.files_changed();
                 }
-                SendEvent::FileProgress { file_id, progress, .. } => {
+                SendEvent::FileProgress {
+                    file_id, progress, ..
+                } => {
                     if let Ok(mut g) = self.entries.write() {
                         if let Some(e) = g.iter_mut().find(|e| e.file_id == file_id) {
                             e.progress = progress;

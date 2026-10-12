@@ -77,13 +77,13 @@ Dialog {
 
             ListItemLayout {
                 title.text: modelData.name
-                title.color: root.appTheme ? root.appTheme.colors.surfaceText : "#1B1D21"
+                title.color: root.appTheme && root.appTheme.colors ? root.appTheme.colors.surfaceText : "#1B1D21"
 
                 Icon {
                     SlotsLayout.position: SlotsLayout.Trailing
                     name: "tick"
                     visible: modelData.code === root.currentLocale
-                    color: root.appTheme ? root.appTheme.colors.primary : "#00695C"
+                    color: root.appTheme && root.appTheme.colors ? root.appTheme.colors.primary : "#00695C"
                 }
             }
         }

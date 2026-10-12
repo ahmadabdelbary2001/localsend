@@ -14,10 +14,7 @@ use if_addrs::IfAddr;
 /// Whitelist and blacklist entries are matched against the interface name
 /// (e.g. "wlan0", "eth0"). Matching is case-sensitive for now; Flutter's
 /// implementation is also name-based.
-pub fn list_local_ips(
-    whitelist: Option<&[String]>,
-    blacklist: Option<&[String]>,
-) -> Vec<String> {
+pub fn list_local_ips(whitelist: Option<&[String]>, blacklist: Option<&[String]>) -> Vec<String> {
     let ifaces = match if_addrs::get_if_addrs() {
         Ok(v) => v,
         Err(e) => {
@@ -64,11 +61,7 @@ fn rank_ips(ips: &mut Vec<String>) {
 }
 
 fn score(ip: &str) -> u8 {
-    if ip.ends_with(".1") {
-        0
-    } else {
-        1
-    }
+    if ip.ends_with(".1") { 0 } else { 1 }
 }
 
 #[cfg(test)]

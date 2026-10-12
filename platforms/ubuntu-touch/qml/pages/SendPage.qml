@@ -56,7 +56,7 @@ Page {
                     Layout.fillWidth: true
                     text: translator.tr("sendTab.nearbyDevices")
                     fontSize: "medium"
-                    color: page.appTheme ? page.appTheme.colors.surfaceText : "#1B1D21"
+                    color: page.appTheme && page.appTheme.colors ? page.appTheme.colors.surfaceText : "#1B1D21"
                 }
 
                 Label {
@@ -69,7 +69,7 @@ Page {
                         return n + " " + qsTr("devices found")
                     }
                     fontSize: "x-small"
-                    color: page.appTheme ? page.appTheme.colors.surfaceTextMuted : "#5F6368"
+                    color: page.appTheme && page.appTheme.colors ? page.appTheme.colors.surfaceTextMuted : "#5F6368"
                 }
             }
 
@@ -91,7 +91,7 @@ Page {
             visible: favoritesController.count > 0
             text: qsTr("Favorites")
             fontSize: "small"
-            color: page.appTheme ? page.appTheme.colors.surfaceTextMuted : "#5F6368"
+            color: page.appTheme && page.appTheme.colors ? page.appTheme.colors.surfaceTextMuted : "#5F6368"
         }
 
         ListView {
@@ -134,7 +134,7 @@ Page {
             visible: deviceListModel.rowCount() > 0
             text: qsTr("Nearby")
             fontSize: "small"
-            color: page.appTheme ? page.appTheme.colors.surfaceTextMuted : "#5F6368"
+            color: page.appTheme && page.appTheme.colors ? page.appTheme.colors.surfaceTextMuted : "#5F6368"
         }
 
         ListView {
@@ -189,7 +189,7 @@ Page {
                 fontSize: "small"
                 horizontalAlignment: Text.AlignHCenter
                 wrapMode: Text.Wrap
-                color: page.appTheme ? page.appTheme.colors.surfaceTextMuted : "#5F6368"
+                color: page.appTheme && page.appTheme.colors ? page.appTheme.colors.surfaceTextMuted : "#5F6368"
             }
         }
     }

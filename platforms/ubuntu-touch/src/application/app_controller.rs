@@ -110,9 +110,7 @@ impl AppControllerHandle {
     /// Once the Qt-side event dispatcher is in place, the receiver
     /// will be moved to a dedicated poller bound to the Qt thread
     /// (e.g. a QTimer-driven `AppController::poll_events`).
-    pub fn take_event_receiver(
-        &self,
-    ) -> Option<mpsc::UnboundedReceiver<AppEvent>> {
+    pub fn take_event_receiver(&self) -> Option<mpsc::UnboundedReceiver<AppEvent>> {
         self.evt_rx.lock().ok().and_then(|mut g| g.take())
     }
 }

@@ -9,34 +9,29 @@ use std::sync::Arc;
 use std::sync::RwLock;
 use std::time::Duration;
 
-use qmetaobject::prelude::*;
 use qmetaobject::QObjectPinned;
+use qmetaobject::prelude::*;
 
-use crate::application::discovery_service::{
-    DiscoveryParams, DiscoveryServiceHandle,
-};
-use crate::application::identity_service::DeviceIdentity;
-use crate::application::settings_service::SettingsService;
-use crate::application::server_service::IncomingFileEntry;
+use crate::application::discovery_service::{DiscoveryParams, DiscoveryServiceHandle};
 use crate::application::favorites_service::FavoritesService;
+use crate::application::identity_service::DeviceIdentity;
+use crate::application::server_service::IncomingFileEntry;
+use crate::application::settings_service::SettingsService;
 use crate::bridge::app::AppController;
 use crate::bridge::discovery_controller::DiscoveryController;
+use crate::bridge::favorites_controller::FavoritesController;
 use crate::bridge::home_controller::HomeController;
+use crate::bridge::send_controller::{OutgoingEntry, SendController};
 use crate::bridge::server_controller::ServerController;
 use crate::bridge::settings_controller::SettingsController;
 use crate::bridge::translator::Translator;
-use crate::bridge::send_controller::{OutgoingEntry, SendController};
-use crate::bridge::favorites_controller::FavoritesController;
-use crate::model::local_ips_model::LocalIpsModel;
 use crate::model::device_model::DeviceListModel;
 use crate::model::incoming_files_model::IncomingFilesModel;
+use crate::model::local_ips_model::LocalIpsModel;
 use crate::model::outgoing_files_model::OutgoingFilesModel;
 
 fn main() -> ExitCode {
-    env_logger::Builder::from_env(
-        env_logger::Env::default().default_filter_or("info"),
-    )
-    .init();
+    env_logger::Builder::from_env(env_logger::Env::default().default_filter_or("info")).init();
     let _ = tracing_log::LogTracer::init();
 
     let settings = match SettingsService::load_or_default() {
@@ -61,7 +56,7 @@ fn main() -> ExitCode {
     // register with us) and DiscoveryController (to expose to QML) hold it.
     let discovery_handle = Arc::new(DiscoveryServiceHandle::spawn());
 
-        let favorites = match FavoritesService::load_or_default() {
+    let favorites = match FavoritesService::load_or_default() {
         Ok(s) => Arc::new(s),
         Err(e) => {
             log::error!("failed to load favorites: {e}");
@@ -76,8 +71,7 @@ fn main() -> ExitCode {
     let home_controller = RefCell::new(HomeController::new());
 
     // Shared with ServerController and IncomingFilesModel.
-    let incoming_entries: Arc<RwLock<Vec<IncomingFileEntry>>> =
-        Arc::new(RwLock::new(Vec::new()));
+    let incoming_entries: Arc<RwLock<Vec<IncomingFileEntry>>> = Arc::new(RwLock::new(Vec::new()));
 
     let outgoing_entries: Arc<RwLock<Vec<OutgoingEntry>>> = Arc::new(RwLock::new(Vec::new()));
 
@@ -95,14 +89,10 @@ fn main() -> ExitCode {
 
     let settings_controller = RefCell::new(SettingsController::new(settings));
     let local_ips_model = RefCell::new(LocalIpsModel::new());
-    let device_list_model = RefCell::new(DeviceListModel::new(
-        discovery_handle.snapshot_arc(),
-    ));
+    let device_list_model = RefCell::new(DeviceListModel::new(discovery_handle.snapshot_arc()));
     let incoming_files_model = RefCell::new(IncomingFilesModel::new(incoming_entries.clone()));
     let outgoing_files_model = RefCell::new(OutgoingFilesModel::new(outgoing_entries.clone()));
-    let discovery_controller = RefCell::new(DiscoveryController::new(
-        discovery_handle.clone(),
-    ));
+    let discovery_controller = RefCell::new(DiscoveryController::new(discovery_handle.clone()));
     let favorites_controller = RefCell::new(FavoritesController::new(favorites));
 
     // Start server first.
@@ -146,9 +136,8 @@ fn main() -> ExitCode {
         }
 
         // ---- optional test send (fires once, after discovery settles) ----
-        let test_send: Option<(String, String)> = std::env::var("LOCALSEND_TEST_SEND")
-            .ok()
-            .and_then(|s| {
+        let test_send: Option<(String, String)> =
+            std::env::var("LOCALSEND_TEST_SEND").ok().and_then(|s| {
                 let mut parts = s.splitn(2, '|');
                 let fp = parts.next()?.to_string();
                 let path = parts.next()?.to_string();
@@ -203,15 +192,9 @@ fn main() -> ExitCode {
                     };
                     if target_visible && ticks >= 4 {
                         log::info!("TEST_SEND: dispatching to {} -> {}", fp, path);
-                        let paths_json = format!(
-                            r#"["{}"]"#,
-                            path.replace('\\', "\\\\")
-                        );
+                        let paths_json = format!(r#"["{}"]"#, path.replace('\\', "\\\\"));
                         let mut send_c = send_controller.borrow_mut();
-                        send_c.send_files(
-                            QString::from(fp.clone()),
-                            QString::from(paths_json),
-                        );
+                        send_c.send_files(QString::from(fp.clone()), QString::from(paths_json));
                         test_send_fired = true;
                     } else if ticks >= 40 {
                         log::warn!("TEST_SEND: giving up, target not visible");
@@ -240,22 +223,48 @@ fn main() -> ExitCode {
         }
     }
 
-
     let mut engine = QmlEngine::new();
 
     unsafe {
         engine.set_object_property("translator".into(), QObjectPinned::new(&translator));
         engine.set_object_property("appController".into(), QObjectPinned::new(&app_controller));
-        engine.set_object_property("homeController".into(), QObjectPinned::new(&home_controller));
-        engine.set_object_property("serverController".into(), QObjectPinned::new(&server_controller));
-        engine.set_object_property("settingsController".into(), QObjectPinned::new(&settings_controller));
+        engine.set_object_property(
+            "homeController".into(),
+            QObjectPinned::new(&home_controller),
+        );
+        engine.set_object_property(
+            "serverController".into(),
+            QObjectPinned::new(&server_controller),
+        );
+        engine.set_object_property(
+            "settingsController".into(),
+            QObjectPinned::new(&settings_controller),
+        );
         engine.set_object_property("localIpsModel".into(), QObjectPinned::new(&local_ips_model));
-        engine.set_object_property("discoveryController".into(), QObjectPinned::new(&discovery_controller));
-        engine.set_object_property("deviceListModel".into(), QObjectPinned::new(&device_list_model));
-        engine.set_object_property("incomingFilesModel".into(), QObjectPinned::new(&incoming_files_model));
-        engine.set_object_property("outgoingFilesModel".into(), QObjectPinned::new(&outgoing_files_model));
-        engine.set_object_property("sendController".into(), QObjectPinned::new(&send_controller));
-        engine.set_object_property("favoritesController".into(), QObjectPinned::new(&favorites_controller));
+        engine.set_object_property(
+            "discoveryController".into(),
+            QObjectPinned::new(&discovery_controller),
+        );
+        engine.set_object_property(
+            "deviceListModel".into(),
+            QObjectPinned::new(&device_list_model),
+        );
+        engine.set_object_property(
+            "incomingFilesModel".into(),
+            QObjectPinned::new(&incoming_files_model),
+        );
+        engine.set_object_property(
+            "outgoingFilesModel".into(),
+            QObjectPinned::new(&outgoing_files_model),
+        );
+        engine.set_object_property(
+            "sendController".into(),
+            QObjectPinned::new(&send_controller),
+        );
+        engine.set_object_property(
+            "favoritesController".into(),
+            QObjectPinned::new(&favorites_controller),
+        );
     }
 
     engine.load_file("qrc:/qml/Main.qml".into());

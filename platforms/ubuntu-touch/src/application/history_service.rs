@@ -56,8 +56,8 @@ pub struct HistoryService {
 
 impl HistoryService {
     pub fn load_or_default() -> std::io::Result<Self> {
-        let dir = filesystem::app_config_dir()
-            .ok_or_else(|| std::io::Error::other("no config dir"))?;
+        let dir =
+            filesystem::app_config_dir().ok_or_else(|| std::io::Error::other("no config dir"))?;
         std::fs::create_dir_all(&dir)?;
         let path = dir.join("history.json");
 

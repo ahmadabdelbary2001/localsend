@@ -38,7 +38,7 @@ Page {
                         Layout.fillWidth: true
                         text: translator.tr("settingsTab.general.brightness")
                         fontSize: "small"
-                        color: page.appTheme ? page.appTheme.colors.surfaceText : "#1B1D21"
+                        color: page.appTheme && page.appTheme.colors ? page.appTheme.colors.surfaceText : "#1B1D21"
                     }
 
                     ComboBox {
@@ -119,7 +119,7 @@ Page {
                         Layout.fillWidth: true
                         text: translator.tr("settingsTab.network.server")
                         fontSize: "small"
-                        color: page.appTheme ? page.appTheme.colors.surfaceText : "#1B1D21"
+                        color: page.appTheme && page.appTheme.colors ? page.appTheme.colors.surfaceText : "#1B1D21"
                     }
 
                     Row {
@@ -226,12 +226,12 @@ Page {
                         Layout.fillWidth: true
                         text: "Version"
                         fontSize: "small"
-                        color: page.appTheme ? page.appTheme.colors.surfaceText : "#1B1D21"
+                        color: page.appTheme && page.appTheme.colors ? page.appTheme.colors.surfaceText : "#1B1D21"
                     }
                     Label {
                         text: appController.coreVersion
                         fontSize: "small"
-                        color: page.appTheme ? page.appTheme.colors.surfaceTextMuted : "#5F6368"
+                        color: page.appTheme && page.appTheme.colors ? page.appTheme.colors.surfaceTextMuted : "#5F6368"
                     }
                 }
             }

@@ -3,7 +3,7 @@ import QtQuick.Controls 2.15
 import Lomiri.Components 1.3
 
 import "shell"
-import "theme"
+import "theme" as LocalSendThemeComponents
 
 MainView {
     id: root
@@ -13,11 +13,11 @@ MainView {
     width: units.gu(50)
     height: units.gu(90)
 
-    Theme {
-        id: theme
+    LocalSendThemeComponents.Theme {
+        id: localSendTheme
         mode: settingsController.theme
-        colorMode: settingsController.color_mode
-        customColor: settingsController.custom_color
+        colorMode: settingsController.colorMode
+        customColor: settingsController.customColor
     }
 
     PageStack {
@@ -27,7 +27,7 @@ MainView {
 
     Component {
         id: shellComponent
-        AppShell { appTheme: theme }
+        AppShell { appTheme: localSendTheme }
     }
 
     // Incoming transfer dialog (auto-shown when a session is pending)
@@ -36,7 +36,7 @@ MainView {
         anchors.fill: parent
         active: serverController.incomingActive
         source: active ? "dialogs/IncomingTransferDialog.qml" : ""
-        onLoaded: item.appTheme = theme
+        onLoaded: item.appTheme = localSendTheme
     }
 
     // Outgoing send progress dialog (auto-shown while a session is active)
@@ -45,7 +45,7 @@ MainView {
         anchors.fill: parent
         active: sendController.active
         source: active ? "dialogs/SendProgressDialog.qml" : ""
-        onLoaded: item.appTheme = theme
+        onLoaded: item.appTheme = localSendTheme
     }
 
     // Single Timer drives all polling. Each block touches exactly one
