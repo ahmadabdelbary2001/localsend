@@ -7,6 +7,7 @@ use qmetaobject::prelude::*;
 use crate::application::discovery_service::{
     DiscoveryCommand, DiscoveryServiceHandle, build_discovered_device,
 };
+use crate::application::history_service::{HistoryEntry, HistoryService};
 use crate::application::identity_service::DeviceIdentity;
 use crate::application::server_service::{
     IncomingFileEntry, IncomingSession, ServerCommand, ServerEvent, ServerHandle, ServerSnapshot,
@@ -41,6 +42,7 @@ pub struct ServerController {
     handle: Option<Arc<ServerHandle>>,
     discovery: Option<Arc<DiscoveryServiceHandle>>,
     last_snapshot: ServerSnapshot,
+    history: Arc<HistoryService>,
     current_session: Option<IncomingSession>,
     entries: Arc<RwLock<Vec<IncomingFileEntry>>>,
 }
@@ -50,6 +52,7 @@ impl ServerController {
         identity: Arc<DeviceIdentity>,
         discovery: Arc<DiscoveryServiceHandle>,
         entries: Arc<RwLock<Vec<IncomingFileEntry>>>,
+        history: Arc<HistoryService>,
     ) -> Self {
         let handle = ServerHandle::spawn(identity);
         Self {
@@ -77,6 +80,7 @@ impl ServerController {
             last_snapshot: ServerSnapshot::default(),
             current_session: None,
             entries,
+            history,
         }
     }
 
@@ -262,6 +266,7 @@ impl ServerController {
                     error,
                     ..
                 } => {
+                    let mut recorded: Option<(String, u64, String)> = None;
                     if let Ok(mut g) = self.entries.write() {
                         if let Some(e) = g.iter_mut().find(|e| e.file_id == file_id) {
                             e.progress = 1.0;
@@ -269,6 +274,7 @@ impl ServerController {
                                 (Some(p), _) => {
                                     e.status = "finished".into();
                                     e.path = Some(p.clone());
+                                    recorded = Some((e.file_name.clone(), e.size, p.clone()));
                                 }
                                 (None, Some(err)) => {
                                     e.status = "failed".into();
@@ -280,6 +286,15 @@ impl ServerController {
                                 }
                             }
                         }
+                    }
+                    if let Some((name, size, p)) = recorded {
+                        let alias = self
+                            .current_session
+                            .as_ref()
+                            .map(|s| s.sender_alias.clone())
+                            .unwrap_or_default();
+                        self.history
+                            .add(HistoryEntry::new(name, size, Some(p), alias, false));
                     }
                     self.entries_changed();
                 }

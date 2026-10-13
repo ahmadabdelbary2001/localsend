@@ -89,6 +89,7 @@ fn main() -> ExitCode {
         identity.clone(),
         discovery_handle.clone(),
         incoming_entries.clone(),
+        history.clone(),
     ));
 
     let send_controller = RefCell::new(SendController::new(

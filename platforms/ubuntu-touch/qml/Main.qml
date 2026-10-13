@@ -68,6 +68,8 @@ MainView {
             if (typeof deviceListModel !== "undefined")      deviceListModel.refresh()
             if (typeof incomingFilesModel !== "undefined")   incomingFilesModel.refresh()
             if (typeof outgoingFilesModel !== "undefined")   outgoingFilesModel.refresh()
+            if (typeof favoritesController !== "undefined")  favoritesController.refresh()
+            if (typeof historyController !== "undefined")    historyController.refresh()
         }
     }
 
