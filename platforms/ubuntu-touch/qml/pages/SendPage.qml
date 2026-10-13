@@ -123,6 +123,16 @@ Page {
                     page.pendingFingerprint = model.fingerprint
                     pickerLoader.active = true
                 }
+                onDetailsRequested: {
+                    detailsDialog.fingerprint = model.fingerprint
+                    detailsDialog.alias = model.alias
+                    detailsDialog.deviceModel = ""
+                    detailsDialog.deviceType = ""
+                    detailsDialog.ip = model.ip
+                    detailsDialog.port = model.port
+                    detailsDialog.https = true
+                    detailsDialog.open()
+                }
                 onToggleFavorite: favoritesController.remove(model.fingerprint)
             }
         }
@@ -164,6 +174,16 @@ Page {
                     page.pendingFingerprint = model.fingerprint
                     pickerLoader.active = true
                 }
+                onDetailsRequested: {
+                    detailsDialog.fingerprint = model.fingerprint
+                    detailsDialog.alias = model.alias
+                    detailsDialog.deviceModel = model.deviceModel
+                    detailsDialog.deviceType = model.deviceType
+                    detailsDialog.ip = model.ip
+                    detailsDialog.port = model.port
+                    detailsDialog.https = model.https
+                    detailsDialog.open()
+                }
                 onToggleFavorite: {
                     if (favoritesController.is_favorite(model.fingerprint)) {
                         favoritesController.remove(model.fingerprint)
@@ -192,5 +212,10 @@ Page {
                 color: page.appTheme && page.appTheme.colors ? page.appTheme.colors.surfaceTextMuted : "#5F6368"
             }
         }
+    }
+
+    DeviceDetailsDialog {
+        id: detailsDialog
+        appTheme: page.appTheme
     }
 }

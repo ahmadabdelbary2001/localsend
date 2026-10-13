@@ -13,8 +13,8 @@ pub fn register() {
             "qml/shell/AppShell.qml" as "shell/AppShell.qml",
             "qml/shell/BottomNavigation.qml" as "shell/BottomNavigation.qml",
             "qml/pages/AboutPage.qml" as "pages/AboutPage.qml",
-        "qml/pages/ChangelogPage.qml" as "pages/ChangelogPage.qml",
-        "qml/pages/ReceivePage.qml" as "pages/ReceivePage.qml",
+            "qml/pages/ChangelogPage.qml" as "pages/ChangelogPage.qml",
+            "qml/pages/ReceivePage.qml" as "pages/ReceivePage.qml",
             "qml/pages/SendPage.qml" as "pages/SendPage.qml",
             "qml/pages/SettingsPage.qml" as "pages/SettingsPage.qml",
             "qml/theme/Theme.qml" as "theme/Theme.qml",
@@ -27,6 +27,7 @@ pub fn register() {
             "qml/dialogs/IncomingTransferDialog.qml" as "dialogs/IncomingTransferDialog.qml",
             "qml/dialogs/SendProgressDialog.qml" as "dialogs/SendProgressDialog.qml",
             "qml/dialogs/HistoryDialog.qml" as "dialogs/HistoryDialog.qml",
+            "qml/dialogs/DeviceDetailsDialog.qml" as "dialogs/DeviceDetailsDialog.qml",
             "qml/dialogs/LanguageDialog.qml"       as "dialogs/LanguageDialog.qml",
             "assets/logo.png" as "assets/logo.png",
         }

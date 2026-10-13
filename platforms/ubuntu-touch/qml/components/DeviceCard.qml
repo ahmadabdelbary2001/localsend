@@ -17,6 +17,7 @@ Rectangle {
 
     signal tapped()
     signal toggleFavorite()
+    signal detailsRequested()
 
     height: units.gu(9)
     radius: appTheme && appTheme.metrics
@@ -82,6 +83,20 @@ Rectangle {
                 opacity: 0.5
                 elide: Text.ElideRight
                 color: appTheme && appTheme.colors ? appTheme.colors.surfaceTextMuted : "#5F6368"
+            }
+        }
+
+        // Info icon (opens device details)
+        Icon {
+            Layout.preferredWidth: units.gu(3)
+            Layout.preferredHeight: units.gu(3)
+            name: "info"
+            color: appTheme ? appTheme.colors.surfaceTextMuted : "#888"
+
+            MouseArea {
+                anchors.fill: parent
+                anchors.margins: -units.gu(0.6)
+                onClicked: card.detailsRequested()
             }
         }
 
