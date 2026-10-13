@@ -1,5 +1,4 @@
 import QtQuick 2.15
-import QtQuick.Window 2.15
 import QtQuick.Controls 2.15
 import Lomiri.Components 1.3
 
@@ -10,7 +9,8 @@ MainView {
     id: root
     objectName: "localsendMain"
     applicationName: "localsend.ahmadabdelbary"
-    visibility: Window.FullScreen
+    width: units.gu(50)
+    height: units.gu(90)
     LocalSendThemeComponents.Theme {
         id: localSendTheme
         mode: settingsController.theme
@@ -25,6 +25,7 @@ MainView {
             console.log("[BOOT] PageStack completed", width, height)
             push(shellComponent)
             console.log("[BOOT] PageStack push requested")
+            console.log("[BOOT] PageStack state", mainStack.depth, mainStack.currentPage, mainStack.currentPage ? mainStack.currentPage.visible : false)
         }
     }
 
@@ -53,6 +54,23 @@ MainView {
 
     // Single Timer drives all polling. Each block touches exactly one
     // controller or model, so no RefCell is borrowed twice.
+    // TEMPORARY render probe. Remove after diagnosis.
+    Rectangle {
+        id: renderProbe
+        z: 10000
+        x: units.gu(1)
+        y: units.gu(1)
+        width: units.gu(24)
+        height: units.gu(6)
+        color: "#D500F9"
+        Text {
+            anchors.centerIn: parent
+            text: "QML RENDER OK"
+            color: "white"
+            font.pixelSize: units.gu(2)
+        }
+    }
+
     Timer {
         interval: 250
         running: true
@@ -76,12 +94,5 @@ MainView {
         if (typeof appController !== "undefined") {
             appController.initialize()
         }
-        root.showFullScreen()
-        console.log("[BOOT] showFullScreen requested")
-        if (false) {
-        }
-        // Explicitly ask the compositor to make us visible fullscreen.
-        root.showFullScreen()
-        console.log("[BOOT] showFullScreen requested, visibility =", root.visibility)
     }
 }
