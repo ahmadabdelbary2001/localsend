@@ -14,12 +14,14 @@ use qmetaobject::prelude::*;
 
 use crate::application::discovery_service::{DiscoveryParams, DiscoveryServiceHandle};
 use crate::application::favorites_service::FavoritesService;
+use crate::application::history_service::HistoryService;
 use crate::application::identity_service::DeviceIdentity;
 use crate::application::server_service::IncomingFileEntry;
 use crate::application::settings_service::SettingsService;
 use crate::bridge::app::AppController;
 use crate::bridge::discovery_controller::DiscoveryController;
 use crate::bridge::favorites_controller::FavoritesController;
+use crate::bridge::history_controller::HistoryController;
 use crate::bridge::home_controller::HomeController;
 use crate::bridge::send_controller::{OutgoingEntry, SendController};
 use crate::bridge::server_controller::ServerController;
@@ -64,6 +66,14 @@ fn main() -> ExitCode {
         }
     };
 
+    let history = match HistoryService::load_or_default() {
+        Ok(service) => Arc::new(service),
+        Err(error) => {
+            log::error!("failed to load history: {error}");
+            return ExitCode::FAILURE;
+        }
+    };
+
     resources::register();
 
     let translator = RefCell::new(Translator::new());
@@ -94,6 +104,7 @@ fn main() -> ExitCode {
     let outgoing_files_model = RefCell::new(OutgoingFilesModel::new(outgoing_entries.clone()));
     let discovery_controller = RefCell::new(DiscoveryController::new(discovery_handle.clone()));
     let favorites_controller = RefCell::new(FavoritesController::new(favorites));
+    let history_controller = RefCell::new(HistoryController::new(history));
 
     // Start server first.
     {
@@ -264,6 +275,10 @@ fn main() -> ExitCode {
         engine.set_object_property(
             "favoritesController".into(),
             QObjectPinned::new(&favorites_controller),
+        );
+        engine.set_object_property(
+            "historyController".into(),
+            QObjectPinned::new(&history_controller),
         );
     }
 

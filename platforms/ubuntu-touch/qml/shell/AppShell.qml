@@ -10,6 +10,10 @@ Page {
 
     header: null
 
+    Component.onCompleted: {
+        console.log("[BOOT] AppShell completed", shell.width, shell.height)
+    }
+
     SwipeView {
         id: view
         anchors {

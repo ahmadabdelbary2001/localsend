@@ -23,7 +23,11 @@ MainView {
     PageStack {
         anchors.fill: parent
         id: mainStack
-        Component.onCompleted: push(shellComponent)
+        Component.onCompleted: {
+            console.log("[BOOT] PageStack completed", width, height)
+            push(shellComponent)
+            console.log("[BOOT] PageStack push requested")
+        }
     }
 
     Component {
@@ -68,6 +72,7 @@ MainView {
     }
 
     Component.onCompleted: {
+        console.log("[BOOT] MainView completed", root.visible, root.width, root.height)
         if (typeof appController !== "undefined") {
             appController.initialize()
         }
