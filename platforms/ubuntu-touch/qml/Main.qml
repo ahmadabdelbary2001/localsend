@@ -16,11 +16,12 @@ MainView {
     LocalSendThemeComponents.Theme {
         id: localSendTheme
         mode: settingsController.theme
-        colorMode: settingsController.colorMode
-        customColor: settingsController.customColor
+        colorMode: settingsController.color_mode
+        customColor: settingsController.custom_color
     }
 
     PageStack {
+        anchors.fill: parent
         id: mainStack
         Component.onCompleted: push(shellComponent)
     }
@@ -34,7 +35,7 @@ MainView {
     Loader {
         id: incomingLoader
         anchors.fill: parent
-        active: serverController.incomingActive
+        active: serverController.incoming_active
         source: active ? "dialogs/IncomingTransferDialog.qml" : ""
         onLoaded: item.appTheme = localSendTheme
     }

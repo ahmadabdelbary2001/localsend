@@ -67,7 +67,7 @@ Page {
                 SettingsSwitch {
                     appTheme: page.appTheme
                     label: translator.tr("settingsTab.general.animations")
-                    checked: settingsController.enableAnimations
+                    checked: settingsController.enable_animations
                     onToggled: settingsController.set_enable_animations(value)
                 }
             }
@@ -80,28 +80,28 @@ Page {
                 SettingsSwitch {
                     appTheme: page.appTheme
                     label: translator.tr("settingsTab.receive.quickSave")
-                    checked: settingsController.quickSave
+                    checked: settingsController.quick_save
                     onToggled: settingsController.set_quick_save(value)
                 }
 
                 SettingsSwitch {
                     appTheme: page.appTheme
                     label: translator.tr("settingsTab.receive.quickSaveFromFavorites")
-                    checked: settingsController.quickSaveFromFavorites
+                    checked: settingsController.quick_save_from_favorites
                     onToggled: settingsController.set_quick_save_from_favorites(value)
                 }
 
                 SettingsSwitch {
                     appTheme: page.appTheme
                     label: translator.tr("settingsTab.receive.autoFinish")
-                    checked: settingsController.autoFinish
+                    checked: settingsController.auto_finish
                     onToggled: settingsController.set_auto_finish(value)
                 }
 
                 SettingsSwitch {
                     appTheme: page.appTheme
                     label: translator.tr("settingsTab.receive.saveToHistory")
-                    checked: settingsController.saveToHistory
+                    checked: settingsController.save_to_history
                     onToggled: settingsController.set_save_to_history(value)
                 }
             }
@@ -132,7 +132,7 @@ Page {
                                 settingsController.alias,
                                 settingsController.port,
                                 settingsController.https,
-                                settingsController.receivePin)
+                                settingsController.receive_pin)
                         }
 
                         Button {
@@ -144,7 +144,7 @@ Page {
                                     settingsController.alias,
                                     settingsController.port,
                                     settingsController.https,
-                                    settingsController.receivePin)
+                                    settingsController.receive_pin)
                             }
                         }
 
@@ -197,7 +197,7 @@ Page {
             SettingsSwitch {
                 appTheme: page.appTheme
                 label: translator.tr("settingsTab.advancedSettings")
-                checked: settingsController.advancedSettings
+                checked: settingsController.advanced_settings
                 onToggled: settingsController.set_advanced_settings(value)
             }
 
@@ -229,7 +229,7 @@ Page {
                         color: page.appTheme && page.appTheme.colors ? page.appTheme.colors.surfaceText : "#1B1D21"
                     }
                     Label {
-                        text: appController.coreVersion
+                        text: appController.core_version
                         fontSize: "small"
                         color: page.appTheme && page.appTheme.colors ? page.appTheme.colors.surfaceTextMuted : "#5F6368"
                     }

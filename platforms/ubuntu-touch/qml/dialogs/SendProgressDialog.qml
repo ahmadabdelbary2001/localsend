@@ -10,9 +10,9 @@ Rectangle {
     color: Qt.rgba(0, 0, 0, 0.55)
     z: 101
 
-    readonly property int total: sendController.totalCount
-    readonly property int done: sendController.finishedCount
-    readonly property int failed: sendController.failedCount
+    readonly property int total: sendController.total_count
+    readonly property int done: sendController.finished_count
+    readonly property int failed: sendController.failed_count
     readonly property real overall: total > 0
         ? Math.min(1.0, (done + failed) / total)
         : 0.0
@@ -47,7 +47,7 @@ Rectangle {
 
             Label {
                 Layout.fillWidth: true
-                text: sendController.targetAlias
+                text: sendController.target_alias
                       + " · "
                       + root.done + " / " + root.total
                       + (root.failed > 0 ? "  (" + root.failed + " ✗)" : "")

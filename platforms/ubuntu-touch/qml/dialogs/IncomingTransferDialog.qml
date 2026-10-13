@@ -51,7 +51,7 @@ Rectangle {
             Label {
                 Layout.fillWidth: true
                 text: {
-                    var p = serverController.incomingPhase
+                    var p = serverController.incoming_phase
                     if (p === "waiting")   return qsTr("Incoming transfer")
                     if (p === "receiving") return qsTr("Receiving…")
                     return qsTr("Transfer finished")
@@ -62,9 +62,9 @@ Rectangle {
 
             Label {
                 Layout.fillWidth: true
-                text: serverController.incomingSender
+                text: serverController.incoming_sender
                       + " · "
-                      + serverController.incomingFileCount
+                      + serverController.incoming_file_count
                       + " " + qsTr("file(s)")
                 fontSize: "small"
                 opacity: 0.7
@@ -147,20 +147,20 @@ Rectangle {
 
                 Button {
                     text: qsTr("Decline")
-                    visible: serverController.incomingPhase === "waiting"
+                    visible: serverController.incoming_phase === "waiting"
                     onClicked: serverController.decline_incoming()
                 }
 
                 Button {
                     text: qsTr("Accept")
                     color: root.appTheme && root.appTheme.colors ? root.appTheme.colors.primary : "#00695C"
-                    visible: serverController.incomingPhase === "waiting"
+                    visible: serverController.incoming_phase === "waiting"
                     onClicked: serverController.accept_incoming()
                 }
 
                 Button {
                     text: qsTr("Share")
-                    visible: serverController.incomingPhase === "done"
+                    visible: serverController.incoming_phase === "done"
                     onClicked: {
                         pickerLoader.active = false
                         pickerLoader.active = true
@@ -169,7 +169,7 @@ Rectangle {
 
                 Button {
                     text: qsTr("Close")
-                    visible: serverController.incomingPhase === "done"
+                    visible: serverController.incoming_phase === "done"
                     onClicked: serverController.dismiss_incoming()
                 }
             }

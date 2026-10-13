@@ -145,7 +145,7 @@ Page {
                             settingsController.alias,
                             settingsController.port,
                             settingsController.https,
-                            settingsController.receivePin)
+                            settingsController.receive_pin)
                     }
                 }
             }
