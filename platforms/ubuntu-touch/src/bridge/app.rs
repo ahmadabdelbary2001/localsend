@@ -18,6 +18,10 @@ pub struct AppController {
     core_version: qt_property!(QString; NOTIFY core_version_changed),
     core_version_changed: qt_signal!(),
 
+    /// Full Markdown contents of CHANGELOG.md, embedded at build time.
+    changelog_text: qt_property!(QString; NOTIFY changelog_text_changed),
+    changelog_text_changed: qt_signal!(),
+
     /// Short status text. Will be replaced by fine-grained models
     /// once Server/Send/Settings controllers are fully wired.
     status: qt_property!(QString; NOTIFY status_changed),
