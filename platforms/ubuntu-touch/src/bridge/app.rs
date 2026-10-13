@@ -52,6 +52,9 @@ impl AppController {
 
         self.core_version = QString::from(env!("CARGO_PKG_VERSION"));
         self.core_version_changed();
+
+        self.changelog_text = QString::from(include_str!("../../assets/CHANGELOG.md"));
+        self.changelog_text_changed();
     }
 
     fn ping(&mut self) -> QString {
