@@ -3,6 +3,7 @@ import QtQuick.Layouts 1.15
 import Lomiri.Components 1.3
 
 import "../components"
+import "../dialogs" as LocalSendDialogs
 
 Page {
     id: page
@@ -214,7 +215,7 @@ Page {
         }
     }
 
-    DeviceDetailsDialog {
+    LocalSendDialogs.DeviceDetailsDialog {
         id: detailsDialog
         appTheme: page.appTheme
     }

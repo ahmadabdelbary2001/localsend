@@ -228,7 +228,6 @@ jobs:
                 echo "--- $f"
                 qmllint "$f" 2>&1 | \
                   grep -v "Unqualified access" | \
-                  grep -v "is not a type" | \
                   grep -v "Cannot find property" | \
                   grep -v "^$" > /tmp/lint.txt || true
                 if [ -s /tmp/lint.txt ]; then
