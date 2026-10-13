@@ -1,4 +1,5 @@
 import QtQuick 2.15
+import QtQuick.Window 2.15
 import QtQuick.Controls 2.15
 import Lomiri.Components 1.3
 
@@ -9,10 +10,7 @@ MainView {
     id: root
     objectName: "localsendMain"
     applicationName: "localsend.ahmadabdelbary"
-
-    width: units.gu(50)
-    height: units.gu(90)
-
+    visibility: Window.FullScreen
     LocalSendThemeComponents.Theme {
         id: localSendTheme
         mode: settingsController.theme
@@ -78,5 +76,12 @@ MainView {
         if (typeof appController !== "undefined") {
             appController.initialize()
         }
+        root.showFullScreen()
+        console.log("[BOOT] showFullScreen requested")
+        if (false) {
+        }
+        // Explicitly ask the compositor to make us visible fullscreen.
+        root.showFullScreen()
+        console.log("[BOOT] showFullScreen requested, visibility =", root.visibility)
     }
 }
