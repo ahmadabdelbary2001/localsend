@@ -16,6 +16,7 @@ use crate::application::discovery_service::{DiscoveryParams, DiscoveryServiceHan
 use crate::application::favorites_service::FavoritesService;
 use crate::application::history_service::HistoryService;
 use crate::application::identity_service::DeviceIdentity;
+use crate::application::local_ip_service::list_local_ips;
 use crate::application::server_service::IncomingFileEntry;
 use crate::application::settings_service::SettingsService;
 use crate::bridge::app::AppController;
@@ -99,7 +100,15 @@ fn main() -> ExitCode {
     ));
 
     let settings_controller = RefCell::new(SettingsController::new(settings));
-    let local_ips_model = RefCell::new(LocalIpsModel::new());
+    let local_ips = list_local_ips(
+        settings_snapshot.network_whitelist.as_deref(),
+        settings_snapshot.network_blacklist.as_deref(),
+    );
+
+    let mut local_ips_model_value = LocalIpsModel::new();
+    local_ips_model_value.replace_all(local_ips);
+
+    let local_ips_model = RefCell::new(local_ips_model_value);
     let device_list_model = RefCell::new(DeviceListModel::new(discovery_handle.snapshot_arc()));
     let incoming_files_model = RefCell::new(IncomingFilesModel::new(incoming_entries.clone()));
     let outgoing_files_model = RefCell::new(OutgoingFilesModel::new(outgoing_entries.clone()));

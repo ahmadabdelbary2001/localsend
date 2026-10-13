@@ -132,6 +132,8 @@ Page {
                     detailsDialog.ip = model.ip
                     detailsDialog.port = model.port
                     detailsDialog.https = true
+                    detailsDialog.protocolVersion = ""
+                    detailsDialog.isFavorite = true
                     detailsDialog.open()
                 }
                 onToggleFavorite: favoritesController.remove(model.fingerprint)
@@ -183,6 +185,8 @@ Page {
                     detailsDialog.ip = model.ip
                     detailsDialog.port = model.port
                     detailsDialog.https = model.https
+                    detailsDialog.protocolVersion = model.version
+                    detailsDialog.isFavorite = favoritesController.is_favorite(model.fingerprint)
                     detailsDialog.open()
                 }
                 onToggleFavorite: {
@@ -218,5 +222,20 @@ Page {
     LocalSendDialogs.DeviceDetailsDialog {
         id: detailsDialog
         appTheme: page.appTheme
+
+        onToggleFavorite: {
+            if (favoritesController.is_favorite(detailsDialog.fingerprint)) {
+                favoritesController.remove(detailsDialog.fingerprint)
+            } else {
+                favoritesController.add_or_update(
+                    detailsDialog.fingerprint,
+                    detailsDialog.ip,
+                    detailsDialog.port,
+                    detailsDialog.alias
+                )
+            }
+            detailsDialog.isFavorite =
+                favoritesController.is_favorite(detailsDialog.fingerprint)
+        }
     }
 }

@@ -61,6 +61,7 @@ impl QAbstractListModel for DeviceListModel {
             5 => QVariant::from(d.port as i32),
             6 => QVariant::from(d.https),
             7 => QVariant::from(d.download),
+            8 => QString::from(d.version.clone()).into(),
             _ => QVariant::default(),
         }
     }
@@ -75,6 +76,7 @@ impl QAbstractListModel for DeviceListModel {
         m.insert(5, QByteArray::from("port"));
         m.insert(6, QByteArray::from("https"));
         m.insert(7, QByteArray::from("download"));
+        m.insert(8, QByteArray::from("version"));
         m
     }
 }

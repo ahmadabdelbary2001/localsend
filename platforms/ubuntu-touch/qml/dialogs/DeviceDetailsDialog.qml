@@ -14,6 +14,9 @@ Dialog {
     property int port: 0
     property bool https: false
 
+    property string protocolVersion: ""
+    property bool isFavorite: false
+
     /// Emitted when user taps the "Favorite" toggle.
     signal toggleFavorite()
 
@@ -49,6 +52,13 @@ Dialog {
 
                 Label { text: qsTr("Address"); fontSize: "small"; opacity: 0.6 }
                 Label { text: root.ip + ":" + root.port + (root.https ? "  HTTPS" : "  HTTP"); fontSize: "small" }
+
+                Label { text: qsTr("Protocol version"); fontSize: "small"; opacity: 0.6 }
+                Label {
+                    text: root.protocolVersion.length > 0 ? root.protocolVersion : "-"
+                    fontSize: "small"
+                    Layout.fillWidth: true
+                }
             }
 
             Label {
@@ -82,7 +92,7 @@ Dialog {
 
                 Button {
                     Layout.fillWidth: true
-                    text: qsTr("Favorite")
+                    text: root.isFavorite ? qsTr("Remove favorite") : qsTr("Add to favorites")
                     onClicked: root.toggleFavorite()
                 }
 
