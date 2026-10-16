@@ -4,6 +4,7 @@ import Lomiri.Components 1.3
 Item {
     id: nav
     implicitHeight: units.gu(7)
+    height: implicitHeight
 
     property var appTheme
     property int currentIndex: 0

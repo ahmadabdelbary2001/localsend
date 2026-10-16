@@ -12,6 +12,7 @@ Page {
 
     Component.onCompleted: {
         console.log("[BOOT] AppShell completed", shell.width, shell.height)
+        console.log("[UI] AppShell geometry", "shell", shell.width, shell.height, "view", view.width, view.height, "nav", nav.width, nav.height, "implicitHeight", nav.implicitHeight, "tab", view.currentIndex)
     }
 
     SwipeView {
@@ -45,6 +46,9 @@ Page {
             bottom: parent.bottom
         }
         currentIndex: homeController.current_tab
-        onTabSelected: function(index) { homeController.change_tab(index) }
+        onTabSelected: function(index) {
+            console.log("[NAV] tab selected", index)
+            homeController.change_tab(index)
+        }
     }
 }
