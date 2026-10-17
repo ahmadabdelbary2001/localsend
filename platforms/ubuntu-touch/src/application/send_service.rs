@@ -316,7 +316,7 @@ async fn do_send(
                             Some(p) => { current_pin = Some(p); }
                             None => return Ok(()),
                         }
-                        _ = cancel.cancelled() => return Ok(()),
+                        _cancel = cancel.cancelled() => return Ok(()),
                     }
                 }
                 403 => {
