@@ -59,6 +59,99 @@ Page {
         page.selectedPaths = []
     }
 
+    function pasteFromClipboard() {
+        var text = ""
+        try {
+            if (typeof Clipboard !== "undefined" && Clipboard.text) {
+                text = Clipboard.text.trim()
+            }
+        } catch (e) {
+            console.warn("[SendPage] clipboard read error:", e)
+        }
+
+        if (!text || text.length === 0) {
+            page.showToast(qsTr("Clipboard is empty"))
+            return
+        }
+
+        var path = sendController.create_text_file(text)
+        if (path.length > 0) {
+            if (page.pendingFingerprint.length > 0) {
+                sendController.send_files(page.pendingFingerprint, JSON.stringify([path]))
+                page.pendingFingerprint = ""
+            } else if (page.pendingAddress) {
+                sendController.send_to_address(
+                    page.pendingAddress.ip,
+                    page.pendingAddress.port,
+                    page.pendingAddress.https,
+                    page.pendingAddress.ip,
+                    JSON.stringify([path])
+                )
+                page.pendingAddress = null
+            } else {
+                page.selectedPaths = page.selectedPaths.concat([path])
+                page.showToast(qsTr("Pasted from clipboard"))
+            }
+        }
+    }
+
+    function addFolder(folderPath) {
+        if (!folderPath || folderPath.length === 0) return
+        try {
+            var filesJson = sendController.collect_directory_files(folderPath)
+            var files = JSON.parse(filesJson)
+            if (!files || files.length === 0) {
+                page.showToast(qsTr("Folder is empty"))
+                return
+            }
+
+            if (page.pendingFingerprint.length > 0) {
+                sendController.send_files(page.pendingFingerprint, JSON.stringify(files))
+                page.pendingFingerprint = ""
+            } else if (page.pendingAddress) {
+                sendController.send_to_address(
+                    page.pendingAddress.ip,
+                    page.pendingAddress.port,
+                    page.pendingAddress.https,
+                    page.pendingAddress.ip,
+                    JSON.stringify(files)
+                )
+                page.pendingAddress = null
+            } else {
+                page.selectedPaths = page.selectedPaths.concat(files)
+                page.showToast(files.length + " " + qsTr("files added from folder"))
+            }
+        } catch (e) {
+            console.warn("[SendPage] error adding folder:", e)
+        }
+    }
+
+    function addApp(appPath) {
+        if (!appPath || appPath.length === 0) return
+        if (page.pendingFingerprint.length > 0) {
+            sendController.send_files(page.pendingFingerprint, JSON.stringify([appPath]))
+            page.pendingFingerprint = ""
+        } else if (page.pendingAddress) {
+            sendController.send_to_address(
+                page.pendingAddress.ip,
+                page.pendingAddress.port,
+                page.pendingAddress.https,
+                page.pendingAddress.ip,
+                JSON.stringify([appPath])
+            )
+            page.pendingAddress = null
+        } else {
+            page.selectedPaths = page.selectedPaths.concat([appPath])
+            page.showToast(qsTr("App added to selection"))
+        }
+    }
+
+    function showToast(message) {
+        toastLabel.text = message
+        toastBanner.visible = true
+        toastTimer.restart()
+    }
+
     // ---------- File Picker Loader ----------
     Loader {
         id: pickerLoader
@@ -130,37 +223,85 @@ Page {
             width: Math.max(0, flickable.width - units.gu(3))
             spacing: units.gu(1.5)
 
-            // ---------- Selection Action Buttons (When empty) ----------
-            RowLayout {
+            // ---------- Selection Area (When empty: 6 Big Buttons) ----------
+            ColumnLayout {
                 Layout.fillWidth: true
-                spacing: units.gu(1)
+                spacing: units.gu(0.8)
                 visible: page.selectedPaths.length === 0
 
-                Button {
-                    Layout.fillWidth: true
-                    text: qsTr("File")
-                    onClicked: {
-                        page.pickerType = "all"
-                        pickerLoader.active = true
-                    }
+                Label {
+                    text: translator.tr("sendTab.selection.title")
+                    fontSize: "medium"
+                    font.bold: true
+                    color: page.appTheme && page.appTheme.colors ? page.appTheme.colors.surfaceText : "#1B1D21"
                 }
 
-                Button {
+                GridLayout {
                     Layout.fillWidth: true
-                    text: qsTr("Media")
-                    onClicked: {
-                        page.pickerType = "pictures"
-                        pickerLoader.active = true
-                    }
-                }
+                    columns: 3
+                    columnSpacing: units.gu(1)
+                    rowSpacing: units.gu(1)
 
-                Button {
-                    Layout.fillWidth: true
-                    text: qsTr("Text")
-                    onClicked: {
-                        page.pendingFingerprint = ""
-                        page.pendingAddress = null
-                        messageDialogLoader.active = true
+                    // 1. File (ملف)
+                    BigButton {
+                        appTheme: page.appTheme
+                        iconName: "document"
+                        label: translator.tr("sendTab.picker.file")
+                        onClicked: {
+                            page.pickerType = "all"
+                            pickerLoader.active = true
+                        }
+                    }
+
+                    // 2. Media (وسائط)
+                    BigButton {
+                        appTheme: page.appTheme
+                        iconName: "image"
+                        label: translator.tr("sendTab.picker.media")
+                        onClicked: {
+                            page.pickerType = "pictures"
+                            pickerLoader.active = true
+                        }
+                    }
+
+                    // 3. Paste (لصق)
+                    BigButton {
+                        appTheme: page.appTheme
+                        iconName: "edit-paste"
+                        label: translator.tr("sendTab.picker.clipboard")
+                        onClicked: page.pasteFromClipboard()
+                    }
+
+                    // 4. Text (نص)
+                    BigButton {
+                        appTheme: page.appTheme
+                        iconName: "edit"
+                        label: translator.tr("sendTab.picker.text")
+                        onClicked: {
+                            page.pendingFingerprint = ""
+                            page.pendingAddress = null
+                            messageDialogLoader.active = true
+                        }
+                    }
+
+                    // 5. Folder (مجلد)
+                    BigButton {
+                        appTheme: page.appTheme
+                        iconName: "folder"
+                        label: translator.tr("sendTab.picker.folder")
+                        onClicked: {
+                            folderDialogLoader.active = true
+                        }
+                    }
+
+                    // 6. App (تطبيق)
+                    BigButton {
+                        appTheme: page.appTheme
+                        iconName: "package"
+                        label: translator.tr("sendTab.picker.app")
+                        onClicked: {
+                            appDialogLoader.active = true
+                        }
                     }
                 }
             }
@@ -168,7 +309,7 @@ Page {
             // ---------- Selected Items Summary (When not empty) ----------
             Rectangle {
                 Layout.fillWidth: true
-                Layout.preferredHeight: units.gu(7)
+                Layout.preferredHeight: units.gu(7.5)
                 radius: units.gu(0.8)
                 visible: page.selectedPaths.length > 0
                 color: page.appTheme && page.appTheme.colors ? page.appTheme.colors.surface : "#ffffff"
@@ -177,7 +318,7 @@ Page {
 
                 RowLayout {
                     anchors.fill: parent
-                    anchors.margins: units.gu(1)
+                    anchors.margins: units.gu(1.2)
                     spacing: units.gu(1)
 
                     ColumnLayout {
@@ -185,7 +326,7 @@ Page {
                         spacing: units.gu(0.2)
 
                         Label {
-                            text: qsTr("Selection")
+                            text: translator.tr("sendTab.selection.title")
                             fontSize: "small"
                             color: page.appTheme && page.appTheme.colors ? page.appTheme.colors.surfaceTextMuted : "#5F6368"
                         }
@@ -203,8 +344,7 @@ Page {
                     Button {
                         text: qsTr("+ Add")
                         onClicked: {
-                            page.pickerType = "all"
-                            pickerLoader.active = true
+                            addMenuPopup.visible = !addMenuPopup.visible
                         }
                     }
 
@@ -213,6 +353,64 @@ Page {
                         onClicked: {
                             page.selectedPaths = []
                         }
+                    }
+                }
+            }
+
+            // Expandable Add-More Grid when selection is active
+            Rectangle {
+                id: addMenuPopup
+                Layout.fillWidth: true
+                visible: false
+                implicitHeight: addGrid.implicitHeight + units.gu(2)
+                radius: units.gu(0.8)
+                color: page.appTheme && page.appTheme.colors ? page.appTheme.colors.surfaceTint : "#ECEFF1"
+
+                GridLayout {
+                    id: addGrid
+                    anchors {
+                        fill: parent
+                        margins: units.gu(1)
+                    }
+                    columns: 3
+                    columnSpacing: units.gu(0.8)
+                    rowSpacing: units.gu(0.8)
+
+                    BigButton {
+                        appTheme: page.appTheme
+                        iconName: "document"
+                        label: translator.tr("sendTab.picker.file")
+                        onClicked: { addMenuPopup.visible = false; page.pickerType = "all"; pickerLoader.active = true; }
+                    }
+                    BigButton {
+                        appTheme: page.appTheme
+                        iconName: "image"
+                        label: translator.tr("sendTab.picker.media")
+                        onClicked: { addMenuPopup.visible = false; page.pickerType = "pictures"; pickerLoader.active = true; }
+                    }
+                    BigButton {
+                        appTheme: page.appTheme
+                        iconName: "edit-paste"
+                        label: translator.tr("sendTab.picker.clipboard")
+                        onClicked: { addMenuPopup.visible = false; page.pasteFromClipboard(); }
+                    }
+                    BigButton {
+                        appTheme: page.appTheme
+                        iconName: "edit"
+                        label: translator.tr("sendTab.picker.text")
+                        onClicked: { addMenuPopup.visible = false; messageDialogLoader.active = true; }
+                    }
+                    BigButton {
+                        appTheme: page.appTheme
+                        iconName: "folder"
+                        label: translator.tr("sendTab.picker.folder")
+                        onClicked: { addMenuPopup.visible = false; folderDialogLoader.active = true; }
+                    }
+                    BigButton {
+                        appTheme: page.appTheme
+                        iconName: "package"
+                        label: translator.tr("sendTab.picker.app")
+                        onClicked: { addMenuPopup.visible = false; appDialogLoader.active = true; }
                     }
                 }
             }
@@ -444,6 +642,37 @@ Page {
         }
     }
 
+    // ---------- Floating Toast Banner ----------
+    Rectangle {
+        id: toastBanner
+        anchors {
+            bottom: parent.bottom
+            horizontalCenter: parent.horizontalCenter
+            bottomMargin: units.gu(3)
+        }
+        visible: false
+        z: 200
+        implicitWidth: toastLabel.implicitWidth + units.gu(4)
+        implicitHeight: units.gu(4.5)
+        radius: units.gu(2.2)
+        color: "#323232"
+        opacity: 0.95
+
+        Label {
+            id: toastLabel
+            anchors.centerIn: parent
+            text: ""
+            fontSize: "small"
+            color: "#ffffff"
+        }
+
+        Timer {
+            id: toastTimer
+            interval: 2500
+            onTriggered: toastBanner.visible = false
+        }
+    }
+
     // ---------- Text Message Dialog Loader ----------
     Loader {
         id: messageDialogLoader
@@ -486,6 +715,65 @@ Page {
                 page.pendingFingerprint = ""
                 page.pendingAddress = null
                 messageDialogLoader.active = false
+            }
+        }
+    }
+
+    // ---------- Folder Picker Dialog Loader ----------
+    Loader {
+        id: folderDialogLoader
+        active: false
+        source: "../dialogs/FolderPickerDialog.qml"
+
+        onLoaded: {
+            item.appTheme = page.appTheme
+            item.folderSelected.connect(function(folderPath) {
+                page.addFolder(folderPath)
+                folderDialogLoader.active = false
+            })
+            item.canceled.connect(function() {
+                page.pendingFingerprint = ""
+                page.pendingAddress = null
+                folderDialogLoader.active = false
+            })
+            item.open()
+        }
+        onStatusChanged: {
+            if (status === Loader.Error) {
+                console.warn("[SendPage] FolderPickerDialog unavailable")
+                folderDialogLoader.active = false
+            }
+        }
+    }
+
+    // ---------- App Picker Dialog Loader ----------
+    Loader {
+        id: appDialogLoader
+        active: false
+        source: "../dialogs/AppPickerDialog.qml"
+
+        onLoaded: {
+            item.appTheme = page.appTheme
+            item.appSelected.connect(function(appPath) {
+                page.addApp(appPath)
+                appDialogLoader.active = false
+            })
+            item.pickCustomFile.connect(function() {
+                appDialogLoader.active = false
+                page.pickerType = "all"
+                pickerLoader.active = true
+            })
+            item.canceled.connect(function() {
+                page.pendingFingerprint = ""
+                page.pendingAddress = null
+                appDialogLoader.active = false
+            })
+            item.open()
+        }
+        onStatusChanged: {
+            if (status === Loader.Error) {
+                console.warn("[SendPage] AppPickerDialog unavailable")
+                appDialogLoader.active = false
             }
         }
     }

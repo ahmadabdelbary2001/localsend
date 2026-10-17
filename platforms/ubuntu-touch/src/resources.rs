@@ -20,6 +20,7 @@ pub fn register() {
             "qml/theme/Theme.qml" as "theme/Theme.qml",
             "qml/pickers/ContentHubPicker.qml" as "pickers/ContentHubPicker.qml",
             "qml/components/DeviceCard.qml" as "components/DeviceCard.qml",
+            "qml/components/BigButton.qml" as "components/BigButton.qml",
             "qml/components/SettingsSection.qml"   as "components/SettingsSection.qml",
             "qml/components/SettingsSwitch.qml"    as "components/SettingsSwitch.qml",
             "qml/components/SettingsButton.qml"    as "components/SettingsButton.qml",
@@ -31,6 +32,8 @@ pub fn register() {
             "qml/dialogs/PinDialog.qml" as "dialogs/PinDialog.qml",
             "qml/dialogs/MessageInputDialog.qml"   as "dialogs/MessageInputDialog.qml",
             "qml/dialogs/ManualSendDialog.qml"     as "dialogs/ManualSendDialog.qml",
+            "qml/dialogs/FolderPickerDialog.qml"   as "dialogs/FolderPickerDialog.qml",
+            "qml/dialogs/AppPickerDialog.qml"      as "dialogs/AppPickerDialog.qml",
             "qml/dialogs/LanguageDialog.qml"       as "dialogs/LanguageDialog.qml",
             "assets/logo.png" as "assets/logo.png",
         }

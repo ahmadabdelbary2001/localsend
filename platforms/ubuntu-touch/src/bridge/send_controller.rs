@@ -57,6 +57,9 @@ pub struct SendController {
         )
     ),
     create_text_file: qt_method!(fn(&mut self, text: QString) -> QString),
+    collect_directory_files: qt_method!(fn(&mut self, dir_path: QString) -> QString),
+    list_directory: qt_method!(fn(&mut self, dir_path: QString) -> QString),
+    list_installed_apps: qt_method!(fn(&mut self) -> QString),
     submit_pin: qt_method!(fn(&mut self, pin: QString)),
     cancel: qt_method!(fn(&mut self)),
     dismiss: qt_method!(fn(&mut self)),
@@ -97,6 +100,9 @@ impl SendController {
             send_files: Default::default(),
             send_to_address: Default::default(),
             create_text_file: Default::default(),
+            collect_directory_files: Default::default(),
+            list_directory: Default::default(),
+            list_installed_apps: Default::default(),
             submit_pin: Default::default(),
             cancel: Default::default(),
             dismiss: Default::default(),
@@ -307,6 +313,182 @@ impl SendController {
             return QString::default();
         }
         QString::from(file_path.to_string_lossy().to_string())
+    }
+
+    pub fn collect_directory_files(&mut self, dir_path: QString) -> QString {
+        let dir = PathBuf::from(dir_path.to_string());
+        if !dir.is_dir() {
+            return QString::from("[]");
+        }
+        let mut files = Vec::new();
+        fn scan(dir: &std::path::Path, acc: &mut Vec<String>) {
+            if let Ok(entries) = std::fs::read_dir(dir) {
+                for entry in entries.flatten() {
+                    let p = entry.path();
+                    if p.is_file() {
+                        if let Some(s) = p.to_str() {
+                            acc.push(s.to_string());
+                        }
+                    } else if p.is_dir() {
+                        scan(&p, acc);
+                    }
+                }
+            }
+        }
+        scan(&dir, &mut files);
+        serde_json::to_string(&files).unwrap_or_else(|_| "[]".into()).into()
+    }
+
+    pub fn list_directory(&mut self, dir_path: QString) -> QString {
+        #[derive(serde::Serialize)]
+        struct DirEntry {
+            name: String,
+            path: String,
+            is_dir: bool,
+            size: u64,
+        }
+        let p_str = dir_path.to_string();
+        let target_dir = if p_str.trim().is_empty() {
+            std::env::var("HOME")
+                .map(PathBuf::from)
+                .unwrap_or_else(|_| PathBuf::from("/home/phablet"))
+        } else {
+            PathBuf::from(p_str)
+        };
+
+        let mut entries_list = Vec::new();
+        if let Ok(entries) = std::fs::read_dir(&target_dir) {
+            for entry in entries.flatten() {
+                let p = entry.path();
+                let name = p.file_name().and_then(|n| n.to_str()).unwrap_or("").to_string();
+                if name.starts_with('.') {
+                    continue; // Skip hidden files
+                }
+                let is_dir = p.is_dir();
+                let size = if is_dir { 0 } else { p.metadata().map(|m| m.len()).unwrap_or(0) };
+                entries_list.push(DirEntry {
+                    name,
+                    path: p.to_string_lossy().to_string(),
+                    is_dir,
+                    size,
+                });
+            }
+        }
+        entries_list.sort_by(|a, b| {
+            b.is_dir.cmp(&a.is_dir).then_with(|| a.name.to_lowercase().cmp(&b.name.to_lowercase()))
+        });
+
+        serde_json::to_string(&entries_list).unwrap_or_else(|_| "[]".into()).into()
+    }
+
+    pub fn list_installed_apps(&mut self) -> QString {
+        #[derive(serde::Serialize)]
+        struct AppItem {
+            name: String,
+            path: String,
+            icon: String,
+        }
+        let mut apps = Vec::new();
+
+        // 1. Scan Click packages in /opt/click.ubuntu.com
+        let click_dir = PathBuf::from("/opt/click.ubuntu.com");
+        if let Ok(entries) = std::fs::read_dir(&click_dir) {
+            for entry in entries.flatten() {
+                let p = entry.path();
+                if p.is_dir() {
+                    let pkg_name = p.file_name().and_then(|n| n.to_str()).unwrap_or("").to_string();
+                    if pkg_name.is_empty() || pkg_name.starts_with('.') {
+                        continue;
+                    }
+                    if let Ok(sub_entries) = std::fs::read_dir(&p) {
+                        for sub in sub_entries.flatten() {
+                            let manifest = sub.path().join("manifest.json");
+                            if manifest.is_file() {
+                                if let Ok(data) = std::fs::read_to_string(&manifest) {
+                                    if let Ok(json) = serde_json::from_str::<serde_json::Value>(&data) {
+                                        let title = json.get("title").and_then(|v| v.as_str()).unwrap_or(&pkg_name);
+                                        let icon = json.get("icon").and_then(|v| v.as_str()).unwrap_or("package");
+                                        let path = sub.path().to_string_lossy().to_string();
+                                        apps.push(AppItem {
+                                            name: title.to_string(),
+                                            path,
+                                            icon: icon.to_string(),
+                                        });
+                                    }
+                                }
+                                break;
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        // 2. Scan desktop files in /usr/share/applications and ~/.local/share/applications
+        let home = std::env::var("HOME").map(PathBuf::from).ok();
+        let desktop_dirs = [
+            PathBuf::from("/usr/share/applications"),
+            home.as_ref().map(|h| h.join(".local/share/applications")).unwrap_or_default(),
+        ];
+        for ddir in &desktop_dirs {
+            if let Ok(entries) = std::fs::read_dir(ddir) {
+                for entry in entries.flatten() {
+                    let p = entry.path();
+                    if p.extension().map_or(false, |ext| ext == "desktop") {
+                        if let Ok(content) = std::fs::read_to_string(&p) {
+                            let mut name = None;
+                            let mut icon = None;
+                            let mut no_display = false;
+                            for line in content.lines() {
+                                if line.starts_with("Name=") && name.is_none() {
+                                    name = Some(line["Name=".len()..].trim().to_string());
+                                } else if line.starts_with("Icon=") && icon.is_none() {
+                                    icon = Some(line["Icon=".len()..].trim().to_string());
+                                } else if line.starts_with("NoDisplay=true") {
+                                    no_display = true;
+                                }
+                            }
+                            if !no_display {
+                                if let Some(n) = name {
+                                    if !n.is_empty() {
+                                        apps.push(AppItem {
+                                            name: n,
+                                            path: p.to_string_lossy().to_string(),
+                                            icon: icon.unwrap_or_else(|| "software-properties".into()),
+                                        });
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        // 3. Scan ~/Downloads for any .click or .deb packages
+        if let Some(h) = &home {
+            let downloads = h.join("Downloads");
+            if let Ok(entries) = std::fs::read_dir(&downloads) {
+                for entry in entries.flatten() {
+                    let p = entry.path();
+                    if let Some(ext) = p.extension() {
+                        if ext == "click" || ext == "deb" {
+                            let fname = p.file_name().and_then(|n| n.to_str()).unwrap_or("package").to_string();
+                            apps.push(AppItem {
+                                name: format!("{fname} (installer)"),
+                                path: p.to_string_lossy().to_string(),
+                                icon: "package".to_string(),
+                            });
+                        }
+                    }
+                }
+            }
+        }
+
+        apps.sort_by(|a, b| a.name.to_lowercase().cmp(&b.name.to_lowercase()));
+        apps.dedup_by(|a, b| a.name == b.name);
+
+        serde_json::to_string(&apps).unwrap_or_else(|_| "[]".into()).into()
     }
 
     fn cancel(&mut self) {
