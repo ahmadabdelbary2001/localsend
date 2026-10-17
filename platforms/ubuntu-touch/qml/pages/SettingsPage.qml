@@ -8,7 +8,9 @@ import "../dialogs"
 
 Page {
     id: page
+
     property var appTheme
+    property var navigationStack: null
 
     Flickable {
         anchors.fill: parent
@@ -210,7 +212,16 @@ Page {
                     appTheme: page.appTheme
                     label: translator.tr("aboutPage.title")
                     buttonLabel: translator.tr("general.open")
-                    onTapped: page.pageStack.push(Qt.resolvedUrl("AboutPage.qml"), { appTheme: page.appTheme })
+                    onTapped: {
+                        if (page.navigationStack) {
+                            page.navigationStack.push(
+                                Qt.resolvedUrl("AboutPage.qml"),
+                                { appTheme: page.appTheme }
+                            )
+                        } else {
+                            console.warn("[NAV] navigation stack unavailable for AboutPage")
+                        }
+                    }
                 }
 
                 SettingsButton {

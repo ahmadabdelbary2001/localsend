@@ -6,7 +6,9 @@ import "../pages"
 
 Page {
     id: shell
+
     property var appTheme
+    property var navigationStack: null
 
     header: null
 
@@ -17,6 +19,7 @@ Page {
 
     SwipeView {
         id: view
+        clip: true
         anchors {
             top: parent.top
             left: parent.left
@@ -34,7 +37,10 @@ Page {
 
         ReceivePage  { appTheme: shell.appTheme }
         SendPage     { appTheme: shell.appTheme }
-        SettingsPage { appTheme: shell.appTheme }
+        SettingsPage {
+            appTheme: shell.appTheme
+            navigationStack: shell.navigationStack
+        }
     }
 
     BottomNavigation {

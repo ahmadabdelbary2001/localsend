@@ -38,7 +38,11 @@ Window {
         id: root
         objectName: "localsendMain"
 
-        anchors.fill: parent
+        x: 0
+        y: 0
+        width: appWindow.width
+        height: appWindow.height
+
         applicationName: "localsend.ahmadabdelbary"
         backgroundColor: localSendTheme.colors.background
 
@@ -80,6 +84,7 @@ Window {
 
             AppShell {
                 appTheme: localSendTheme
+                navigationStack: mainStack
             }
         }
 
@@ -110,39 +115,6 @@ Window {
 
             onLoaded: {
                 item.appTheme = localSendTheme
-            }
-        }
-
-        // TEMPORARY diagnostic: this must be visible on screen.
-        Rectangle {
-            id: renderProbe
-
-            z: 10000
-            x: units.gu(1)
-            y: units.gu(1)
-
-            width: units.gu(24)
-            height: units.gu(6)
-
-            color: "#D500F9"
-
-            Text {
-                anchors.centerIn: parent
-
-                text: "QML RENDER OK"
-                color: "white"
-                font.pixelSize: units.gu(2)
-            }
-
-            Component.onCompleted: {
-                console.log(
-                    "[UI] Render probe created",
-                    x,
-                    y,
-                    width,
-                    height,
-                    visible
-                )
             }
         }
 
