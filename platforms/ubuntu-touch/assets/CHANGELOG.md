@@ -1,3 +1,10 @@
+## 1.3.1
+- PIN dialog for receivers protected by a PIN (matches Dart's
+  pin_dialog.dart).
+- Distinct final statuses: receiver declined, receiver busy, too many
+  attempts, canceled by sender.
+- Retry of 1.3.0 publish after OpenStore returned HTTP 500 on upload.
+
 ## 1.3.0
 - Complete send flow: file selection via Content Hub, per-file status,
   explicit error on unreadable files.
