@@ -13,18 +13,19 @@ Page {
     property var navigationStack: null
 
     Flickable {
+        id: settingsFlickable
         anchors.fill: parent
-        contentHeight: col.implicitHeight + units.gu(4)
+        contentWidth: width
+        contentHeight: col.y + col.implicitHeight + units.gu(2)
+        flickableDirection: Flickable.VerticalFlick
+        boundsBehavior: Flickable.StopAtBounds
         clip: true
 
         ColumnLayout {
             id: col
-            anchors {
-                top: parent.top
-                left: parent.left
-                right: parent.right
-                margins: units.gu(2)
-            }
+            x: units.gu(2)
+            y: units.gu(2)
+            width: Math.max(0, settingsFlickable.width - units.gu(4))
             spacing: units.gu(1.5)
 
             // ---------------- General ----------------

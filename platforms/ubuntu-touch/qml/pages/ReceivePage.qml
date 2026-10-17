@@ -54,12 +54,15 @@ Page {
                 radius: width / 2
                 color: page.appTheme && page.appTheme.colors ? page.appTheme.colors.surfaceTint : "#ECEFF1"
 
-                Label {
-                    anchors.centerIn: parent
-                    text: "LS"
-                    fontSize: "xx-large"
-                    color: page.appTheme && page.appTheme.colors ? page.appTheme.colors.primary : "#00695C"
-                }
+            Image {
+                anchors.centerIn: parent
+                width: units.gu(14)
+                height: units.gu(14)
+                source: "qrc:/qml/assets/logo.png"
+                fillMode: Image.PreserveAspectFit
+                smooth: true
+                cache: true
+            }
 
                 RotationAnimator on rotation {
                     running: serverController.running
@@ -154,6 +157,7 @@ Page {
 
     // ---------------- Top-right buttons ----------------
     Row {
+        z: 2
         anchors { top: parent.top; right: parent.right; margins: units.gu(2) }
         spacing: units.gu(1)
 
@@ -173,9 +177,10 @@ Page {
 
     // ---------------- Advanced info box ----------------
     Rectangle {
+        z: 1
         anchors { top: parent.top; right: parent.right; margins: units.gu(2) }
-        width: units.gu(30)
-        height: infoColumn.height + units.gu(2)
+        width: Math.min(units.gu(30), Math.max(units.gu(1), parent.width - units.gu(4)))
+        height: infoColumn.childrenRect.height + units.gu(2)
         radius: page.appTheme && page.appTheme.metrics ? page.appTheme.metrics.cardRadius : units.gu(0.6)
         color: page.appTheme && page.appTheme.colors ? page.appTheme.colors.surface : "#ffffff"
         border.color: page.appTheme && page.appTheme.colors ? page.appTheme.colors.divider : "#e0e0e0"

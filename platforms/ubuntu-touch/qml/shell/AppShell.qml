@@ -1,4 +1,5 @@
 import QtQuick 2.15
+import QtQuick.Layouts 1.15
 import QtQuick.Controls 2.15
 import Lomiri.Components 1.3
 
@@ -12,32 +13,51 @@ Page {
 
     header: null
 
-    Component.onCompleted: {
-        console.log("[BOOT] AppShell completed", shell.width, shell.height)
-        console.log("[UI] AppShell geometry", "shell", shell.width, shell.height, "view", view.width, view.height, "nav", nav.width, nav.height, "implicitHeight", nav.implicitHeight, "tab", view.currentIndex)
-    }
-
-    SwipeView {
+    // StackLayout keeps the pages in one layout but displays
+    // only the page selected by currentIndex.
+    StackLayout {
         id: view
-        clip: true
+
         anchors {
             top: parent.top
             left: parent.left
             right: parent.right
             bottom: nav.top
         }
-        interactive: false
+
+        clip: true
         currentIndex: homeController.current_tab
 
         onCurrentIndexChanged: {
             if (homeController.current_tab !== currentIndex) {
                 homeController.change_tab(currentIndex)
             }
+
+            // Temporary diagnostic: verify inactive pages are hidden.
+            Qt.callLater(function() {
+                console.log(
+                    "[UI] active tab",
+                    view.currentIndex,
+                    "receive visible", receivePage.visible,
+                    "send visible", sendPage.visible,
+                    "settings visible", settingsPage.visible,
+                    "layout", view.width, view.height
+                )
+            })
         }
 
-        ReceivePage  { appTheme: shell.appTheme }
-        SendPage     { appTheme: shell.appTheme }
+        ReceivePage {
+            id: receivePage
+            appTheme: shell.appTheme
+        }
+
+        SendPage {
+            id: sendPage
+            appTheme: shell.appTheme
+        }
+
         SettingsPage {
+            id: settingsPage
             appTheme: shell.appTheme
             navigationStack: shell.navigationStack
         }
@@ -45,16 +65,20 @@ Page {
 
     BottomNavigation {
         id: nav
+
         appTheme: shell.appTheme
+        currentIndex: homeController.current_tab
+
         anchors {
             left: parent.left
             right: parent.right
             bottom: parent.bottom
         }
-        currentIndex: homeController.current_tab
+
         onTabSelected: function(index) {
-            console.log("[NAV] tab selected", index)
-            homeController.change_tab(index)
+            if (index >= 0 && index < 3) {
+                homeController.change_tab(index)
+            }
         }
     }
 }

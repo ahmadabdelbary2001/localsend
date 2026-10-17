@@ -9,6 +9,22 @@ Page {
     id: page
     property var appTheme
     property string pendingFingerprint: ""
+    property var selectedPaths: []
+
+    function sendToDevice(fingerprint) {
+        if (sendController.active) return
+
+        if (page.selectedPaths.length === 0) {
+            page.pendingFingerprint = fingerprint
+            pickerLoader.active = true
+            return
+        }
+
+        sendController.send_files(
+            fingerprint,
+            JSON.stringify(page.selectedPaths)
+        )
+    }
 
     Loader {
         id: pickerLoader
@@ -17,9 +33,20 @@ Page {
 
         onLoaded: {
             item.filesPicked.connect(function(paths) {
-                if (page.pendingFingerprint.length > 0 && paths && paths.length > 0) {
-                    sendController.send_files(page.pendingFingerprint, JSON.stringify(paths))
+                var pickedPaths = paths || []
+
+                if (pickedPaths.length > 0) {
+                    page.selectedPaths = page.selectedPaths.concat(pickedPaths)
                 }
+
+                if (page.pendingFingerprint.length > 0 &&
+                    pickedPaths.length > 0 && page.selectedPaths.length > 0) {
+                    sendController.send_files(
+                        page.pendingFingerprint,
+                        JSON.stringify(page.selectedPaths)
+                    )
+                }
+
                 page.pendingFingerprint = ""
                 pickerLoader.active = false
             })
@@ -119,11 +146,7 @@ Page {
                 isFavorite: true
                 offline: false
 
-                onTapped: {
-                    if (sendController.active) return
-                    page.pendingFingerprint = model.fingerprint
-                    pickerLoader.active = true
-                }
+                onTapped: page.sendToDevice(model.fingerprint)
                 onDetailsRequested: {
                     detailsDialog.fingerprint = model.fingerprint
                     detailsDialog.alias = model.alias
@@ -172,11 +195,7 @@ Page {
                 isFavorite: favoritesController.is_favorite(model.fingerprint)
                 offline: false
 
-                onTapped: {
-                    if (sendController.active) return
-                    page.pendingFingerprint = model.fingerprint
-                    pickerLoader.active = true
-                }
+                onTapped: page.sendToDevice(model.fingerprint)
                 onDetailsRequested: {
                     detailsDialog.fingerprint = model.fingerprint
                     detailsDialog.alias = model.alias
