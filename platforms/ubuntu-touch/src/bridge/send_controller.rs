@@ -37,6 +37,7 @@ pub struct SendController {
     failed_count: qt_property!(i32; NOTIFY state_changed),
     error_message: qt_property!(QString; NOTIFY state_changed),
     status: qt_property!(QString; NOTIFY state_changed),
+    pin_invalid: qt_property!(bool; NOTIFY state_changed),
 
     state_changed: qt_signal!(),
     log_message: qt_signal!(message: QString),
@@ -44,6 +45,7 @@ pub struct SendController {
 
     /// paths_json = JSON array of absolute file paths.
     send_files: qt_method!(fn(&mut self, fingerprint: QString, paths_json: QString)),
+    submit_pin: qt_method!(fn(&mut self, pin: QString)),
     cancel: qt_method!(fn(&mut self)),
     dismiss: qt_method!(fn(&mut self)),
     poll: qt_method!(fn(&mut self)),
@@ -74,6 +76,7 @@ impl SendController {
             failed_count: 0,
             error_message: QString::default(),
             status: QString::default(),
+            pin_invalid: false,
             state_changed: Default::default(),
             log_message: Default::default(),
             files_changed: Default::default(),
@@ -124,6 +127,7 @@ impl SendController {
         self.done = false;
         self.error_message = QString::default();
         self.status = QString::from("sending");
+        self.pin_invalid = false;
 
         let mut files: Vec<SendFileEntry> = Vec::new();
         let mut entries: Vec<OutgoingEntry> = Vec::new();
@@ -237,6 +241,15 @@ impl SendController {
         self.state_changed();
     }
 
+    fn submit_pin(&mut self, pin: QString) {
+        if let (Some(h), Some(sid)) = (&self.handle, &self.session_id) {
+            h.send(SendCommand::SubmitPin {
+                session_id: sid.clone(),
+                pin: pin.to_string(),
+            });
+        }
+    }
+
     fn dismiss(&mut self) {
         self.session_id = None;
         self.active = false;
@@ -302,6 +315,29 @@ impl SendController {
                     }
                     self.failed_count += 1;
                     self.files_changed();
+                    self.state_changed();
+                }
+                SendEvent::PinRequired { invalid_pin, .. } => {
+                    self.status = QString::from("pinRequired");
+                    self.pin_invalid = invalid_pin;
+                    self.state_changed();
+                }
+                SendEvent::Declined { .. } => {
+                    self.status = QString::from("declined");
+                    self.active = false;
+                    self.done = true;
+                    self.state_changed();
+                }
+                SendEvent::RecipientBusy { .. } => {
+                    self.status = QString::from("recipientBusy");
+                    self.active = false;
+                    self.done = true;
+                    self.state_changed();
+                }
+                SendEvent::TooManyAttempts { .. } => {
+                    self.status = QString::from("tooManyAttempts");
+                    self.active = false;
+                    self.done = true;
                     self.state_changed();
                 }
                 SendEvent::Finished { ok, error, .. } => {

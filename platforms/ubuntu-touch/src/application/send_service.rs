@@ -8,13 +8,13 @@ use std::path::PathBuf;
 use std::sync::Arc;
 use std::thread;
 
-use anyhow::{Context, Result};
+use anyhow::{anyhow, Context, Result};
 use tokio::sync::{mpsc, oneshot};
 
 use bytes::Bytes;
 use futures::StreamExt;
 
-use localsend::http::client::LsHttpClientV2;
+use localsend::http::client::{HttpClientError, LsHttpClientV2};
 use localsend::http::dto_v2::{PrepareUploadRequestDtoV2, RegisterDtoV2};
 use localsend::model::discovery::{DeviceType, ProtocolType};
 use localsend::model::transfer::{FileContent, FileDto};
@@ -51,6 +51,10 @@ pub enum SendCommand {
         sender_fingerprint: String,
         pin: Option<String>,
     },
+    SubmitPin {
+        session_id: String,
+        pin: String,
+    },
     Cancel {
         session_id: String,
     },
@@ -81,6 +85,19 @@ pub enum SendEvent {
         session_id: String,
         file_id: String,
         error: String,
+    },
+    PinRequired {
+        session_id: String,
+        invalid_pin: bool,
+    },
+    Declined {
+        session_id: String,
+    },
+    RecipientBusy {
+        session_id: String,
+    },
+    TooManyAttempts {
+        session_id: String,
     },
     Finished {
         session_id: String,
@@ -140,6 +157,7 @@ async fn send_task(
     evt_tx: mpsc::UnboundedSender<SendEvent>,
 ) {
     let mut active: HashMap<String, oneshot::Sender<()>> = HashMap::new();
+    let mut active_pin: HashMap<String, mpsc::UnboundedSender<String>> = HashMap::new();
 
     while let Some(cmd) = cmd_rx.recv().await {
         match cmd {
@@ -154,7 +172,9 @@ async fn send_task(
                 pin,
             } => {
                 let (cancel_tx, cancel_rx) = oneshot::channel::<()>();
+                let (pin_tx, pin_rx) = mpsc::unbounded_channel::<String>();
                 active.insert(session_id.clone(), cancel_tx);
+                active_pin.insert(session_id.clone(), pin_tx);
 
                 let identity = identity.clone();
                 let evt_tx = evt_tx.clone();
@@ -187,6 +207,12 @@ async fn send_task(
                 if let Some(tx) = active.remove(&session_id) {
                     let _ = tx.send(());
                 }
+                active_pin.remove(&session_id);
+            }
+            SendCommand::SubmitPin { session_id, pin } => {
+                if let Some(tx) = active_pin.get(&session_id) {
+                    let _ = tx.send(pin);
+                }
             }
             SendCommand::Shutdown => break,
         }
@@ -206,6 +232,7 @@ async fn do_send(
     pin: Option<String>,
     evt_tx: mpsc::UnboundedSender<SendEvent>,
     cancel_rx: oneshot::Receiver<()>,
+    pin_rx: mpsc::UnboundedReceiver<String>,
 ) -> Result<()> {
     let client = LsHttpClientV2::try_new(
         &identity.private_key_pem,
@@ -248,7 +275,7 @@ async fn do_send(
         );
     }
 
-    let payload = PrepareUploadRequestDtoV2 {
+    let payload_template = PrepareUploadRequestDtoV2 {
         info: register,
         files: files_dto,
     };
@@ -260,20 +287,63 @@ async fn do_send(
         cancel_for_wait.cancel();
     });
 
-    let result = client
-        .prepare_upload(
-            target.protocol,
-            &target.host,
-            target.port,
-            None,
-            payload,
-            pin.as_deref(),
-            cancel.clone(),
-        )
-        .await
-        .context("prepare_upload")?;
+    let mut pin_attempt: i32 = 0;
+    let mut current_pin = pin;
+    let prepare_result = loop {
+        pin_attempt += 1;
+        let payload = payload_template.clone();
+        match client
+            .prepare_upload(
+                target.protocol,
+                &target.host,
+                target.port,
+                None,
+                payload,
+                current_pin.as_deref(),
+                cancel.clone(),
+            )
+            .await
+        {
+            Ok(r) => break r,
+            Err(HttpClientError::StatusCode { status, .. }) => match status {
+                401 => {
+                    let _ = evt_tx.send(SendEvent::PinRequired {
+                        session_id: session_id.clone(),
+                        invalid_pin: pin_attempt > 1,
+                    });
+                    tokio::select! {
+                        maybe_pin = pin_rx.recv() => match maybe_pin {
+                            Some(p) => { current_pin = Some(p); }
+                            None => return Ok(()),
+                        }
+                        _ = cancel.cancelled() => return Ok(()),
+                    }
+                }
+                403 => {
+                    let _ = evt_tx.send(SendEvent::Declined {
+                        session_id: session_id.clone(),
+                    });
+                    return Ok(());
+                }
+                409 => {
+                    let _ = evt_tx.send(SendEvent::RecipientBusy {
+                        session_id: session_id.clone(),
+                    });
+                    return Ok(());
+                }
+                429 => {
+                    let _ = evt_tx.send(SendEvent::TooManyAttempts {
+                        session_id: session_id.clone(),
+                    });
+                    return Ok(());
+                }
+                _ => return Err(anyhow!("HTTP {status}")),
+            },
+            Err(e) => return Err(e.into()),
+        }
+    };
 
-    let (remote_session_id, accepted_files) = match result.response {
+    let (remote_session_id, accepted_files) = match prepare_result.response {
         Some(r) => (r.session_id, r.files),
         None => {
             let _ = evt_tx.send(SendEvent::Finished {

@@ -38,6 +38,11 @@ Rectangle {
                     if (st === "finished")           return qsTr("Send finished")
                     if (st === "finishedWithErrors") return qsTr("Send finished with errors")
                     if (st === "cancelled")          return qsTr("Cancelled")
+                    if (st === "pinRequired")        return qsTr("Waiting for PIN…")
+                    if (st === "declined")           return qsTr("Receiver declined")
+                    if (st === "recipientBusy")      return qsTr("Receiver is busy")
+                    if (st === "tooManyAttempts")    return qsTr("Too many attempts")
+                    if (st === "canceledBySender")   return qsTr("Canceled")
                     if (st === "sending")            return qsTr("Sending…")
                     return root.failed > 0
                         ? qsTr("Send finished with errors")
@@ -194,6 +199,31 @@ Rectangle {
                     color: root.appTheme && root.appTheme.colors ? root.appTheme.colors.primary : "#00695C"
                     onClicked: sendController.dismiss()
                 }
+            }
+        }
+    }
+
+    PinDialog {
+        id: pinDialog
+        appTheme: root.appTheme
+        showInvalidPin: sendController.pin_invalid
+
+        onSubmitted: function(pin) {
+            sendController.submit_pin(pin)
+        }
+        onCanceled: {
+            sendController.cancel()
+        }
+    }
+
+    Connections {
+        target: sendController
+
+        function onStateChanged() {
+            if (sendController.status === "pinRequired" && !pinDialog.visible) {
+                pinDialog.open()
+            } else if (sendController.status !== "pinRequired" && pinDialog.visible) {
+                pinDialog.close()
             }
         }
     }

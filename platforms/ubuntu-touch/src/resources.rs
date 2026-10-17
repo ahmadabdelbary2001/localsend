@@ -28,6 +28,7 @@ pub fn register() {
             "qml/dialogs/SendProgressDialog.qml" as "dialogs/SendProgressDialog.qml",
             "qml/dialogs/HistoryDialog.qml" as "dialogs/HistoryDialog.qml",
             "qml/dialogs/DeviceDetailsDialog.qml" as "dialogs/DeviceDetailsDialog.qml",
+            "qml/dialogs/PinDialog.qml" as "dialogs/PinDialog.qml",
             "qml/dialogs/LanguageDialog.qml"       as "dialogs/LanguageDialog.qml",
             "assets/logo.png" as "assets/logo.png",
         }
