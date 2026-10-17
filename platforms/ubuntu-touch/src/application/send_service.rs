@@ -306,50 +306,58 @@ async fn do_send(
             .await
         {
             Ok(r) => break r,
-            Err(ClientError::StatusCode(err)) => match err.status {
-                401 => {
-                    let _ = evt_tx.send(SendEvent::PinRequired {
-                        session_id: session_id.clone(),
-                        invalid_pin: pin_attempt > 1,
-                    });
-                    // tokio ≤ 1.53 does not parse `_name = f => return` inside
-                    // select!, so we hoist the result into a local and return
-                    // after the macro expands cleanly.
-                    enum PinWait { Pin(String), Cancelled }
-                    let wait_result = tokio::select! {
-                        maybe_pin = pin_rx.recv() => {
-                            match maybe_pin {
-                                Some(p) => PinWait::Pin(p),
-                                None    => PinWait::Cancelled,
-                            }
+            Err(ClientError::StatusCode(err)) => {
+                let status = err.status;
+                match status {
+                    401 => {
+                        let _ = evt_tx.send(SendEvent::PinRequired {
+                            session_id: session_id.clone(),
+                            invalid_pin: pin_attempt > 1,
+                        });
+                        // tokio ≤ 1.53 does not parse `_name = f => return` inside
+                        // select!, so we hoist the result into a local and return
+                        // after the macro expands cleanly.
+                        enum PinWait {
+                            Pin(String),
+                            Cancelled,
                         }
-                        _ = cancel.cancelled() => PinWait::Cancelled,
-                    };
-                    match wait_result {
-                        PinWait::Pin(p)   => { current_pin = Some(p); }
-                        PinWait::Cancelled => return Ok(()),
+                        let wait_result = tokio::select! {
+                            maybe_pin = pin_rx.recv() => {
+                                match maybe_pin {
+                                    Some(p) => PinWait::Pin(p),
+                                    None    => PinWait::Cancelled,
+                                }
+                            }
+                            _ = cancel.cancelled() => PinWait::Cancelled,
+                        };
+                        match wait_result {
+                            PinWait::Pin(p) => {
+                                current_pin = Some(p);
+                            }
+                            PinWait::Cancelled => return Ok(()),
+                        }
                     }
+                    403 => {
+                        let _ = evt_tx.send(SendEvent::Declined {
+                            session_id: session_id.clone(),
+                        });
+                        return Ok(());
+                    }
+                    409 => {
+                        let _ = evt_tx.send(SendEvent::RecipientBusy {
+                            session_id: session_id.clone(),
+                        });
+                        return Ok(());
+                    }
+                    429 => {
+                        let _ = evt_tx.send(SendEvent::TooManyAttempts {
+                            session_id: session_id.clone(),
+                        });
+                        return Ok(());
+                    }
+                    _ => return Err(anyhow!("HTTP {status}")),
                 }
-                403 => {
-                    let _ = evt_tx.send(SendEvent::Declined {
-                        session_id: session_id.clone(),
-                    });
-                    return Ok(());
-                }
-                409 => {
-                    let _ = evt_tx.send(SendEvent::RecipientBusy {
-                        session_id: session_id.clone(),
-                    });
-                    return Ok(());
-                }
-                429 => {
-                    let _ = evt_tx.send(SendEvent::TooManyAttempts {
-                        session_id: session_id.clone(),
-                    });
-                    return Ok(());
-                }
-                _ => return Err(anyhow!("HTTP {status}")),
-            },
+            }
             Err(e) => return Err(e.into()),
         }
     };
