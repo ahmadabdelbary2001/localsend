@@ -36,6 +36,7 @@ pub struct SendController {
     finished_count: qt_property!(i32; NOTIFY state_changed),
     failed_count: qt_property!(i32; NOTIFY state_changed),
     error_message: qt_property!(QString; NOTIFY state_changed),
+    status: qt_property!(QString; NOTIFY state_changed),
 
     state_changed: qt_signal!(),
     log_message: qt_signal!(message: QString),
@@ -72,6 +73,7 @@ impl SendController {
             finished_count: 0,
             failed_count: 0,
             error_message: QString::default(),
+            status: QString::default(),
             state_changed: Default::default(),
             log_message: Default::default(),
             files_changed: Default::default(),
@@ -121,6 +123,7 @@ impl SendController {
         self.active = true;
         self.done = false;
         self.error_message = QString::default();
+        self.status = QString::from("sending");
 
         let mut files: Vec<SendFileEntry> = Vec::new();
         let mut entries: Vec<OutgoingEntry> = Vec::new();
@@ -230,6 +233,7 @@ impl SendController {
         }
         self.done = true;
         self.active = false;
+        self.status = QString::from("cancelled");
         self.state_changed();
     }
 
@@ -237,6 +241,7 @@ impl SendController {
         self.session_id = None;
         self.active = false;
         self.done = false;
+        self.status = QString::default();
         if let Ok(mut g) = self.entries.write() {
             g.clear();
         }
@@ -302,7 +307,10 @@ impl SendController {
                 SendEvent::Finished { ok, error, .. } => {
                     self.active = false;
                     self.done = true;
-                    if !ok {
+                    if ok {
+                        self.status = QString::from("finished");
+                    } else {
+                        self.status = QString::from("finishedWithErrors");
                         self.error_message = QString::from(error.unwrap_or_default());
                     }
                     self.state_changed();

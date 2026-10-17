@@ -44,6 +44,9 @@ Page {
                     sendController.send_files(
                         page.pendingFingerprint,
                         JSON.stringify(page.selectedPaths)
+                    // Clear after dispatch: otherwise the next device tap
+                    // re-sends the same files without opening the picker.
+                    page.selectedPaths = []
                     )
                 }
 
@@ -98,6 +101,18 @@ Page {
                     }
                     fontSize: "x-small"
                     color: page.appTheme && page.appTheme.colors ? page.appTheme.colors.surfaceTextMuted : "#5F6368"
+                }
+
+                Label {
+                    Layout.fillWidth: true
+                    visible: page.selectedPaths.length > 0
+                    text: page.selectedPaths.length === 1
+                        ? qsTr("1 file ready to send")
+                        : page.selectedPaths.length + " " + qsTr("files ready to send")
+                    fontSize: "x-small"
+                    color: page.appTheme && page.appTheme.colors
+                        ? page.appTheme.colors.primary
+                        : "#00695C"
                 }
             }
 
