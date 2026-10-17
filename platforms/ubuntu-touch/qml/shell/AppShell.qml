@@ -7,24 +7,22 @@ import "../pages"
 
 Page {
     id: shell
-
     property var appTheme
     property var navigationStack: null
 
     header: null
 
-    // StackLayout keeps the pages in one layout but displays
-    // only the page selected by currentIndex.
+    // StackLayout manages one page at a time. Each page is wrapped in
+    // a plain Item with Layout.fillWidth/Height so the layout sizes
+    // them, while the Page itself uses normal anchors internally.
     StackLayout {
         id: view
-
         anchors {
             top: parent.top
             left: parent.left
             right: parent.right
             bottom: nav.top
         }
-
         clip: true
         currentIndex: homeController.current_tab
 
@@ -32,49 +30,49 @@ Page {
             if (homeController.current_tab !== currentIndex) {
                 homeController.change_tab(currentIndex)
             }
-
-            // Temporary diagnostic: verify inactive pages are hidden.
-            Qt.callLater(function() {
-                console.log(
-                    "[UI] active tab",
-                    view.currentIndex,
-                    "receive visible", receivePage.visible,
-                    "send visible", sendPage.visible,
-                    "settings visible", settingsPage.visible,
-                    "layout", view.width, view.height
-                )
-            })
         }
 
-        ReceivePage {
-            id: receivePage
-            appTheme: shell.appTheme
+        Item {
+            Layout.fillWidth: true
+            Layout.fillHeight: true
+            ReceivePage {
+                id: receivePage
+                anchors.fill: parent
+                appTheme: shell.appTheme
+            }
         }
 
-        SendPage {
-            id: sendPage
-            appTheme: shell.appTheme
+        Item {
+            Layout.fillWidth: true
+            Layout.fillHeight: true
+            SendPage {
+                id: sendPage
+                anchors.fill: parent
+                appTheme: shell.appTheme
+            }
         }
 
-        SettingsPage {
-            id: settingsPage
-            appTheme: shell.appTheme
-            navigationStack: shell.navigationStack
+        Item {
+            Layout.fillWidth: true
+            Layout.fillHeight: true
+            SettingsPage {
+                id: settingsPage
+                anchors.fill: parent
+                appTheme: shell.appTheme
+                navigationStack: shell.navigationStack
+            }
         }
     }
 
     BottomNavigation {
         id: nav
-
         appTheme: shell.appTheme
         currentIndex: homeController.current_tab
-
         anchors {
             left: parent.left
             right: parent.right
             bottom: parent.bottom
         }
-
         onTabSelected: function(index) {
             if (index >= 0 && index < 3) {
                 homeController.change_tab(index)

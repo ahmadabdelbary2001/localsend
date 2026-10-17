@@ -21,17 +21,9 @@ Window {
     height: units.gu(90)
 
     Component.onCompleted: {
-        console.log(
-            "[BOOT] Window completed",
-            appWindow.visible,
-            appWindow.visibility,
-            appWindow.width,
-            appWindow.height
-        )
     }
 
     onVisibleChanged: {
-        console.log("[BOOT] Window visibility changed", appWindow.visible)
     }
 
     MainView {
@@ -58,24 +50,7 @@ Window {
             anchors.fill: parent
 
             Component.onCompleted: {
-                console.log(
-                    "[BOOT] PageStack completed",
-                    width,
-                    height
-                )
-
                 push(shellComponent)
-
-                console.log("[BOOT] PageStack push requested")
-
-                console.log(
-                    "[BOOT] PageStack state",
-                    mainStack.depth,
-                    mainStack.currentPage,
-                    mainStack.currentPage
-                        ? mainStack.currentPage.visible
-                        : false
-                )
             }
         }
 
@@ -153,13 +128,6 @@ Window {
         }
 
         Component.onCompleted: {
-            console.log(
-                "[BOOT] MainView completed",
-                root.visible,
-                root.width,
-                root.height
-            )
-
             if (typeof appController !== "undefined") {
                 appController.initialize()
             }

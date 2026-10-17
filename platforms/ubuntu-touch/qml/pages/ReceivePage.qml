@@ -127,7 +127,6 @@ Page {
                 text: translator.tr("receiveTab.link")
                 onClicked: {
                     // TODO: Web share page (core supports it)
-                    console.log("TODO: web share page")
                 }
             }
 
