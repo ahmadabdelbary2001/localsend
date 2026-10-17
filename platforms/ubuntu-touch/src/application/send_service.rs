@@ -291,8 +291,17 @@ async fn do_send(
         accepted: accepted_files.keys().cloned().collect(),
     });
 
+    let mut failed_count: usize = 0;
+    let mut rejected_count: usize = 0;
+
     for f in files {
         let Some(token) = accepted_files.get(&f.file_id) else {
+            rejected_count += 1;
+            let _ = evt_tx.send(SendEvent::FileFailed {
+                session_id: session_id.clone(),
+                file_id: f.file_id.clone(),
+                error: "rejected by receiver".into(),
+            });
             continue;
         };
         let _ = evt_tx.send(SendEvent::FileStarted {
@@ -347,6 +356,7 @@ async fn do_send(
                 });
             }
             Err(e) => {
+                failed_count += 1;
                 let _ = evt_tx.send(SendEvent::FileFailed {
                     session_id: session_id.clone(),
                     file_id: f.file_id.clone(),
@@ -356,10 +366,20 @@ async fn do_send(
         }
     }
 
+    // C05: session success is derived from per-file outcomes, never hardcoded.
+    let ok = failed_count == 0 && rejected_count == 0;
+    let error = if failed_count > 0 {
+        Some(format!("{failed_count} file(s) failed to upload"))
+    } else if rejected_count > 0 {
+        Some(format!("{rejected_count} file(s) rejected by receiver"))
+    } else {
+        None
+    };
+
     let _ = evt_tx.send(SendEvent::Finished {
         session_id,
-        ok: true,
-        error: None,
+        ok,
+        error,
     });
     Ok(())
 }

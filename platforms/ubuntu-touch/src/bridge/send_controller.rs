@@ -10,6 +10,7 @@ use localsend::model::discovery::ProtocolType;
 
 use crate::application::discovery_service::DiscoveryServiceHandle;
 use crate::application::identity_service::DeviceIdentity;
+use crate::application::settings_service::SettingsService;
 use crate::application::send_service::{
     SendCommand, SendEvent, SendFileEntry, SendServiceHandle, SendTarget,
 };
@@ -50,6 +51,7 @@ pub struct SendController {
     discovery: Option<Arc<DiscoveryServiceHandle>>,
     identity: Arc<DeviceIdentity>,
     session_id: Option<String>,
+    settings: Arc<SettingsService>,
     entries: Arc<RwLock<Vec<OutgoingEntry>>>,
 }
 
@@ -58,6 +60,7 @@ impl SendController {
         identity: Arc<DeviceIdentity>,
         discovery: Arc<DiscoveryServiceHandle>,
         entries: Arc<RwLock<Vec<OutgoingEntry>>>,
+        settings: Arc<SettingsService>,
     ) -> Self {
         let handle = SendServiceHandle::spawn(identity.clone());
         Self {
@@ -81,6 +84,7 @@ impl SendController {
             identity,
             session_id: None,
             entries,
+            settings,
         }
     }
 
@@ -120,6 +124,8 @@ impl SendController {
 
         let mut files: Vec<SendFileEntry> = Vec::new();
         let mut entries: Vec<OutgoingEntry> = Vec::new();
+        let mut validation_errors: Vec<String> = Vec::new();
+
         for p in &paths {
             let path = PathBuf::from(p);
             let name = path
@@ -127,7 +133,26 @@ impl SendController {
                 .and_then(|s| s.to_str())
                 .unwrap_or("file")
                 .to_string();
-            let size = std::fs::metadata(&path).map(|m| m.len()).unwrap_or(0);
+
+            // C03: explicit validation. A file that cannot be stat'ed or
+            // opened must not silently become a 0-byte transfer.
+            let metadata = match std::fs::metadata(&path) {
+                Ok(m) => m,
+                Err(e) => {
+                    validation_errors.push(format!("{}: {e}", path.display()));
+                    continue;
+                }
+            };
+            if !metadata.is_file() {
+                validation_errors.push(format!("{}: not a regular file", path.display()));
+                continue;
+            }
+            if let Err(e) = std::fs::File::open(&path) {
+                validation_errors.push(format!("{}: cannot open ({e})", path.display()));
+                continue;
+            }
+            let size = metadata.len();
+
             let file_id = Uuid::new_v4().to_string();
             files.push(SendFileEntry {
                 file_id: file_id.clone(),
@@ -143,6 +168,15 @@ impl SendController {
                 status: "queue".into(),
                 error: None,
             });
+        }
+
+        if !validation_errors.is_empty() {
+            self.error_message = QString::from(format!(
+                "Cannot send file(s): {}",
+                validation_errors.join("; ")
+            ));
+            self.state_changed();
+            return;
         }
         self.total_count = entries.len() as i32;
         self.finished_count = 0;
@@ -165,17 +199,16 @@ impl SendController {
             alias: device.alias.clone(),
         };
 
-        let sender_https = true; // TODO: read from settings
-        let sender_port = 53317; // TODO: read from settings
+        let snap = self.settings.snapshot();
 
         if let Some(h) = &self.handle {
             h.send(SendCommand::Start {
                 session_id: session_id.clone(),
                 target,
                 files,
-                sender_alias: self.identity.fingerprint.clone(), // TODO: real alias
-                sender_port,
-                sender_https,
+                sender_alias: snap.alias.clone(),
+                sender_port: snap.port,
+                sender_https: snap.https,
                 sender_fingerprint: self.identity.fingerprint.clone(),
                 pin: None,
             });
