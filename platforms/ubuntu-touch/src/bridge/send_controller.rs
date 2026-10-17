@@ -45,6 +45,7 @@ pub struct SendController {
 
     /// paths_json = JSON array of absolute file paths.
     send_files: qt_method!(fn(&mut self, fingerprint: QString, paths_json: QString)),
+    create_text_file: qt_method!(fn(&mut self, text: QString) -> QString),
     submit_pin: qt_method!(fn(&mut self, pin: QString)),
     cancel: qt_method!(fn(&mut self)),
     dismiss: qt_method!(fn(&mut self)),
@@ -81,6 +82,7 @@ impl SendController {
             log_message: Default::default(),
             files_changed: Default::default(),
             send_files: Default::default(),
+            create_text_file: Default::default(),
             submit_pin: Default::default(),
             cancel: Default::default(),
             dismiss: Default::default(),
@@ -228,6 +230,24 @@ impl SendController {
             "Sending {} file(s) to {}",
             self.total_count, self.target_alias
         )));
+    }
+
+    fn create_text_file(&mut self, text: QString) -> QString {
+        let content = text.to_string();
+        if content.trim().is_empty() {
+            return QString::default();
+        }
+        let cache_dir = std::env::temp_dir().join("localsend_text");
+        if let Err(e) = std::fs::create_dir_all(&cache_dir) {
+            log::warn!("[send_controller] failed to create text cache dir: {e}");
+            return QString::default();
+        }
+        let file_path = cache_dir.join(format!("{}.txt", Uuid::new_v4()));
+        if let Err(e) = std::fs::write(&file_path, content.as_bytes()) {
+            log::warn!("[send_controller] failed to write text file: {e}");
+            return QString::default();
+        }
+        QString::from(file_path.to_string_lossy().to_string())
     }
 
     fn cancel(&mut self) {

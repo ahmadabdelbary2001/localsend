@@ -10,12 +10,14 @@ Page {
     property var appTheme
     property string pendingFingerprint: ""
     property var selectedPaths: []
+    property string pickerType: "all" // "all" | "pictures"
 
     function sendToDevice(fingerprint) {
         if (sendController.active) return
 
         if (page.selectedPaths.length === 0) {
             page.pendingFingerprint = fingerprint
+            page.pickerType = "all"
             pickerLoader.active = true
             return
         }
@@ -24,10 +26,14 @@ Page {
             fingerprint,
             JSON.stringify(page.selectedPaths)
         )
+        // Clear after dispatch so subsequent sends require new selection
+        page.selectedPaths = []
     }
 
     Loader {
         id: pickerLoader
+        anchors.fill: parent
+        z: 150
         active: false
         source: "../pickers/ContentHubPicker.qml"
 
@@ -45,8 +51,6 @@ Page {
                         page.pendingFingerprint,
                         JSON.stringify(page.selectedPaths)
                     )
-                    // Clear after dispatch: otherwise the next device tap
-                    // re-sends the same files without opening the picker.
                     page.selectedPaths = []
                 }
 
@@ -57,7 +61,7 @@ Page {
                 page.pendingFingerprint = ""
                 pickerLoader.active = false
             })
-            item.open()
+            item.open(page.pickerType)
         }
         onStatusChanged: {
             if (status === Loader.Error) {
@@ -75,6 +79,89 @@ Page {
         }
         spacing: units.gu(1)
 
+        // ---------- Selection Action Buttons (When empty) ----------
+        RowLayout {
+            Layout.fillWidth: true
+            spacing: units.gu(1)
+            visible: page.selectedPaths.length === 0
+
+            Button {
+                Layout.fillWidth: true
+                text: qsTr("File")
+                onClicked: {
+                    page.pickerType = "all"
+                    pickerLoader.active = true
+                }
+            }
+
+            Button {
+                Layout.fillWidth: true
+                text: qsTr("Media")
+                onClicked: {
+                    page.pickerType = "pictures"
+                    pickerLoader.active = true
+                }
+            }
+
+            Button {
+                Layout.fillWidth: true
+                text: qsTr("Text")
+                onClicked: {
+                    messageDialog.open()
+                }
+            }
+        }
+
+        // ---------- Selected Items Summary (When not empty) ----------
+        Rectangle {
+            Layout.fillWidth: true
+            Layout.preferredHeight: units.gu(7)
+            radius: units.gu(0.6)
+            visible: page.selectedPaths.length > 0
+            color: page.appTheme && page.appTheme.colors ? page.appTheme.colors.surface : "#ffffff"
+
+            RowLayout {
+                anchors.fill: parent
+                anchors.margins: units.gu(1)
+                spacing: units.gu(1)
+
+                ColumnLayout {
+                    Layout.fillWidth: true
+                    spacing: units.gu(0.2)
+
+                    Label {
+                        text: qsTr("Selection")
+                        fontSize: "small"
+                        color: page.appTheme && page.appTheme.colors ? page.appTheme.colors.surfaceTextMuted : "#5F6368"
+                    }
+
+                    Label {
+                        text: page.selectedPaths.length === 1
+                            ? qsTr("1 item ready")
+                            : page.selectedPaths.length + " " + qsTr("items ready")
+                        fontSize: "medium"
+                        color: page.appTheme && page.appTheme.colors ? page.appTheme.colors.primary : "#00695C"
+                    }
+                }
+
+                Button {
+                    text: qsTr("+ Add")
+                    onClicked: {
+                        page.pickerType = "all"
+                        pickerLoader.active = true
+                    }
+                }
+
+                Button {
+                    text: qsTr("Clear")
+                    onClicked: {
+                        page.selectedPaths = []
+                    }
+                }
+            }
+        }
+
+        // ---------- Nearby Devices Header ----------
         RowLayout {
             Layout.fillWidth: true
             spacing: units.gu(1)
@@ -101,18 +188,6 @@ Page {
                     }
                     fontSize: "x-small"
                     color: page.appTheme && page.appTheme.colors ? page.appTheme.colors.surfaceTextMuted : "#5F6368"
-                }
-
-                Label {
-                    Layout.fillWidth: true
-                    visible: page.selectedPaths.length > 0
-                    text: page.selectedPaths.length === 1
-                        ? qsTr("1 file ready to send")
-                        : page.selectedPaths.length + " " + qsTr("files ready to send")
-                    fontSize: "x-small"
-                    color: page.appTheme && page.appTheme.colors
-                        ? page.appTheme.colors.primary
-                        : "#00695C"
                 }
             }
 
@@ -250,6 +325,26 @@ Page {
                 wrapMode: Text.Wrap
                 color: page.appTheme && page.appTheme.colors ? page.appTheme.colors.surfaceTextMuted : "#5F6368"
             }
+        }
+    }
+
+    LocalSendDialogs.MessageInputDialog {
+        id: messageDialog
+        appTheme: page.appTheme
+
+        onSubmitted: function(message) {
+            var path = sendController.create_text_file(message)
+            if (path.length > 0) {
+                if (page.pendingFingerprint.length > 0) {
+                    sendController.send_files(page.pendingFingerprint, JSON.stringify([path]))
+                    page.pendingFingerprint = ""
+                } else {
+                    page.selectedPaths = page.selectedPaths.concat([path])
+                }
+            }
+        }
+        onCanceled: {
+            page.pendingFingerprint = ""
         }
     }
 

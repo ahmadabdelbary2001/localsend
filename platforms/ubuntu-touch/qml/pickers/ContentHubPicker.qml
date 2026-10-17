@@ -1,23 +1,36 @@
 import QtQuick 2.15
+import Lomiri.Components 1.3
 import Lomiri.Content 1.1
 
 Item {
     id: root
 
+    anchors.fill: parent
+    z: 200
     visible: false
 
     property var activeTransfer: null
+    property string pickerType: "all" // "all" | "pictures" | "documents"
 
     signal filesPicked(var paths)
     signal pickCancelled()
 
-    // Ask Content Hub for a source that can provide files.
-    ContentPeer {
-        id: fileSource
+    // Scrim background to dim underlying page
+    Rectangle {
+        anchors.fill: parent
+        color: Qt.rgba(0, 0, 0, 0.45)
+        visible: root.visible
 
-        contentType: ContentType.All
-        handler: ContentHandler.Source
-        selectionType: ContentTransfer.Multiple
+        MouseArea {
+            anchors.fill: parent
+            onClicked: {
+                // Dim tap outside cancels
+                if (root.activeTransfer === null) {
+                    root.close()
+                    root.pickCancelled()
+                }
+            }
+        }
     }
 
     // Keep imported files in persistent app storage so that Rust can
@@ -25,6 +38,42 @@ Item {
     ContentStore {
         id: appStore
         scope: ContentScope.App
+    }
+
+    // Visual picker dialog that allows user to choose source app (e.g. File Manager, Gallery)
+    ContentPeerPicker {
+        id: peerPicker
+        anchors.fill: parent
+        visible: root.visible && root.activeTransfer === null
+        showTitle: true
+        contentType: root.pickerType === "pictures"
+            ? ContentType.Pictures
+            : (root.pickerType === "documents" ? ContentType.Documents : ContentType.All)
+        handler: ContentHandler.Source
+
+        onPeerSelected: {
+            peer.selectionType = ContentTransfer.Multiple
+            try {
+                var transfer = peer.request(appStore)
+                if (transfer) {
+                    root.activeTransfer = transfer
+                } else {
+                    console.warn("[ContentHubPicker] Peer returned no transfer")
+                    root.close()
+                    root.pickCancelled()
+                }
+            } catch (err) {
+                console.warn("[ContentHubPicker] Peer request failed: " + err)
+                root.close()
+                root.pickCancelled()
+            }
+        }
+
+        onCancelPressed: {
+            console.log("[ContentHubPicker] Peer picker cancelled by user")
+            root.close()
+            root.pickCancelled()
+        }
     }
 
     ContentTransferHint {
@@ -49,9 +98,7 @@ Item {
                 }
             }
         } catch (error) {
-            console.warn(
-                "[ContentHubPicker] URL conversion failed"
-            )
+            console.warn("[ContentHubPicker] URL conversion failed")
         }
 
         // Fall back to decoding an absolute file:// URL.
@@ -68,14 +115,11 @@ Item {
         try {
             encodedPath = decodeURIComponent(encodedPath)
         } catch (error) {
-            console.warn(
-                "[ContentHubPicker] Invalid encoded file URL"
-            )
+            console.warn("[ContentHubPicker] Invalid encoded file URL")
             return ""
         }
 
-        if (encodedPath.length === 0 ||
-            encodedPath.charAt(0) !== "/") {
+        if (encodedPath.length === 0 || encodedPath.charAt(0) !== "/") {
             return ""
         }
 
@@ -104,8 +148,7 @@ Item {
                         paths.push(path)
                     } else {
                         console.warn(
-                            "[ContentHubPicker] Ignoring an item " +
-                            "without a usable local file path"
+                            "[ContentHubPicker] Ignoring an item without a usable local file path"
                         )
                     }
                 }
@@ -114,42 +157,31 @@ Item {
                 // transfer before finalizing it to prevent re-entry.
                 transfer.state = ContentTransfer.Collected
 
-                root.activeTransfer = null
-                root.visible = false
+                root.close()
 
                 // ContentStore.App provides persistent storage for the
                 // imported items; finalize can now clean up transfer data.
                 try {
                     transfer.finalize()
                 } catch (error) {
-                    console.warn(
-                        "[ContentHubPicker] Transfer finalization failed"
-                    )
+                    console.warn("[ContentHubPicker] Transfer finalization failed")
                 }
 
                 if (paths.length > 0) {
-                    console.log(
-                        "[ContentHubPicker] Selected " +
-                        paths.length + " file(s)"
-                    )
+                    console.log("[ContentHubPicker] Selected " + paths.length + " file(s)")
                     root.filesPicked(paths)
                 } else {
-                    console.warn(
-                        "[ContentHubPicker] No usable files selected"
-                    )
+                    console.warn("[ContentHubPicker] No usable files selected")
                     root.pickCancelled()
                 }
 
             } else if (transfer.state === ContentTransfer.Aborted) {
-                root.activeTransfer = null
-                root.visible = false
+                root.close()
 
                 try {
                     transfer.finalize()
                 } catch (error) {
-                    console.warn(
-                        "[ContentHubPicker] Aborted transfer cleanup failed"
-                    )
+                    console.warn("[ContentHubPicker] Aborted transfer cleanup failed")
                 }
 
                 console.log("[ContentHubPicker] Selection cancelled")
@@ -158,38 +190,15 @@ Item {
         }
     }
 
-    function open() {
-        if (root.activeTransfer)
-            return
-
-        root.visible = true
-
-        console.log("[ContentHubPicker] Requesting file selection")
-
-        try {
-            var transfer = fileSource.request(appStore)
-
-            if (!transfer) {
-                root.visible = false
-                console.warn(
-                    "[ContentHubPicker] Content Hub returned no transfer"
-                )
-                root.pickCancelled()
-                return
-            }
-
-            root.activeTransfer = transfer
-
-        } catch (error) {
-            root.activeTransfer = null
-            root.visible = false
-
-            console.warn(
-                "[ContentHubPicker] Failed to request file selection: " +
-                error
-            )
-
-            root.pickCancelled()
+    function open(type) {
+        if (type) {
+            root.pickerType = type
         }
+        root.visible = true
+    }
+
+    function close() {
+        root.visible = false
+        root.activeTransfer = null
     }
 }

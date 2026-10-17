@@ -104,7 +104,6 @@ Rectangle {
                             color: root.appTheme && root.appTheme.colors ? root.appTheme.colors.surfaceText : "#1B1D21"
                         }
 
-                        Label {
                         Icon {
                             Layout.preferredWidth: units.gu(2)
                             Layout.preferredHeight: units.gu(2)
@@ -118,6 +117,8 @@ Rectangle {
                                     ? (root.appTheme && root.appTheme.colors ? root.appTheme.colors.danger : "#C0392B")
                                     : (root.appTheme && root.appTheme.colors ? root.appTheme.colors.surfaceTextMuted : "#888")
                         }
+
+                        Label {
                             text: _statusText(model.status, model.progress)
                             fontSize: "x-small"
                             color: model.status === "failed"
