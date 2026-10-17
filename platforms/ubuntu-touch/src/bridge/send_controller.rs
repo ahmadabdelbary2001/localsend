@@ -81,6 +81,7 @@ impl SendController {
             log_message: Default::default(),
             files_changed: Default::default(),
             send_files: Default::default(),
+            submit_pin: Default::default(),
             cancel: Default::default(),
             dismiss: Default::default(),
             poll: Default::default(),

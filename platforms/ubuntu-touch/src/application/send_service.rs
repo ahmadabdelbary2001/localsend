@@ -14,7 +14,7 @@ use tokio::sync::{mpsc, oneshot};
 use bytes::Bytes;
 use futures::StreamExt;
 
-use localsend::http::client::{HttpClientError, LsHttpClientV2};
+use localsend::http::client::{ClientError, LsHttpClientV2};
 use localsend::http::dto_v2::{PrepareUploadRequestDtoV2, RegisterDtoV2};
 use localsend::model::discovery::{DeviceType, ProtocolType};
 use localsend::model::transfer::{FileContent, FileDto};
@@ -192,6 +192,7 @@ async fn send_task(
                         pin,
                         evt_tx.clone(),
                         cancel_rx,
+                        pin_rx,
                     )
                     .await;
                     if let Err(e) = r {
@@ -305,7 +306,7 @@ async fn do_send(
             .await
         {
             Ok(r) => break r,
-            Err(HttpClientError::StatusCode { status, .. }) => match status {
+            Err(ClientError::StatusCode(err)) => match err.status {
                 401 => {
                     let _ = evt_tx.send(SendEvent::PinRequired {
                         session_id: session_id.clone(),
