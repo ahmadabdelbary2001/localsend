@@ -1,3 +1,8 @@
+## 1.3.2
+- Selection bar on Send page: pick File, Media, or compose a Text message.
+- ContentPeerPicker integration for selecting source app (File Manager / Gallery).
+- Dynamic dialog loading and QRC registration to ensure robust startup.
+
 ## 1.3.1
 - PIN dialog for receivers protected by a PIN (matches Dart's
   pin_dialog.dart).

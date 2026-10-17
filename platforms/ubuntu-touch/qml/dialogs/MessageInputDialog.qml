@@ -18,13 +18,18 @@ Dialog {
     contentItem: ColumnLayout {
         spacing: units.gu(1.5)
 
-        TextArea {
-            id: messageArea
+        TextField {
+            id: messageField
             Layout.fillWidth: true
-            Layout.preferredHeight: units.gu(14)
-            placeholderText: qsTr("Type a message…")
-            wrapMode: TextEdit.Wrap
-            selectByMouse: true
+            placeholderText: qsTr("Type a message or paste…")
+            onAccepted: {
+                if (text.trim().length > 0) {
+                    var msg = text
+                    text = ""
+                    root.submitted(msg)
+                    root.close()
+                }
+            }
         }
 
         RowLayout {
@@ -34,7 +39,13 @@ Dialog {
             Button {
                 text: qsTr("Paste")
                 onClicked: {
-                    messageArea.paste()
+                    try {
+                        messageField.paste()
+                    } catch (e) {
+                        if (typeof Clipboard !== "undefined" && Clipboard.text) {
+                            messageField.text = Clipboard.text
+                        }
+                    }
                 }
             }
 
@@ -43,7 +54,7 @@ Dialog {
             Button {
                 text: qsTr("Cancel")
                 onClicked: {
-                    messageArea.text = ""
+                    messageField.text = ""
                     root.canceled()
                     root.close()
                 }
@@ -54,10 +65,10 @@ Dialog {
                 color: root.appTheme && root.appTheme.colors
                     ? root.appTheme.colors.primary
                     : "#00695C"
-                enabled: messageArea.text.trim().length > 0
+                enabled: messageField.text.trim().length > 0
                 onClicked: {
-                    var msg = messageArea.text
-                    messageArea.text = ""
+                    var msg = messageField.text
+                    messageField.text = ""
                     root.submitted(msg)
                     root.close()
                 }
@@ -66,6 +77,7 @@ Dialog {
     }
 
     onOpened: {
-        messageArea.forceActiveFocus()
+        messageField.text = ""
+        messageField.forceActiveFocus()
     }
 }

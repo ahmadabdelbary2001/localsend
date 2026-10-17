@@ -107,7 +107,7 @@ Page {
                 Layout.fillWidth: true
                 text: qsTr("Text")
                 onClicked: {
-                    messageDialog.open()
+                    messageDialogLoader.active = true
                 }
             }
         }
@@ -328,23 +328,37 @@ Page {
         }
     }
 
-    LocalSendDialogs.MessageInputDialog {
-        id: messageDialog
-        appTheme: page.appTheme
+    Loader {
+        id: messageDialogLoader
+        active: false
+        source: "../dialogs/MessageInputDialog.qml"
 
-        onSubmitted: function(message) {
-            var path = sendController.create_text_file(message)
-            if (path.length > 0) {
-                if (page.pendingFingerprint.length > 0) {
-                    sendController.send_files(page.pendingFingerprint, JSON.stringify([path]))
-                    page.pendingFingerprint = ""
-                } else {
-                    page.selectedPaths = page.selectedPaths.concat([path])
+        onLoaded: {
+            item.appTheme = page.appTheme
+            item.submitted.connect(function(message) {
+                var path = sendController.create_text_file(message)
+                if (path.length > 0) {
+                    if (page.pendingFingerprint.length > 0) {
+                        sendController.send_files(page.pendingFingerprint, JSON.stringify([path]))
+                        page.pendingFingerprint = ""
+                    } else {
+                        page.selectedPaths = page.selectedPaths.concat([path])
+                    }
                 }
-            }
+                messageDialogLoader.active = false
+            })
+            item.canceled.connect(function() {
+                page.pendingFingerprint = ""
+                messageDialogLoader.active = false
+            })
+            item.open()
         }
-        onCanceled: {
-            page.pendingFingerprint = ""
+        onStatusChanged: {
+            if (status === Loader.Error) {
+                console.warn("[SendPage] MessageInputDialog unavailable")
+                page.pendingFingerprint = ""
+                messageDialogLoader.active = false
+            }
         }
     }
 
