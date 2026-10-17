@@ -233,7 +233,7 @@ async fn do_send(
     pin: Option<String>,
     evt_tx: mpsc::UnboundedSender<SendEvent>,
     cancel_rx: oneshot::Receiver<()>,
-    pin_rx: mpsc::UnboundedReceiver<String>,
+    mut pin_rx: mpsc::UnboundedReceiver<String>,
 ) -> Result<()> {
     let client = LsHttpClientV2::try_new(
         &identity.private_key_pem,
