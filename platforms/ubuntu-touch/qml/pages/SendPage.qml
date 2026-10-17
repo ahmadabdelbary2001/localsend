@@ -44,10 +44,10 @@ Page {
                     sendController.send_files(
                         page.pendingFingerprint,
                         JSON.stringify(page.selectedPaths)
+                    )
                     // Clear after dispatch: otherwise the next device tap
                     // re-sends the same files without opening the picker.
                     page.selectedPaths = []
-                    )
                 }
 
                 page.pendingFingerprint = ""
