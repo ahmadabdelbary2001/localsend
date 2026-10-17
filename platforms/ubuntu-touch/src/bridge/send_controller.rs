@@ -9,6 +9,7 @@ use uuid::Uuid;
 use localsend::model::discovery::ProtocolType;
 
 use crate::application::discovery_service::DiscoveryServiceHandle;
+use crate::application::favorites_service::FavoritesService;
 use crate::application::identity_service::DeviceIdentity;
 use crate::application::settings_service::SettingsService;
 use crate::application::send_service::{
@@ -45,6 +46,16 @@ pub struct SendController {
 
     /// paths_json = JSON array of absolute file paths.
     send_files: qt_method!(fn(&mut self, fingerprint: QString, paths_json: QString)),
+    send_to_address: qt_method!(
+        fn(
+            &mut self,
+            ip: QString,
+            port: u32,
+            https: bool,
+            alias: QString,
+            paths_json: QString,
+        )
+    ),
     create_text_file: qt_method!(fn(&mut self, text: QString) -> QString),
     submit_pin: qt_method!(fn(&mut self, pin: QString)),
     cancel: qt_method!(fn(&mut self)),
@@ -53,6 +64,7 @@ pub struct SendController {
 
     handle: Option<Arc<SendServiceHandle>>,
     discovery: Option<Arc<DiscoveryServiceHandle>>,
+    favorites: Option<Arc<FavoritesService>>,
     identity: Arc<DeviceIdentity>,
     session_id: Option<String>,
     settings: Arc<SettingsService>,
@@ -65,6 +77,7 @@ impl SendController {
         discovery: Arc<DiscoveryServiceHandle>,
         entries: Arc<RwLock<Vec<OutgoingEntry>>>,
         settings: Arc<SettingsService>,
+        favorites: Arc<FavoritesService>,
     ) -> Self {
         let handle = SendServiceHandle::spawn(identity.clone());
         Self {
@@ -82,6 +95,7 @@ impl SendController {
             log_message: Default::default(),
             files_changed: Default::default(),
             send_files: Default::default(),
+            send_to_address: Default::default(),
             create_text_file: Default::default(),
             submit_pin: Default::default(),
             cancel: Default::default(),
@@ -89,6 +103,7 @@ impl SendController {
             poll: Default::default(),
             handle: Some(Arc::new(handle)),
             discovery: Some(discovery),
+            favorites: Some(favorites),
             identity,
             session_id: None,
             entries,
@@ -98,15 +113,72 @@ impl SendController {
 
     pub fn send_files(&mut self, fingerprint: QString, paths_json: QString) {
         let fp = fingerprint.to_string();
-        let json = paths_json.to_string();
 
-        // Resolve target device from discovery snapshot.
-        let Some(dh) = &self.discovery else { return };
-        let Some(device) = dh.snapshot().iter().find(|d| d.fingerprint == fp).cloned() else {
+        let target = if let Some(d) = self
+            .discovery
+            .as_ref()
+            .and_then(|dh| dh.snapshot().iter().find(|d| d.fingerprint == fp).cloned())
+        {
+            let protocol = if d.https {
+                ProtocolType::Https
+            } else {
+                ProtocolType::Http
+            };
+            SendTarget {
+                fingerprint: d.fingerprint,
+                host: d.ip,
+                port: d.port,
+                protocol,
+                alias: d.alias,
+            }
+        } else if let Some(fav) = self.favorites.as_ref().and_then(|f| f.find(&fp)) {
+            SendTarget {
+                fingerprint: fav.fingerprint,
+                host: fav.ip,
+                port: fav.port,
+                protocol: ProtocolType::Https,
+                alias: fav.alias,
+            }
+        } else {
             self.error_message = QString::from(format!("device not found: {fp}"));
             self.state_changed();
             return;
         };
+
+        self.dispatch_send(target, paths_json);
+    }
+
+    pub fn send_to_address(
+        &mut self,
+        ip: QString,
+        port: u32,
+        https: bool,
+        alias: QString,
+        paths_json: QString,
+    ) {
+        let host = ip.to_string().trim().to_string();
+        if host.is_empty() {
+            self.error_message = QString::from("IP address cannot be empty");
+            self.state_changed();
+            return;
+        }
+        let alias_str = alias.to_string();
+        let target = SendTarget {
+            fingerprint: Uuid::new_v4().to_string(),
+            host: host.clone(),
+            port: port.min(u16::MAX as u32) as u16,
+            protocol: if https {
+                ProtocolType::Https
+            } else {
+                ProtocolType::Http
+            },
+            alias: if alias_str.is_empty() { host } else { alias_str },
+        };
+        self.dispatch_send(target, paths_json);
+    }
+
+    fn dispatch_send(&mut self, target: SendTarget, paths_json: QString) {
+        let json = paths_json.to_string();
 
         let paths: Vec<String> = match serde_json::from_str::<Value>(&json) {
             Ok(Value::Array(a)) => a
@@ -125,7 +197,7 @@ impl SendController {
 
         let session_id = Uuid::new_v4().to_string();
         self.session_id = Some(session_id.clone());
-        self.target_alias = QString::from(device.alias.clone());
+        self.target_alias = QString::from(target.alias.clone());
         self.active = true;
         self.done = false;
         self.error_message = QString::default();
@@ -195,19 +267,6 @@ impl SendController {
         if let Ok(mut g) = self.entries.write() {
             *g = entries;
         }
-
-        let protocol = if device.https {
-            ProtocolType::Https
-        } else {
-            ProtocolType::Http
-        };
-        let target = SendTarget {
-            fingerprint: device.fingerprint.clone(),
-            host: device.ip.clone(),
-            port: device.port,
-            protocol,
-            alias: device.alias.clone(),
-        };
 
         let snap = self.settings.snapshot();
 

@@ -15,6 +15,9 @@ use crate::application::discovery_service::DeviceSnapshot;
 pub struct DeviceListModel {
     base: qt_base_class!(trait QAbstractListModel),
 
+    count: qt_property!(i32; NOTIFY count_changed),
+    count_changed: qt_signal!(),
+
     /// Shared with DiscoveryServiceHandle.
     items: Arc<RwLock<Vec<DeviceSnapshot>>>,
 
@@ -25,8 +28,11 @@ pub struct DeviceListModel {
 
 impl DeviceListModel {
     pub fn new(items: Arc<RwLock<Vec<DeviceSnapshot>>>) -> Self {
+        let count = items.read().map(|g| g.len() as i32).unwrap_or(0);
         Self {
             base: Default::default(),
+            count,
+            count_changed: Default::default(),
             items,
             refresh: Default::default(),
         }
@@ -35,6 +41,11 @@ impl DeviceListModel {
     pub fn refresh(&mut self) {
         self.begin_reset_model();
         self.end_reset_model();
+        let new_count = self.row_count();
+        if self.count != new_count {
+            self.count = new_count;
+            self.count_changed();
+        }
     }
 }
 

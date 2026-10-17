@@ -30,6 +30,7 @@ pub fn register() {
             "qml/dialogs/DeviceDetailsDialog.qml" as "dialogs/DeviceDetailsDialog.qml",
             "qml/dialogs/PinDialog.qml" as "dialogs/PinDialog.qml",
             "qml/dialogs/MessageInputDialog.qml"   as "dialogs/MessageInputDialog.qml",
+            "qml/dialogs/ManualSendDialog.qml"     as "dialogs/ManualSendDialog.qml",
             "qml/dialogs/LanguageDialog.qml"       as "dialogs/LanguageDialog.qml",
             "assets/logo.png" as "assets/logo.png",
         }

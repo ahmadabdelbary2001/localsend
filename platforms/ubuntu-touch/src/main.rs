@@ -98,6 +98,7 @@ fn main() -> ExitCode {
         discovery_handle.clone(),
         outgoing_entries.clone(),
         settings.clone(),
+        favorites.clone(),
     ));
 
     let settings_controller = RefCell::new(SettingsController::new(settings));
