@@ -311,12 +311,22 @@ async fn do_send(
                         session_id: session_id.clone(),
                         invalid_pin: pin_attempt > 1,
                     });
-                    tokio::select! {
-                        maybe_pin = pin_rx.recv() => match maybe_pin {
-                            Some(p) => { current_pin = Some(p); }
-                            None => return Ok(()),
+                    // tokio ≤ 1.53 does not parse `_name = f => return` inside
+                    // select!, so we hoist the result into a local and return
+                    // after the macro expands cleanly.
+                    enum PinWait { Pin(String), Cancelled }
+                    let wait_result = tokio::select! {
+                        maybe_pin = pin_rx.recv() => {
+                            match maybe_pin {
+                                Some(p) => PinWait::Pin(p),
+                                None    => PinWait::Cancelled,
+                            }
                         }
-                        _cancel = cancel.cancelled() => return Ok(()),
+                        _ = cancel.cancelled() => PinWait::Cancelled,
+                    };
+                    match wait_result {
+                        PinWait::Pin(p)   => { current_pin = Some(p); }
+                        PinWait::Cancelled => return Ok(()),
                     }
                 }
                 403 => {
