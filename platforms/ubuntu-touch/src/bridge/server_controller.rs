@@ -31,6 +31,8 @@ pub struct ServerController {
     web_receive_active: qt_property!(bool; NOTIFY web_receive_changed),
     /// Port the web-receive server is listening on (0 when inactive).
     web_receive_port: qt_property!(u32; NOTIFY web_receive_changed),
+    auto_accept: qt_property!(bool; NOTIFY auto_accept_changed),
+    auto_accept_changed: qt_signal!(),
 
     state_changed: qt_signal!(),
     log_message: qt_signal!(message: QString),
@@ -46,6 +48,7 @@ pub struct ServerController {
     dismiss_incoming: qt_method!(fn(&mut self)),
     start_web_receive: qt_method!(fn(&mut self, alias: QString, port: u32, https: bool, pin: QString)),
     stop_web_receive: qt_method!(fn(&mut self)),
+    set_auto_accept: qt_method!(fn(&mut self, v: bool)),
 
     handle: Option<Arc<ServerHandle>>,
     discovery: Option<Arc<DiscoveryServiceHandle>>,
@@ -80,6 +83,9 @@ impl ServerController {
             web_receive_changed: Default::default(),
             web_receive_active: false,
             web_receive_port: 0,
+            auto_accept: false,
+            auto_accept_changed: Default::default(),
+            set_auto_accept: Default::default(),
             start: Default::default(),
             stop: Default::default(),
             poll: Default::default(),
@@ -131,6 +137,8 @@ impl ServerController {
     }
 
     pub fn set_auto_accept(&mut self, v: bool) {
+        self.auto_accept = v;
+        self.auto_accept_changed();
         if let Some(h) = &self.handle {
             h.send(ServerCommand::SetAutoAccept(v));
         }

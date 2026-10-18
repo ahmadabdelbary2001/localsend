@@ -18,6 +18,7 @@ use qmetaobject::prelude::*;
 use serde_json::Value;
 
 const EN_JSON: &str = include_str!("../../../../app/assets/i18n/en.json");
+const AR_JSON: &str = include_str!("../../../../app/assets/i18n/ar.json");
 
 #[derive(QObject)]
 pub struct Translator {
@@ -35,35 +36,59 @@ pub struct Translator {
     /// Translate with {placeholder} substitution.
     /// `args_json` must be a JSON object, e.g. `{"files":3}`.
     tr_args: qt_method!(fn(&mut self, key: QString, args_json: QString) -> QString),
+    set_locale: qt_method!(fn(&mut self, loc: QString)),
 
     /// Non-Qt state.
     strings: HashMap<String, String>,
+    ar_strings: HashMap<String, String>,
+    en_strings: HashMap<String, String>,
 }
 
 impl Translator {
     pub fn new() -> Self {
-        let strings = load_and_resolve(EN_JSON);
-        log::info!("Translator loaded {} keys", strings.len());
+        let en_strings = load_and_resolve(EN_JSON);
+        let ar_strings = load_and_resolve(AR_JSON);
+        log::info!("Translator loaded {} EN keys, {} AR keys", en_strings.len(), ar_strings.len());
 
         Self {
             base: Default::default(),
-            locale: QString::from("en"),
+            locale: QString::from("ar"),
             locale_changed: Default::default(),
             tr: Default::default(),
             tr_args: Default::default(),
-            strings,
+            set_locale: Default::default(),
+            strings: ar_strings.clone(),
+            ar_strings,
+            en_strings,
         }
+    }
+
+    fn set_locale(&mut self, loc: QString) {
+        let l = loc.to_string();
+        self.locale = loc;
+        if l == "ar" {
+            self.strings = self.ar_strings.clone();
+        } else {
+            self.strings = self.en_strings.clone();
+        }
+        self.locale_changed();
     }
 
     fn tr(&mut self, key: QString) -> QString {
         let k = key.to_string();
-        match self.strings.get(&k) {
-            Some(s) => QString::from(s.clone()),
-            None => {
-                log::debug!("missing translation key: {k}");
-                QString::from(k)
-            }
+        if let Some(s) = self.strings.get(&k) {
+            return QString::from(s.clone());
         }
+        // Fallback to English if not found in current locale
+        if let Some(s) = self.en_strings.get(&k) {
+            return QString::from(s.clone());
+        }
+        // Fallback to Arabic if not found in English
+        if let Some(s) = self.ar_strings.get(&k) {
+            return QString::from(s.clone());
+        }
+        log::debug!("missing translation key: {k}");
+        QString::from(k)
     }
 
     fn tr_args(&mut self, key: QString, args_json: QString) -> QString {
@@ -247,12 +272,27 @@ mod tests {
             locale_changed: Default::default(),
             tr: Default::default(),
             tr_args: Default::default(),
+            set_locale: Default::default(),
             strings: HashMap::new(),
+            ar_strings: HashMap::new(),
+            en_strings: HashMap::new(),
         };
         t.strings.insert("x".into(), "Files: {files} / {n}".into());
 
         // tr_args returns a QString; compare content.
         let out = t.tr_args(QString::from("x"), QString::from(r#"{"files":3,"n":10}"#));
         assert_eq!(out.to_string(), "Files: 3 / 10");
+    }
+
+    #[test]
+    fn loads_arabic() {
+        let map = load_and_resolve(AR_JSON);
+        assert!(map.contains_key("appName"));
+        assert_eq!(map["appName"], "LocalSend");
+        assert_eq!(map["receiveTab.title"], "استلام");
+        assert_eq!(map["webSharePage.title"], "مشاركة عبر الرابط");
+        assert_eq!(map["webSharePage.autoAccept"], "قبول الطلبات تلقائيًا");
+        assert_eq!(map["webSharePage.requirePin"], "يتطلب رمز PIN");
+        assert_eq!(map["webSharePage.encryption"], "التعمية");
     }
 }
