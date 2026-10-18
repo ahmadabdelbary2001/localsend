@@ -77,7 +77,7 @@ fn main() -> ExitCode {
 
     resources::register();
 
-    let translator = RefCell::new(Translator::new());
+    let translator = RefCell::new(Translator::new(settings_snapshot.locale.clone()));
     let app_controller = RefCell::new(AppController::new());
     let home_controller = RefCell::new(HomeController::new());
 

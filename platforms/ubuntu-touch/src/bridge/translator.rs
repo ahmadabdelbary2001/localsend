@@ -6,11 +6,7 @@
 // dotted keys, resolves "@:key" references, and exposes:
 //   tr(key)            -> QString
 //   trArgs(key, json)  -> QString  (JSON object for {placeholder} args)
-//
-// English is always available (embedded). Additional locales will be
-// loaded from the same directory once the build pipeline copies them
-// into the click. Runtime switching is a TODO; the locale property
-// exists so QML can bind to it and rebuild when it changes.
+//   set_locale(locale) -> QString  ("system" / "" detects system language)
 
 use std::collections::HashMap;
 
@@ -20,12 +16,26 @@ use serde_json::Value;
 const EN_JSON: &str = include_str!("../../../../app/assets/i18n/en.json");
 const AR_JSON: &str = include_str!("../../../../app/assets/i18n/ar.json");
 
+/// Detect system language code from standard POSIX / system environment variables.
+pub fn detect_system_locale() -> String {
+    let raw = std::env::var("LC_ALL")
+        .or_else(|_| std::env::var("LC_MESSAGES"))
+        .or_else(|_| std::env::var("LANG"))
+        .unwrap_or_default();
+    let lower = raw.to_lowercase();
+    let code = lower.split(|c| c == '.' || c == '_' || c == '-').next().unwrap_or("");
+    if code == "ar" {
+        "ar".to_string()
+    } else {
+        "en".to_string()
+    }
+}
+
 #[derive(QObject)]
 pub struct Translator {
     base: qt_base_class!(trait QObject),
 
-    /// "en" | "ar" | ...  Read/write to allow future locale switching.
-    /// Changing it currently reloads nothing; a TODO will wire it.
+    /// "en" | "ar" | ...
     locale: qt_property!(QString; NOTIFY locale_changed),
     locale_changed: qt_signal!(),
 
@@ -45,28 +55,47 @@ pub struct Translator {
 }
 
 impl Translator {
-    pub fn new() -> Self {
+    pub fn new(initial_locale: Option<String>) -> Self {
         let en_strings = load_and_resolve(EN_JSON);
         let ar_strings = load_and_resolve(AR_JSON);
         log::info!("Translator loaded {} EN keys, {} AR keys", en_strings.len(), ar_strings.len());
 
+        let active = match initial_locale.as_deref() {
+            Some(loc) if !loc.is_empty() && loc != "system" => loc.to_string(),
+            _ => detect_system_locale(),
+        };
+
+        log::info!("Translator active locale initialized to: '{active}'");
+
+        let strings = if active == "ar" {
+            ar_strings.clone()
+        } else {
+            en_strings.clone()
+        };
+
         Self {
             base: Default::default(),
-            locale: QString::from("ar"),
+            locale: QString::from(active),
             locale_changed: Default::default(),
             tr: Default::default(),
             tr_args: Default::default(),
             set_locale: Default::default(),
-            strings: ar_strings.clone(),
+            strings,
             ar_strings,
             en_strings,
         }
     }
 
-    fn set_locale(&mut self, loc: QString) {
-        let l = loc.to_string();
-        self.locale = loc;
-        if l == "ar" {
+    pub fn set_locale(&mut self, loc: QString) {
+        let s = loc.to_string();
+        let target = if s.is_empty() || s == "system" {
+            detect_system_locale()
+        } else {
+            s
+        };
+        log::info!("Translator switching locale to: '{target}'");
+        self.locale = QString::from(target.clone());
+        if target == "ar" {
             self.strings = self.ar_strings.clone();
         } else {
             self.strings = self.en_strings.clone();
@@ -205,8 +234,6 @@ fn flatten(v: &Value, prefix: &str, out: &mut HashMap<String, String>) {
             out.insert(prefix.to_string(), s.clone());
         }
         Value::Object(map) => {
-            // Plural object: {"one": ..., "other": ..., "param": "n"}
-            // We pick "other" for now. TODO(plural): pick by n at call site.
             if map.contains_key("other") {
                 if let Some(Value::String(s)) = map.get("other") {
                     out.insert(prefix.to_string(), s.clone());
@@ -222,10 +249,7 @@ fn flatten(v: &Value, prefix: &str, out: &mut HashMap<String, String>) {
                 flatten(val, &new_key, out);
             }
         }
-        Value::Array(_) => {
-            // Arrays (e.g. aboutPage.description) are not flattened yet.
-            // TODO: expose as List<String> properties when needed.
-        }
+        Value::Array(_) => {}
         _ => {}
     }
 }
@@ -246,13 +270,8 @@ mod tests {
     #[test]
     fn resolves_references() {
         let map = load_and_resolve(EN_JSON);
-        // "receiveTab.quickSave.off": "@:general.off"  -> "Off"
         assert_eq!(map["receiveTab.quickSave.off"], "Off");
-        // "webSharePage.encryption": "@:settingsTab.network.encryption"
         assert_eq!(map["webSharePage.encryption"], "Encryption");
-        // Nested reference chain:
-        // "settingsTab.receive.requirePin" -> "@:webSharePage.requirePin"
-        //   -> "Require PIN"
         assert_eq!(map["settingsTab.receive.requirePin"], "Require PIN");
     }
 
@@ -265,7 +284,6 @@ mod tests {
 
     #[test]
     fn placeholder_substitution_works() {
-        // Build a tiny map to test substitution logic independently.
         let mut t = Translator {
             base: Default::default(),
             locale: QString::from("en"),
@@ -278,8 +296,6 @@ mod tests {
             en_strings: HashMap::new(),
         };
         t.strings.insert("x".into(), "Files: {files} / {n}".into());
-
-        // tr_args returns a QString; compare content.
         let out = t.tr_args(QString::from("x"), QString::from(r#"{"files":3,"n":10}"#));
         assert_eq!(out.to_string(), "Files: 3 / 10");
     }

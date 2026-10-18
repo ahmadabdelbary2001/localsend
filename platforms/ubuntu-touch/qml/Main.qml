@@ -26,6 +26,13 @@ Window {
     onVisibleChanged: {
     }
 
+    Connections {
+        target: settingsController
+        function onLocaleChanged() {
+            translator.set_locale(settingsController.locale)
+        }
+    }
+
     MainView {
         id: root
         objectName: "localsendMain"

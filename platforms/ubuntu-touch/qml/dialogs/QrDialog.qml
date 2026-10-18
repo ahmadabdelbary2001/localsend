@@ -118,6 +118,7 @@ Dialog {
         }
     }
 
+    onQrDataChanged: qrCanvas.requestPaint()
     onOpened: {
         qrCanvas.requestPaint()
     }

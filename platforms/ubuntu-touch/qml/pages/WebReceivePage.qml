@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
 //
-// WebReceivePage.qml - "Receive via link" (الاستلام عبر رابط) page for LocalSend.
-// Matches Flutter Android app's WebSharePage in receive mode.
+// WebReceivePage.qml - "Receive via link" (الاستلام عبر رابط) page for LocalSend on Ubuntu Touch.
+// Perfectly mirrors Flutter Android app's WebSharePage (web_share_page.dart) in receive mode.
 
 import QtQuick 2.15
 import QtQuick.Layouts 1.15
@@ -15,14 +15,16 @@ Page {
 
     header: null
 
-    // Internal state
+    // Internal state matching Flutter's _WebSharePageState
     property string _status: "initializing"   // "initializing" | "running" | "error" | "stopping"
     property string _errorMsg: ""
     property bool   _encrypted: false
     property string _pin: ""
     property bool   _pinEnabled: false
 
-    Component.onCompleted: _startWebReceive()
+    Component.onCompleted: {
+        _startWebReceive()
+    }
 
     Component.onDestruction: {
         _status = "stopping"
@@ -47,16 +49,35 @@ Page {
 
     function _ips() {
         var parts = []
-        for (var i = 0; i < localIpsModel.rowCount(); i++) {
-            var idx = localIpsModel.index(i, 0)
-            parts.push(localIpsModel.data(idx, 0))
+        if (typeof localIpsModel !== "undefined" && localIpsModel) {
+            var count = localIpsModel.rowCount()
+            for (var i = 0; i < count; i++) {
+                var idx = localIpsModel.index(i, 0)
+                var ip = localIpsModel.data(idx, 0)
+                if (ip && ip.length > 0) {
+                    parts.push(ip)
+                }
+            }
+        }
+        if (parts.length === 0) {
+            parts.push("127.0.0.1")
         }
         return parts
     }
 
+    function _getPort() {
+        if (serverController.web_receive_port > 0) {
+            return serverController.web_receive_port
+        }
+        if (settingsController.port > 0) {
+            return settingsController.port
+        }
+        return 53317
+    }
+
     function _buildUrl(ip) {
         var scheme = page._encrypted ? "https" : "http"
-        return scheme + "://" + ip + ":" + serverController.web_receive_port
+        return scheme + "://" + ip + ":" + _getPort()
     }
 
     function _buildUrlWithPin(ip) {
@@ -100,7 +121,7 @@ Page {
         color: page.appTheme && page.appTheme.colors ? page.appTheme.colors.background : "#F5F5F5"
     }
 
-    // Header bar
+    // App Bar / Header
     Item {
         id: headerBar
         anchors { top: parent.top; left: parent.left; right: parent.right }
@@ -138,7 +159,7 @@ Page {
         }
     }
 
-    // Initializing / stopping / error state
+    // Initializing / stopping / error states
     Item {
         anchors { top: headerBar.bottom; left: parent.left; right: parent.right; bottom: parent.bottom }
         visible: page._status !== "running"
@@ -146,6 +167,7 @@ Page {
         ColumnLayout {
             anchors.centerIn: parent
             spacing: units.gu(2)
+            width: Math.min(parent.width - units.gu(4), units.gu(45))
 
             ActivityIndicator {
                 Layout.alignment: Qt.AlignHCenter
@@ -160,6 +182,7 @@ Page {
                 fontSize: "large"
                 color: page.appTheme && page.appTheme.colors ? page.appTheme.colors.surfaceText : "#1B1D21"
                 horizontalAlignment: Text.AlignHCenter
+                wrapMode: Text.Wrap
             }
 
             Label {
@@ -169,6 +192,7 @@ Page {
                 fontSize: "large"
                 color: page.appTheme && page.appTheme.colors ? page.appTheme.colors.surfaceText : "#1B1D21"
                 horizontalAlignment: Text.AlignHCenter
+                wrapMode: Text.Wrap
             }
 
             Icon {
@@ -181,6 +205,7 @@ Page {
 
             Label {
                 Layout.alignment: Qt.AlignHCenter
+                Layout.fillWidth: true
                 visible: page._status === "error"
                 text: page._errorMsg.length > 0 ? page._errorMsg : translator.tr("webSharePage.error")
                 fontSize: "medium"
@@ -199,12 +224,12 @@ Page {
         }
     }
 
-    // Running state - main view
+    // Running view (mirrors ResponsiveListView from Flutter)
     Flickable {
         id: mainFlick
         anchors { top: headerBar.bottom; left: parent.left; right: parent.right; bottom: parent.bottom }
         visible: page._status === "running"
-        contentHeight: mainCol.implicitHeight + units.gu(4)
+        contentHeight: mainCol.implicitHeight + units.gu(6)
         clip: true
 
         ColumnLayout {
@@ -212,7 +237,7 @@ Page {
             anchors { left: parent.left; right: parent.right; top: parent.top; margins: units.gu(2) }
             spacing: units.gu(2)
 
-            // Section title: "افتح أحد هذه الروابط في المتصفح:"
+            // Section title: "Open one of these links in your browser:" / "افتح أحد هذه الروابط في المتصفح:"
             Label {
                 Layout.fillWidth: true
                 text: {
@@ -226,7 +251,7 @@ Page {
                 wrapMode: Text.Wrap
             }
 
-            // URLs Card
+            // Card with URLs (mirrors Flutter's Card with secondaryContainer color)
             Rectangle {
                 Layout.fillWidth: true
                 implicitHeight: urlsCol.implicitHeight + units.gu(2)
@@ -254,7 +279,7 @@ Page {
                                 wrapMode: Text.WrapAnywhere
                             }
 
-                            // Copy button
+                            // Copy button (content_copy)
                             AbstractButton {
                                 width: units.gu(4.5); height: units.gu(4)
                                 Rectangle {
@@ -274,7 +299,7 @@ Page {
                                 }
                             }
 
-                            // QR code button
+                            // QR button (qr_code)
                             AbstractButton {
                                 width: units.gu(4.5); height: units.gu(4)
                                 Rectangle {
@@ -307,21 +332,42 @@ Page {
                 color: page.appTheme && page.appTheme.colors ? page.appTheme.colors.divider : "#E0E0E0"
             }
 
+            // =========================================================
             // Checkbox 1: Encryption (التعمية)
+            // =========================================================
             ColumnLayout {
                 Layout.fillWidth: true
                 spacing: units.gu(0.5)
 
                 RowLayout {
                     Layout.fillWidth: true
-                    spacing: units.gu(1)
+                    spacing: units.gu(1.5)
 
-                    CheckBox {
-                        id: encCheck
-                        checked: page._encrypted
-                        onToggled: {
-                            page._encrypted = checked
-                            page._startWebReceive()
+                    Rectangle {
+                        width: units.gu(2.5); height: units.gu(2.5)
+                        radius: units.dp(4)
+                        color: page._encrypted
+                            ? (page.appTheme && page.appTheme.colors ? page.appTheme.colors.primary : "#00695C")
+                            : "transparent"
+                        border.color: page._encrypted
+                            ? (page.appTheme && page.appTheme.colors ? page.appTheme.colors.primary : "#00695C")
+                            : (page.appTheme && page.appTheme.colors ? page.appTheme.colors.surfaceTextMuted : "#757575")
+                        border.width: units.dp(2)
+
+                        Icon {
+                            anchors.centerIn: parent
+                            name: "tick"
+                            width: units.gu(1.8); height: units.gu(1.8)
+                            color: "#FFFFFF"
+                            visible: page._encrypted
+                        }
+
+                        MouseArea {
+                            anchors.fill: parent
+                            onClicked: {
+                                page._encrypted = !page._encrypted
+                                page._startWebReceive()
+                            }
                         }
                     }
 
@@ -332,14 +378,17 @@ Page {
                         color: page.appTheme && page.appTheme.colors ? page.appTheme.colors.surfaceText : "#1B1D21"
                         MouseArea {
                             anchors.fill: parent
-                            onClicked: encCheck.toggle()
+                            onClicked: {
+                                page._encrypted = !page._encrypted
+                                page._startWebReceive()
+                            }
                         }
                     }
                 }
 
                 Label {
                     Layout.fillWidth: true
-                    Layout.leftMargin: units.gu(4.5)
+                    Layout.leftMargin: units.gu(4)
                     visible: page._encrypted
                     text: translator.tr("webSharePage.encryptionHint")
                     fontSize: "small"
@@ -348,16 +397,37 @@ Page {
                 }
             }
 
+            // =========================================================
             // Checkbox 2: Auto-accept requests (قبول الطلبات تلقائياً)
+            // =========================================================
             RowLayout {
                 Layout.fillWidth: true
-                spacing: units.gu(1)
+                spacing: units.gu(1.5)
 
-                CheckBox {
-                    id: autoAcceptCheck
-                    checked: serverController.auto_accept
-                    onToggled: {
-                        serverController.set_auto_accept(checked)
+                Rectangle {
+                    width: units.gu(2.5); height: units.gu(2.5)
+                    radius: units.dp(4)
+                    color: serverController.auto_accept
+                        ? (page.appTheme && page.appTheme.colors ? page.appTheme.colors.primary : "#00695C")
+                        : "transparent"
+                    border.color: serverController.auto_accept
+                        ? (page.appTheme && page.appTheme.colors ? page.appTheme.colors.primary : "#00695C")
+                        : (page.appTheme && page.appTheme.colors ? page.appTheme.colors.surfaceTextMuted : "#757575")
+                    border.width: units.dp(2)
+
+                    Icon {
+                        anchors.centerIn: parent
+                        name: "tick"
+                        width: units.gu(1.8); height: units.gu(1.8)
+                        color: "#FFFFFF"
+                        visible: serverController.auto_accept
+                    }
+
+                    MouseArea {
+                        anchors.fill: parent
+                        onClicked: {
+                            serverController.set_auto_accept(!serverController.auto_accept)
+                        }
                     }
                 }
 
@@ -368,33 +438,46 @@ Page {
                     color: page.appTheme && page.appTheme.colors ? page.appTheme.colors.surfaceText : "#1B1D21"
                     MouseArea {
                         anchors.fill: parent
-                        onClicked: autoAcceptCheck.toggle()
+                        onClicked: {
+                            serverController.set_auto_accept(!serverController.auto_accept)
+                        }
                     }
                 }
             }
 
+            // =========================================================
             // Checkbox 3: Require PIN (يتطلب رمز PIN)
+            // =========================================================
             ColumnLayout {
                 Layout.fillWidth: true
                 spacing: units.gu(0.5)
 
                 RowLayout {
                     Layout.fillWidth: true
-                    spacing: units.gu(1)
+                    spacing: units.gu(1.5)
 
-                    CheckBox {
-                        id: pinCheck
-                        checked: page._pinEnabled && page._pin.length > 0
-                        onToggled: {
-                            if (checked) {
-                                // Open PIN input dialog with random pin pre-filled
-                                pinEntryDialog.suggestedPin = page._generateRandomPin()
-                                pinEntryDialog.open()
-                            } else {
-                                page._pinEnabled = false
-                                page._pin = ""
-                                page._startWebReceive()
-                            }
+                    Rectangle {
+                        width: units.gu(2.5); height: units.gu(2.5)
+                        radius: units.dp(4)
+                        color: (page._pin.length > 0)
+                            ? (page.appTheme && page.appTheme.colors ? page.appTheme.colors.primary : "#00695C")
+                            : "transparent"
+                        border.color: (page._pin.length > 0)
+                            ? (page.appTheme && page.appTheme.colors ? page.appTheme.colors.primary : "#00695C")
+                            : (page.appTheme && page.appTheme.colors ? page.appTheme.colors.surfaceTextMuted : "#757575")
+                        border.width: units.dp(2)
+
+                        Icon {
+                            anchors.centerIn: parent
+                            name: "tick"
+                            width: units.gu(1.8); height: units.gu(1.8)
+                            color: "#FFFFFF"
+                            visible: (page._pin.length > 0)
+                        }
+
+                        MouseArea {
+                            anchors.fill: parent
+                            onClicked: page._togglePin()
                         }
                     }
 
@@ -405,15 +488,15 @@ Page {
                         color: page.appTheme && page.appTheme.colors ? page.appTheme.colors.surfaceText : "#1B1D21"
                         MouseArea {
                             anchors.fill: parent
-                            onClicked: pinCheck.toggle()
+                            onClicked: page._togglePin()
                         }
                     }
                 }
 
                 Label {
                     Layout.fillWidth: true
-                    Layout.leftMargin: units.gu(4.5)
-                    visible: page._pinEnabled && page._pin.length > 0
+                    Layout.leftMargin: units.gu(4)
+                    visible: (page._pin.length > 0)
                     text: translator.trArgs("webSharePage.pinHint", JSON.stringify({ pin: page._pin }))
                     fontSize: "small"
                     font.bold: true
@@ -426,13 +509,24 @@ Page {
         }
     }
 
+    function _togglePin() {
+        if (page._pin.length > 0) {
+            page._pin = ""
+            page._pinEnabled = false
+            page._startWebReceive()
+        } else {
+            pinEntryDialog.suggestedPin = page._generateRandomPin()
+            pinEntryDialog.open()
+        }
+    }
+
     // QR Code Dialog
     QrDialog {
         id: qrDialog
         appTheme: page.appTheme
     }
 
-    // PIN Dialog
+    // PIN Input Dialog
     Dialog {
         id: pinEntryDialog
         property string suggestedPin: ""
@@ -470,7 +564,6 @@ Page {
                     text: translator.tr("general.cancel")
                     onClicked: {
                         pinField.text = ""
-                        pinCheck.checked = (page._pin.length > 0)
                         pinEntryDialog.close()
                     }
                 }
@@ -491,11 +584,7 @@ Page {
                 page._pin = p
                 page._pinEnabled = true
                 page._startWebReceive()
-            } else {
-                page._pinEnabled = false
-                page._pin = ""
             }
-            pinCheck.checked = (page._pin.length > 0)
             pinEntryDialog.close()
         }
 

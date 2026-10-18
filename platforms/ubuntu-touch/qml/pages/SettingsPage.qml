@@ -255,6 +255,9 @@ Page {
         id: languageDialog
         appTheme: page.appTheme
         currentLocale: settingsController.locale
-        onLocaleSelected: settingsController.set_locale(code)
+        onLocaleSelected: {
+            settingsController.set_locale(code)
+            translator.set_locale(code)
+        }
     }
 }
