@@ -242,10 +242,10 @@ Page {
                     columnSpacing: units.gu(1)
                     rowSpacing: units.gu(1)
 
-                    // 1. File (ملف)
+                    // 1. File (ملف) — Flutter: Icons.description
                     BigButton {
                         appTheme: page.appTheme
-                        iconName: "document-open"
+                        iconName: "document"
                         label: translator.tr("sendTab.picker.file")
                         onClicked: {
                             page.pickerType = "all"
@@ -253,10 +253,10 @@ Page {
                         }
                     }
 
-                    // 2. Media (وسائط)
+                    // 2. Media (وسائط) — Flutter: Icons.image
                     BigButton {
                         appTheme: page.appTheme
-                        iconName: "camera-photo"
+                        iconName: "gallery"
                         label: translator.tr("sendTab.picker.media")
                         onClicked: {
                             page.pickerType = "pictures"
@@ -264,7 +264,7 @@ Page {
                         }
                     }
 
-                    // 3. Paste (لصق)
+                    // 3. Paste (لصق) — Flutter: Icons.paste
                     BigButton {
                         appTheme: page.appTheme
                         iconName: "edit-paste"
@@ -272,10 +272,10 @@ Page {
                         onClicked: page.pasteFromClipboard()
                     }
 
-                    // 4. Text (نص)
+                    // 4. Text (نص) — Flutter: Icons.subject
                     BigButton {
                         appTheme: page.appTheme
-                        iconName: "edit-text"
+                        iconName: "edit"
                         label: translator.tr("sendTab.picker.text")
                         onClicked: {
                             page.pendingFingerprint = ""
@@ -284,20 +284,20 @@ Page {
                         }
                     }
 
-                    // 5. Folder (مجلد)
+                    // 5. Folder (مجلد) — Flutter: Icons.folder
                     BigButton {
                         appTheme: page.appTheme
-                        iconName: "folder-open"
+                        iconName: "folder"
                         label: translator.tr("sendTab.picker.folder")
                         onClicked: {
                             folderDialogLoader.active = true
                         }
                     }
 
-                    // 6. App (تطبيق)
+                    // 6. App (تطبيق) — Flutter: Icons.apps
                     BigButton {
                         appTheme: page.appTheme
-                        iconName: "system-run"
+                        iconName: "stock_application"
                         label: translator.tr("sendTab.picker.app")
                         onClicked: {
                             appDialogLoader.active = true
@@ -378,13 +378,13 @@ Page {
 
                     BigButton {
                         appTheme: page.appTheme
-                        iconName: "document-open"
+                        iconName: "document"
                         label: translator.tr("sendTab.picker.file")
                         onClicked: { addMenuPopup.visible = false; page.pickerType = "all"; pickerLoader.active = true; }
                     }
                     BigButton {
                         appTheme: page.appTheme
-                        iconName: "camera-photo"
+                        iconName: "gallery"
                         label: translator.tr("sendTab.picker.media")
                         onClicked: { addMenuPopup.visible = false; page.pickerType = "pictures"; pickerLoader.active = true; }
                     }
@@ -396,19 +396,19 @@ Page {
                     }
                     BigButton {
                         appTheme: page.appTheme
-                        iconName: "edit-text"
+                        iconName: "edit"
                         label: translator.tr("sendTab.picker.text")
                         onClicked: { addMenuPopup.visible = false; messageDialogLoader.active = true; }
                     }
                     BigButton {
                         appTheme: page.appTheme
-                        iconName: "folder-open"
+                        iconName: "folder"
                         label: translator.tr("sendTab.picker.folder")
                         onClicked: { addMenuPopup.visible = false; folderDialogLoader.active = true; }
                     }
                     BigButton {
                         appTheme: page.appTheme
-                        iconName: "system-run"
+                        iconName: "stock_application"
                         label: translator.tr("sendTab.picker.app")
                         onClicked: { addMenuPopup.visible = false; appDialogLoader.active = true; }
                     }
@@ -487,13 +487,44 @@ Page {
                     appTheme: page.appTheme
                     fingerprint: model.fingerprint
                     alias: model.alias
-                    deviceModel: ""
-                    deviceType: ""
+                    // Try to get live info if device is also discovered nearby (role2=deviceModel)
+                    deviceModel: {
+                        for (var i = 0; i < deviceListModel.count; i++) {
+                            var idx = deviceListModel.index(i, 0)
+                            if (deviceListModel.data(idx, 0) === model.fingerprint)
+                                return deviceListModel.data(idx, 2)
+                        }
+                        return ""
+                    }
+                    deviceType: {
+                        for (var i = 0; i < deviceListModel.count; i++) {
+                            var idx = deviceListModel.index(i, 0)
+                            if (deviceListModel.data(idx, 0) === model.fingerprint)
+                                return deviceListModel.data(idx, 3)
+                        }
+                        return ""
+                    }
                     ip: model.ip
                     port: model.port
-                    https: true
+                    https: {
+                        // role6=https; fallback true for saved favorites
+                        for (var i = 0; i < deviceListModel.count; i++) {
+                            var idx = deviceListModel.index(i, 0)
+                            if (deviceListModel.data(idx, 0) === model.fingerprint)
+                                return deviceListModel.data(idx, 6)
+                        }
+                        return true
+                    }
                     isFavorite: true
-                    offline: false
+                    // offline = not found in current discovery snapshot
+                    offline: (function() {
+                        for (var i = 0; i < deviceListModel.count; i++) {
+                            var idx = deviceListModel.index(i, 0)
+                            if (deviceListModel.data(idx, 0) === model.fingerprint)
+                                return false
+                        }
+                        return true
+                    })()
 
                     onTapped: page.sendToDevice(model.fingerprint)
                     onSendTextRequested: page.sendTextToDevice(model.fingerprint)
@@ -525,11 +556,16 @@ Page {
             }
 
             Repeater {
+                id: nearbyRepeater
                 model: deviceListModel
-                visible: discoveryController.device_count > 0 || deviceListModel.count > 0
 
                 delegate: DeviceCard {
+                    // ── KEY FIX: Hide if this device is already shown in Favorites ──
+                    // Flutter does the same: nearbyDevices list excludes favorites shown above
+                    visible: !favoritesController.is_favorite(model.fingerprint)
                     Layout.fillWidth: true
+                    // When hidden, collapse height so layout has no gap
+                    Layout.preferredHeight: visible ? implicitHeight : 0
                     appTheme: page.appTheme
                     fingerprint: model.fingerprint
                     alias: {

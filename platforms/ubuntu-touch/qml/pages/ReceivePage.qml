@@ -46,35 +46,58 @@ Page {
             width: Math.min(parent.width - units.gu(4), units.gu(55))
             spacing: units.gu(2)
 
-            // Logo / wifi icon
-            Rectangle {
+            // Logo / receive icon — mirrors Flutter's RotatingWidget(LocalSendLogo)
+            Item {
                 Layout.alignment: Qt.AlignHCenter
                 Layout.preferredWidth: units.gu(18)
                 Layout.preferredHeight: units.gu(18)
-                radius: width / 2
-                color: page.appTheme && page.appTheme.colors
-                       ? (serverController.running
-                          ? Qt.rgba(0, 0.42, 0.36, 0.12)
-                          : page.appTheme.colors.surfaceTint)
-                       : "#ECEFF1"
 
-                Behavior on color { ColorAnimation { duration: 300 } }
+                // Outer circle (tinted when running)
+                Rectangle {
+                    anchors.fill: parent
+                    radius: width / 2
+                    color: page.appTheme && page.appTheme.colors
+                           ? (serverController.running
+                              ? Qt.rgba(0, 0.42, 0.36, 0.10)
+                              : page.appTheme.colors.surfaceTint)
+                           : "#ECEFF1"
+                    Behavior on color { ColorAnimation { duration: 400 } }
+                }
 
+                // Try logo image first; fall back to an icon
+                Image {
+                    id: logoImg
+                    anchors.centerIn: parent
+                    width: units.gu(12)
+                    height: units.gu(12)
+                    source: "qrc:/qml/assets/logo.png"
+                    fillMode: Image.PreserveAspectFit
+                    smooth: true
+                    cache: true
+                    visible: status === Image.Ready
+
+                    RotationAnimator on rotation {
+                        running: serverController.running
+                        loops: Animation.Infinite
+                        from: 0; to: 360
+                        duration: 15000
+                    }
+                }
+
+                // Fallback icon when logo image fails to load
                 Icon {
                     anchors.centerIn: parent
-                    width: units.gu(10)
-                    height: units.gu(10)
-                    name: serverController.running ? "network-wireless-signal-excellent" : "network-wireless-offline"
+                    width: units.gu(9)
+                    height: units.gu(9)
+                    name: "network-wireless"
+                    visible: logoImg.status !== Image.Ready
                     color: serverController.running
                            ? (page.appTheme && page.appTheme.colors ? page.appTheme.colors.primary : "#00695C")
                            : (page.appTheme && page.appTheme.colors ? page.appTheme.colors.surfaceTextMuted : "#888")
-
-                    Behavior on color { ColorAnimation { duration: 300 } }
-
                     SequentialAnimation on opacity {
-                        running: serverController.running
+                        running: serverController.running && logoImg.status !== Image.Ready
                         loops: Animation.Infinite
-                        NumberAnimation { to: 0.6; duration: 1200; easing.type: Easing.InOutSine }
+                        NumberAnimation { to: 0.5; duration: 1200; easing.type: Easing.InOutSine }
                         NumberAnimation { to: 1.0; duration: 1200; easing.type: Easing.InOutSine }
                     }
                 }
