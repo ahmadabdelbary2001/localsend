@@ -176,8 +176,12 @@ Page {
         }
 
         Label {
-            anchors { left: backBtn.right; right: parent.right; verticalCenter: parent.verticalCenter }
-            leftPadding: units.gu(1)
+            anchors {
+                left: backBtn.right
+                right: parent.right
+                verticalCenter: parent.verticalCenter
+                leftMargin: units.gu(1)
+            }
             text: translator.tr("webReceivePage.title")
             fontSize: "large"
             font.bold: true

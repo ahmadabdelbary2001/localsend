@@ -17,12 +17,14 @@ Window {
     title: "LocalSend"
     color: "#F6F6F6"
 
+    property string lastAppliedLocale: ""
+
     width: units.gu(50)
     height: units.gu(90)
 
     Component.onCompleted: {
-        // Initialize translator with the persisted locale setting on startup.
-        translator.set_locale(settingsController.locale)
+        lastAppliedLocale = settingsController.locale
+        translator.set_locale(lastAppliedLocale)
     }
 
     onVisibleChanged: {
@@ -33,7 +35,10 @@ Window {
     Connections {
         target: settingsController
         function onChanged() {
-            translator.set_locale(settingsController.locale)
+            if (appWindow.lastAppliedLocale !== settingsController.locale) {
+                appWindow.lastAppliedLocale = settingsController.locale
+                translator.set_locale(appWindow.lastAppliedLocale)
+            }
         }
     }
 

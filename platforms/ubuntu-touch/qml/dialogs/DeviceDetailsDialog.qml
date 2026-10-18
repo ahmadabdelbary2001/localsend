@@ -37,7 +37,7 @@ Dialog {
 
     contentItem: Flickable {
         id: flickable
-        implicitHeight: Math.min(col.implicitHeight, root.parent ? root.parent.height - units.gu(14) : units.gu(55))
+        implicitHeight: Math.min(col.implicitHeight, units.gu(55))
         contentHeight: col.implicitHeight
         contentWidth: width
         clip: true
@@ -187,7 +187,7 @@ Dialog {
                     Icon {
                         width: units.gu(2)
                         height: units.gu(2)
-                        name: "security-high"
+                        name: "stock_key"
                         color: root.appTheme && root.appTheme.colors
                                ? root.appTheme.colors.primary
                                : "#00695C"
