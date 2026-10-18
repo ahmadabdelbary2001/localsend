@@ -22,35 +22,37 @@ Rectangle {
 
     function _deviceIcon(type) {
         var t = (type || "").toLowerCase()
-        if (t === "mobile" || t === "phone") return "smartphone"
-        if (t === "desktop" || t === "laptop") return "computer"
-        if (t === "tablet") return "tablet"
-        if (t === "web" || t === "browser") return "stock_website"
-        if (t === "server" || t === "headless") return "network-server"
+        if (t === "mobile" || t === "phone")   return "phone-smartphone"
+        if (t === "desktop")                     return "computer"
+        if (t === "laptop")                      return "computer"
+        if (t === "tablet")                      return "tablet-portrait"
+        if (t === "web" || t === "browser")      return "stock_website"
+        if (t === "server" || t === "headless")  return "network-server"
         return "computer"
     }
 
-    implicitHeight: units.gu(9.5)
+    implicitHeight: units.gu(9)
     radius: appTheme && appTheme.metrics
             ? appTheme.metrics.cardRadius
-            : units.gu(0.8)
+            : units.gu(1)
 
     color: mouseArea.pressed
         ? (appTheme && appTheme.colors ? appTheme.colors.surfaceTint : "#ECEFF1")
         : (appTheme && appTheme.colors ? appTheme.colors.surface : "#ffffff")
 
-    border.color: appTheme && appTheme.colors
-                ? appTheme.colors.divider
-                : "#e0e0e0"
-    border.width: units.dp(1)
-    opacity: card.offline ? 0.6 : 1.0
+    border.color: mouseArea.pressed
+        ? (appTheme && appTheme.colors ? appTheme.colors.primary : "#00695C")
+        : (appTheme && appTheme.colors ? appTheme.colors.divider : "#e0e0e0")
+    border.width: mouseArea.pressed ? units.dp(2) : units.dp(1)
+    opacity: card.offline ? 0.55 : 1.0
 
-    Behavior on color { ColorAnimation { duration: 100 } }
+    Behavior on color { ColorAnimation { duration: 120 } }
+    Behavior on border.color { ColorAnimation { duration: 120 } }
 
     MouseArea {
         id: mouseArea
         anchors.fill: parent
-        anchors.rightMargin: units.gu(14) // Leave trailing buttons clickable
+        anchors.rightMargin: units.gu(13) // Leave trailing buttons clickable
         onClicked: card.tapped()
     }
 
@@ -61,17 +63,31 @@ Rectangle {
 
         // Device icon circle
         Rectangle {
-            Layout.preferredWidth: units.gu(6)
-            Layout.preferredHeight: units.gu(6)
-            radius: units.gu(3)
-            color: appTheme && appTheme.colors ? appTheme.colors.surfaceTint : "#ECEFF1"
+            Layout.preferredWidth: units.gu(5.5)
+            Layout.preferredHeight: units.gu(5.5)
+            radius: width / 2
+            color: appTheme && appTheme.colors
+                   ? Qt.rgba(0, 0.42, 0.36, 0.12)
+                   : "#E8F5E9"
 
             Icon {
                 anchors.centerIn: parent
-                width: units.gu(3.2)
-                height: units.gu(3.2)
+                width: units.gu(3)
+                height: units.gu(3)
                 name: card._deviceIcon(card.deviceType)
                 color: appTheme && appTheme.colors ? appTheme.colors.primary : "#00695C"
+            }
+
+            // Offline indicator dot
+            Rectangle {
+                visible: card.offline
+                anchors { bottom: parent.bottom; right: parent.right; margins: -units.dp(1) }
+                width: units.gu(1.4)
+                height: units.gu(1.4)
+                radius: width / 2
+                color: "#B0BEC5"
+                border.color: appTheme && appTheme.colors ? appTheme.colors.surface : "#ffffff"
+                border.width: units.dp(2)
             }
         }
 
@@ -105,14 +121,16 @@ Rectangle {
             // Badges row: Protocol + Model + IP
             RowLayout {
                 Layout.fillWidth: true
-                spacing: units.gu(0.8)
+                spacing: units.gu(0.6)
 
                 // Protocol badge (HTTPS / HTTP)
                 Rectangle {
-                    implicitWidth: protocolLabel.implicitWidth + units.gu(1)
-                    implicitHeight: protocolLabel.implicitHeight + units.gu(0.3)
-                    radius: units.gu(0.4)
-                    color: card.https ? Qt.rgba(0, 0.5, 0, 0.12) : Qt.rgba(0.5, 0.5, 0.5, 0.15)
+                    implicitWidth: protocolLabel.implicitWidth + units.gu(1.2)
+                    implicitHeight: protocolLabel.implicitHeight + units.gu(0.4)
+                    radius: units.gu(0.5)
+                    color: card.https
+                           ? Qt.rgba(0, 0.5, 0.2, 0.13)
+                           : Qt.rgba(0.6, 0.4, 0, 0.12)
 
                     Label {
                         id: protocolLabel
@@ -122,7 +140,7 @@ Rectangle {
                         font.bold: true
                         color: card.https
                             ? (appTheme && appTheme.colors ? appTheme.colors.primary : "#00695C")
-                            : "#5F6368"
+                            : "#B45309"
                     }
                 }
 

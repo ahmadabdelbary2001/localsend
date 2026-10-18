@@ -245,7 +245,7 @@ Page {
                     // 1. File (ملف)
                     BigButton {
                         appTheme: page.appTheme
-                        iconName: "document"
+                        iconName: "document-open"
                         label: translator.tr("sendTab.picker.file")
                         onClicked: {
                             page.pickerType = "all"
@@ -256,7 +256,7 @@ Page {
                     // 2. Media (وسائط)
                     BigButton {
                         appTheme: page.appTheme
-                        iconName: "image"
+                        iconName: "camera-photo"
                         label: translator.tr("sendTab.picker.media")
                         onClicked: {
                             page.pickerType = "pictures"
@@ -275,7 +275,7 @@ Page {
                     // 4. Text (نص)
                     BigButton {
                         appTheme: page.appTheme
-                        iconName: "edit"
+                        iconName: "edit-text"
                         label: translator.tr("sendTab.picker.text")
                         onClicked: {
                             page.pendingFingerprint = ""
@@ -287,7 +287,7 @@ Page {
                     // 5. Folder (مجلد)
                     BigButton {
                         appTheme: page.appTheme
-                        iconName: "folder"
+                        iconName: "folder-open"
                         label: translator.tr("sendTab.picker.folder")
                         onClicked: {
                             folderDialogLoader.active = true
@@ -297,7 +297,7 @@ Page {
                     // 6. App (تطبيق)
                     BigButton {
                         appTheme: page.appTheme
-                        iconName: "package"
+                        iconName: "system-run"
                         label: translator.tr("sendTab.picker.app")
                         onClicked: {
                             appDialogLoader.active = true
@@ -378,13 +378,13 @@ Page {
 
                     BigButton {
                         appTheme: page.appTheme
-                        iconName: "document"
+                        iconName: "document-open"
                         label: translator.tr("sendTab.picker.file")
                         onClicked: { addMenuPopup.visible = false; page.pickerType = "all"; pickerLoader.active = true; }
                     }
                     BigButton {
                         appTheme: page.appTheme
-                        iconName: "image"
+                        iconName: "camera-photo"
                         label: translator.tr("sendTab.picker.media")
                         onClicked: { addMenuPopup.visible = false; page.pickerType = "pictures"; pickerLoader.active = true; }
                     }
@@ -396,19 +396,19 @@ Page {
                     }
                     BigButton {
                         appTheme: page.appTheme
-                        iconName: "edit"
+                        iconName: "edit-text"
                         label: translator.tr("sendTab.picker.text")
                         onClicked: { addMenuPopup.visible = false; messageDialogLoader.active = true; }
                     }
                     BigButton {
                         appTheme: page.appTheme
-                        iconName: "folder"
+                        iconName: "folder-open"
                         label: translator.tr("sendTab.picker.folder")
                         onClicked: { addMenuPopup.visible = false; folderDialogLoader.active = true; }
                     }
                     BigButton {
                         appTheme: page.appTheme
-                        iconName: "package"
+                        iconName: "system-run"
                         label: translator.tr("sendTab.picker.app")
                         onClicked: { addMenuPopup.visible = false; appDialogLoader.active = true; }
                     }

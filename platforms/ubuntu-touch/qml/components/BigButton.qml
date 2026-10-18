@@ -11,17 +11,20 @@ Rectangle {
     signal clicked()
 
     Layout.fillWidth: true
-    implicitHeight: units.gu(8)
-    radius: appTheme && appTheme.metrics ? appTheme.metrics.cardRadius : units.gu(0.8)
+    implicitHeight: units.gu(9)
+    radius: appTheme && appTheme.metrics ? appTheme.metrics.cardRadius : units.gu(1)
 
     color: mouseArea.pressed
-        ? (appTheme && appTheme.colors ? appTheme.colors.surfaceTint : "#ECEFF1")
+        ? (appTheme && appTheme.colors ? appTheme.colors.surfaceTint : "#D8DADD")
         : (appTheme && appTheme.colors ? appTheme.colors.surface : "#ffffff")
 
-    border.color: appTheme && appTheme.colors ? appTheme.colors.divider : "#e0e0e0"
-    border.width: units.dp(1)
+    border.color: mouseArea.pressed
+        ? (appTheme && appTheme.colors ? appTheme.colors.primary : "#00695C")
+        : (appTheme && appTheme.colors ? appTheme.colors.divider : "#e0e0e0")
+    border.width: mouseArea.pressed ? units.dp(2) : units.dp(1)
 
-    Behavior on color { ColorAnimation { duration: 80 } }
+    Behavior on color { ColorAnimation { duration: 100 } }
+    Behavior on border.color { ColorAnimation { duration: 100 } }
 
     MouseArea {
         id: mouseArea
@@ -31,18 +34,32 @@ Rectangle {
 
     ColumnLayout {
         anchors.centerIn: parent
-        spacing: units.gu(0.6)
+        spacing: units.gu(0.7)
 
-        Icon {
+        // Icon circle background
+        Rectangle {
             Layout.alignment: Qt.AlignHCenter
-            width: units.gu(3)
-            height: units.gu(3)
-            name: root.iconName
-            color: root.appTheme && root.appTheme.colors ? root.appTheme.colors.primary : "#00695C"
+            width: units.gu(4.5)
+            height: units.gu(4.5)
+            radius: width / 2
+            color: mouseArea.pressed
+                ? (root.appTheme && root.appTheme.colors ? Qt.rgba(0, 0.42, 0.36, 0.20) : "#C8E6C9")
+                : (root.appTheme && root.appTheme.colors ? Qt.rgba(0, 0.42, 0.36, 0.10) : "#E8F5E9")
+
+            Behavior on color { ColorAnimation { duration: 100 } }
+
+            Icon {
+                anchors.centerIn: parent
+                width: units.gu(2.6)
+                height: units.gu(2.6)
+                name: root.iconName
+                color: root.appTheme && root.appTheme.colors ? root.appTheme.colors.primary : "#00695C"
+            }
         }
 
         Label {
             Layout.alignment: Qt.AlignHCenter
+            Layout.maximumWidth: units.gu(12)
             text: root.label
             fontSize: "small"
             font.bold: true
@@ -52,3 +69,4 @@ Rectangle {
         }
     }
 }
+

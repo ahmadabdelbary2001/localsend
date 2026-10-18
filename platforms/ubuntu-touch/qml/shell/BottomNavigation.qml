@@ -27,7 +27,7 @@ Item {
 
         Repeater {
             model: [
-                { labelKey: "receiveTab.title",  icon: "inbox" },
+                { labelKey: "receiveTab.title",  icon: "network-wireless" },
                 { labelKey: "sendTab.title",     icon: "send"     },
                 { labelKey: "settingsTab.title", icon: "settings" }
             ]
