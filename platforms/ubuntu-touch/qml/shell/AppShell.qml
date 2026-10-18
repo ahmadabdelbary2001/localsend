@@ -39,6 +39,7 @@ Page {
                 id: receivePage
                 anchors.fill: parent
                 appTheme: shell.appTheme
+                navigationStack: shell.navigationStack
             }
         }
 

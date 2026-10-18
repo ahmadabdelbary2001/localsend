@@ -92,6 +92,15 @@ pub enum ServerCommand {
     DeclineUpload {
         session_id: String,
     },
+    /// Restart server with web-upload mode enabled (receive via link).
+    StartWebReceive {
+        alias: String,
+        port: u16,
+        https: bool,
+        pin: Option<String>,
+    },
+    /// Set pin for active web-receive session.
+    SetWebPin(Option<String>),
     /// For headless testing: auto-accept every incoming upload.
     SetAutoAccept(bool),
     Shutdown,
@@ -128,6 +137,11 @@ pub enum ServerEvent {
         cancelled: bool,
     },
     Log(String),
+    /// Emitted when web-receive becomes active/inactive.
+    WebReceiveChanged {
+        active: bool,
+        port: u16,
+    },
 }
 
 // -------------------- handle --------------------
@@ -203,6 +217,7 @@ async fn server_task(
                         }
                         match start_one(
                             &identity, &alias, port, https, pin, verify_checksums,
+                            WebMode::Disabled,
                             core_tx.clone(), evt_tx.clone(),
                         ).await {
                             Ok(server) => {
@@ -232,9 +247,52 @@ async fn server_task(
                         if let Some(server) = running.take() {
                             server.stop().await;
                             let _ = evt_tx.send(ServerEvent::Snapshot(ServerSnapshot::default()));
+                            let _ = evt_tx.send(ServerEvent::WebReceiveChanged { active: false, port: 0 });
                         }
                         pending_decisions.clear();
                         incoming.clear();
+                    }
+                    ServerCommand::StartWebReceive { alias, port, https, pin } => {
+                        // Stop any running server first.
+                        if let Some(server) = running.take() {
+                            server.stop().await;
+                        }
+                        pending_decisions.clear();
+                        incoming.clear();
+                        match start_one(
+                            &identity, &alias, port, https, pin, false,
+                            WebMode::Upload,
+                            core_tx.clone(), evt_tx.clone(),
+                        ).await {
+                            Ok(server) => {
+                                let actual_port = server.handle.port();
+                                let local_ips: Vec<String> = server
+                                    .handle
+                                    .local_addresses()
+                                    .into_iter()
+                                    .map(|sa| sa.ip().to_string())
+                                    .collect();
+                                let snap = ServerSnapshot {
+                                    running: true,
+                                    alias: alias.clone(),
+                                    port: actual_port,
+                                    https,
+                                    local_ips,
+                                };
+                                let _ = evt_tx.send(ServerEvent::Snapshot(snap));
+                                let _ = evt_tx.send(ServerEvent::WebReceiveChanged { active: true, port: actual_port });
+                                running = Some(server);
+                            }
+                            Err(e) => {
+                                let _ = evt_tx.send(ServerEvent::Log(format!("web-receive start failed: {e:#}")));
+                                let _ = evt_tx.send(ServerEvent::Snapshot(ServerSnapshot::default()));
+                                let _ = evt_tx.send(ServerEvent::WebReceiveChanged { active: false, port: 0 });
+                            }
+                        }
+                    }
+                    ServerCommand::SetWebPin(_new_pin) => {
+                        // Future: restart web-receive with updated pin.
+                        let _ = evt_tx.send(ServerEvent::Log("SetWebPin: restart not yet implemented".into()));
                     }
                     ServerCommand::AcceptUpload { session_id } => {
                         if let Some(tx) = pending_decisions.remove(&session_id) {
@@ -489,6 +547,7 @@ async fn start_one(
     https: bool,
     pin: Option<String>,
     verify_checksums: bool,
+    web_mode: WebMode,
     core_tx: mpsc::UnboundedSender<ServerEventV2>,
     _evt_tx: mpsc::UnboundedSender<ServerEvent>,
 ) -> Result<RunningServer> {
@@ -513,7 +572,7 @@ async fn start_one(
     };
 
     let web_config = WebConfig {
-        mode: WebMode::Disabled,
+        mode: web_mode,
         i18n: WebI18n {
             waiting: "Waiting for response…".into(),
             enter_pin: "Enter PIN".into(),

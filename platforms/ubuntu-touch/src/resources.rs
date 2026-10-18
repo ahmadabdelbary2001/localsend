@@ -17,6 +17,7 @@ pub fn register() {
             "qml/pages/ReceivePage.qml" as "pages/ReceivePage.qml",
             "qml/pages/SendPage.qml" as "pages/SendPage.qml",
             "qml/pages/SettingsPage.qml" as "pages/SettingsPage.qml",
+            "qml/pages/WebReceivePage.qml" as "pages/WebReceivePage.qml",
             "qml/theme/Theme.qml" as "theme/Theme.qml",
             "qml/pickers/ContentHubPicker.qml" as "pickers/ContentHubPicker.qml",
             "qml/components/DeviceCard.qml" as "components/DeviceCard.qml",

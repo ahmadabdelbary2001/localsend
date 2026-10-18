@@ -8,6 +8,7 @@ Page {
     id: page
     header: null
     property var appTheme
+    property var navigationStack: null
 
     property bool _showAdvanced: false
     property bool _showHistoryButton: true
@@ -158,7 +159,14 @@ Page {
                 Layout.topMargin: units.gu(2)
                 text: translator.tr("receiveTab.link")
                 onClicked: {
-                    // TODO: Web share page (core supports it)
+                    if (page.navigationStack) {
+                        page.navigationStack.push(
+                            Qt.resolvedUrl("WebReceivePage.qml"),
+                            { appTheme: page.appTheme }
+                        )
+                    } else {
+                        console.warn("[NAV] navigation stack unavailable for WebReceivePage")
+                    }
                 }
             }
 

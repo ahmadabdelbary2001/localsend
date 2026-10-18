@@ -27,10 +27,16 @@ pub struct ServerController {
     incoming_sender: qt_property!(QString; NOTIFY incoming_changed),
     incoming_file_count: qt_property!(i32; NOTIFY incoming_changed),
 
+    /// true while the HTTP server is running in web-receive (upload) mode.
+    web_receive_active: qt_property!(bool; NOTIFY web_receive_changed),
+    /// Port the web-receive server is listening on (0 when inactive).
+    web_receive_port: qt_property!(u32; NOTIFY web_receive_changed),
+
     state_changed: qt_signal!(),
     log_message: qt_signal!(message: QString),
     incoming_changed: qt_signal!(),
     entries_changed: qt_signal!(),
+    web_receive_changed: qt_signal!(),
 
     start: qt_method!(fn(&mut self, alias: QString, port: u32, https: bool, pin: QString)),
     stop: qt_method!(fn(&mut self)),
@@ -38,6 +44,8 @@ pub struct ServerController {
     accept_incoming: qt_method!(fn(&mut self)),
     decline_incoming: qt_method!(fn(&mut self)),
     dismiss_incoming: qt_method!(fn(&mut self)),
+    start_web_receive: qt_method!(fn(&mut self, alias: QString, port: u32, https: bool, pin: QString)),
+    stop_web_receive: qt_method!(fn(&mut self)),
 
     handle: Option<Arc<ServerHandle>>,
     discovery: Option<Arc<DiscoveryServiceHandle>>,
@@ -69,12 +77,17 @@ impl ServerController {
             log_message: Default::default(),
             incoming_changed: Default::default(),
             entries_changed: Default::default(),
+            web_receive_changed: Default::default(),
+            web_receive_active: false,
+            web_receive_port: 0,
             start: Default::default(),
             stop: Default::default(),
             poll: Default::default(),
             accept_incoming: Default::default(),
             decline_incoming: Default::default(),
             dismiss_incoming: Default::default(),
+            start_web_receive: Default::default(),
+            stop_web_receive: Default::default(),
             handle: Some(Arc::new(handle)),
             discovery: Some(discovery),
             last_snapshot: ServerSnapshot::default(),
@@ -163,6 +176,30 @@ impl ServerController {
 
     pub fn dismiss_incoming(&mut self) {
         self.reset_incoming();
+    }
+
+    pub fn start_web_receive(&mut self, alias: QString, port: u32, https: bool, pin: QString) {
+        let pin_s = pin.to_string();
+        let pin_opt = if pin_s.is_empty() { None } else { Some(pin_s) };
+        if let Some(h) = &self.handle {
+            h.send(ServerCommand::StartWebReceive {
+                alias: alias.to_string(),
+                port: port.min(u16::MAX as u32) as u16,
+                https,
+                pin: pin_opt,
+            });
+        }
+    }
+
+    pub fn stop_web_receive(&mut self) {
+        // Stop the server (returns to normal receive mode) by sending Stop
+        // then immediately restarting as regular server.
+        if let Some(h) = &self.handle {
+            h.send(ServerCommand::Stop);
+        }
+        self.web_receive_active = false;
+        self.web_receive_port = 0;
+        self.web_receive_changed();
     }
 
     pub fn poll(&mut self) {
@@ -309,6 +346,11 @@ impl ServerController {
                 ServerEvent::Log(msg) => {
                     log::info!("[server] {}", msg);
                     self.log_message(QString::from(msg));
+                }
+                ServerEvent::WebReceiveChanged { active, port } => {
+                    self.web_receive_active = active;
+                    self.web_receive_port = port as u32;
+                    self.web_receive_changed();
                 }
             }
         }
