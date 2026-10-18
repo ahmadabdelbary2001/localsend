@@ -2387,7 +2387,7 @@ dependencies = [
 
 [[package]]
 name = "localsend-ubuntu-touch"
-version = "1.4.3"
+version = "1.4.4"
 dependencies = [
  "anyhow",
  "bytes",
