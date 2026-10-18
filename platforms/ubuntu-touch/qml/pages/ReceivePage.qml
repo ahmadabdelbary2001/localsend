@@ -6,6 +6,7 @@ import "../dialogs"
 
 Page {
     id: page
+    header: null
     property var appTheme
 
     property bool _showAdvanced: false
@@ -89,7 +90,7 @@ Page {
                     anchors.centerIn: parent
                     width: units.gu(9)
                     height: units.gu(9)
-                    name: "network-wireless"
+                    name: "transfer"
                     visible: logoImg.status !== Image.Ready
                     color: serverController.running
                            ? (page.appTheme && page.appTheme.colors ? page.appTheme.colors.primary : "#00695C")

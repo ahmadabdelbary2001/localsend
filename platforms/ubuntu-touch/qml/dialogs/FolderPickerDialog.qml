@@ -130,7 +130,7 @@ Dialog {
                         Icon {
                             width: units.gu(2.8)
                             height: units.gu(2.8)
-                            name: modelData.is_dir ? "folder" : "document"
+                            name: modelData.is_dir ? "folder" : "text-x-generic"
                             color: modelData.is_dir
                                 ? (root.appTheme && root.appTheme.colors ? root.appTheme.colors.primary : "#00695C")
                                 : "#888888"

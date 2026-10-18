@@ -108,9 +108,8 @@ fn load_and_resolve(json: &str) -> HashMap<String, String> {
     let mut flat: HashMap<String, String> = HashMap::new();
     flatten(&value, "", &mut flat);
 
-    // Resolve "@:key" references. Iterate a few times because a
-    // reference can point to another reference (e.g. settingsTab.receive.requirePin
-    // -> webSharePage.requirePin -> a literal).
+    // Resolve "@:key" references (both direct "@:key" and inline "@:key" / "@:.relativeKey").
+    // Iterate a few times to resolve chained references.
     for _ in 0..8 {
         let mut changed = false;
         let keys: Vec<String> = flat.keys().cloned().collect();
@@ -119,14 +118,48 @@ fn load_and_resolve(json: &str) -> HashMap<String, String> {
                 Some(v) => v.clone(),
                 None => continue,
             };
+
+            // Direct reference: "@:target"
             if let Some(target) = v.strip_prefix("@:") {
-                if let Some(resolved) = flat.get(target).cloned() {
-                    if resolved != v {
-                        flat.insert(k, resolved);
-                        changed = true;
-                    }
+                let resolved_target = if let Some(rel) = target.strip_prefix('.') {
+                    let parent = k.rsplit_once('.').map(|(p, _)| p).unwrap_or("");
+                    if parent.is_empty() { rel.to_string() } else { format!("{parent}.{rel}") }
                 } else {
-                    log::warn!("unresolved i18n reference: {k} -> @:{target}");
+                    target.to_string()
+                };
+
+                if let Some(resolved) = flat.get(&resolved_target).cloned() {
+                    if resolved != v {
+                        flat.insert(k.clone(), resolved);
+                        changed = true;
+                        continue;
+                    }
+                }
+            }
+
+            // Inline references: replace any "@:some.key" or "@:.relKey" within text
+            if v.contains("@:") {
+                let mut new_v = v.clone();
+                let mut inline_changed = false;
+                for part in v.split_whitespace() {
+                    if let Some(target) = part.strip_prefix("@:") {
+                        let clean_target = target.trim_matches(|c: char| !c.is_alphanumeric() && c != '.' && c != '_');
+                        let resolved_target = if let Some(rel) = clean_target.strip_prefix('.') {
+                            let parent = k.rsplit_once('.').map(|(p, _)| p).unwrap_or("");
+                            if parent.is_empty() { rel.to_string() } else { format!("{parent}.{rel}") }
+                        } else {
+                            clean_target.to_string()
+                        };
+
+                        if let Some(resolved) = flat.get(&resolved_target) {
+                            new_v = new_v.replace(&format!("@:{clean_target}"), resolved);
+                            inline_changed = true;
+                        }
+                    }
+                }
+                if inline_changed && new_v != v {
+                    flat.insert(k, new_v);
+                    changed = true;
                 }
             }
         }

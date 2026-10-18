@@ -7,6 +7,7 @@ import "../dialogs" as LocalSendDialogs
 
 Page {
     id: page
+    header: null
     property var appTheme
     property string pendingFingerprint: ""
     property var pendingAddress: null // { ip: "", port: 53317, https: true }
@@ -245,7 +246,7 @@ Page {
                     // 1. File (ملف) — Flutter: Icons.description
                     BigButton {
                         appTheme: page.appTheme
-                        iconName: "document"
+                        iconName: "text-x-generic"
                         label: translator.tr("sendTab.picker.file")
                         onClicked: {
                             page.pickerType = "all"
@@ -256,7 +257,7 @@ Page {
                     // 2. Media (وسائط) — Flutter: Icons.image
                     BigButton {
                         appTheme: page.appTheme
-                        iconName: "gallery"
+                        iconName: "camera-photo"
                         label: translator.tr("sendTab.picker.media")
                         onClicked: {
                             page.pickerType = "pictures"
@@ -378,13 +379,13 @@ Page {
 
                     BigButton {
                         appTheme: page.appTheme
-                        iconName: "document"
+                        iconName: "text-x-generic"
                         label: translator.tr("sendTab.picker.file")
                         onClicked: { addMenuPopup.visible = false; page.pickerType = "all"; pickerLoader.active = true; }
                     }
                     BigButton {
                         appTheme: page.appTheme
-                        iconName: "gallery"
+                        iconName: "camera-photo"
                         label: translator.tr("sendTab.picker.media")
                         onClicked: { addMenuPopup.visible = false; page.pickerType = "pictures"; pickerLoader.active = true; }
                     }
@@ -628,7 +629,7 @@ Page {
                         Layout.alignment: Qt.AlignHCenter
                         width: units.gu(5)
                         height: units.gu(5)
-                        name: "network-wireless"
+                        name: "find"
                         color: page.appTheme && page.appTheme.colors ? page.appTheme.colors.surfaceTextMuted : "#5F6368"
                     }
 

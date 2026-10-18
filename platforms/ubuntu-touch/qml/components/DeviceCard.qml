@@ -22,7 +22,7 @@ Rectangle {
 
     function _deviceIcon(type) {
         var t = (type || "").toLowerCase()
-        if (t === "mobile" || t === "phone")   return "phone-smartphone"
+        if (t === "mobile" || t === "phone")   return "phone"
         if (t === "desktop")                     return "computer"
         if (t === "laptop")                      return "computer"
         if (t === "tablet")                      return "tablet-portrait"
@@ -184,7 +184,7 @@ Rectangle {
                 anchors.centerIn: parent
                 width: units.gu(2.4)
                 height: units.gu(2.4)
-                name: "mail-message-new"
+                name: "message"
                 color: appTheme ? appTheme.colors.surfaceTextMuted : "#888"
             }
 

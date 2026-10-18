@@ -19,7 +19,7 @@ Dialog {
 
     function _deviceIcon(type) {
         var t = (type || "").toLowerCase()
-        if (t === "mobile" || t === "phone")   return "phone-smartphone"
+        if (t === "mobile" || t === "phone")   return "phone"
         if (t === "desktop" || t === "laptop") return "computer"
         if (t === "tablet")                    return "tablet-portrait"
         if (t === "web" || t === "browser")    return "stock_website"
@@ -37,13 +37,15 @@ Dialog {
 
     contentItem: Flickable {
         id: flickable
-        implicitHeight: Math.min(col.implicitHeight + units.gu(2), root.parent ? root.parent.height - units.gu(12) : units.gu(60))
+        implicitHeight: Math.min(col.implicitHeight, root.parent ? root.parent.height - units.gu(14) : units.gu(55))
         contentHeight: col.implicitHeight
+        contentWidth: width
         clip: true
 
         ColumnLayout {
             id: col
-            width: flickable.width
+            anchors.left: parent.left
+            anchors.right: parent.right
             spacing: units.gu(1.5)
 
             // ── Device header ──
@@ -185,7 +187,7 @@ Dialog {
                     Icon {
                         width: units.gu(2)
                         height: units.gu(2)
-                        name: "security-medium"
+                        name: "security-high"
                         color: root.appTheme && root.appTheme.colors
                                ? root.appTheme.colors.primary
                                : "#00695C"

@@ -8,6 +8,7 @@ import "../dialogs"
 
 Page {
     id: page
+    header: null
 
     property var appTheme
     property var navigationStack: null
