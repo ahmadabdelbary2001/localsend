@@ -87,20 +87,32 @@ Page {
                 }
 
                 // Fallback icon when logo image fails to load
-                Icon {
+                Rectangle {
+                    id: fallbackCircle
                     anchors.centerIn: parent
                     width: units.gu(9)
                     height: units.gu(9)
-                    name: "transfer"
-                    visible: logoImg.status !== Image.Ready
+                    radius: width / 2
                     color: serverController.running
-                           ? (page.appTheme && page.appTheme.colors ? page.appTheme.colors.primary : "#00695C")
-                           : (page.appTheme && page.appTheme.colors ? page.appTheme.colors.surfaceTextMuted : "#888")
-                    SequentialAnimation on opacity {
-                        running: serverController.running && logoImg.status !== Image.Ready
-                        loops: Animation.Infinite
-                        NumberAnimation { to: 0.5; duration: 1200; easing.type: Easing.InOutSine }
-                        NumberAnimation { to: 1.0; duration: 1200; easing.type: Easing.InOutSine }
+                           ? (page.appTheme && page.appTheme.colors ? Qt.rgba(0, 0.42, 0.36, 0.15) : "#E0F2F1")
+                           : (page.appTheme && page.appTheme.colors ? page.appTheme.colors.surfaceTint : "#ECEFF1")
+                    visible: logoImg.status !== Image.Ready
+                    Behavior on color { ColorAnimation { duration: 400 } }
+
+                    Icon {
+                        anchors.centerIn: parent
+                        width: units.gu(5)
+                        height: units.gu(5)
+                        name: "save"
+                        color: serverController.running
+                               ? (page.appTheme && page.appTheme.colors ? page.appTheme.colors.primary : "#00695C")
+                               : (page.appTheme && page.appTheme.colors ? page.appTheme.colors.surfaceTextMuted : "#888")
+                        SequentialAnimation on opacity {
+                            running: serverController.running && logoImg.status !== Image.Ready
+                            loops: Animation.Infinite
+                            NumberAnimation { to: 0.5; duration: 1200; easing.type: Easing.InOutSine }
+                            NumberAnimation { to: 1.0; duration: 1200; easing.type: Easing.InOutSine }
+                        }
                     }
                 }
             }
@@ -162,7 +174,10 @@ Page {
                     if (page.navigationStack) {
                         page.navigationStack.push(
                             Qt.resolvedUrl("WebReceivePage.qml"),
-                            { appTheme: page.appTheme }
+                            {
+                                appTheme: page.appTheme,
+                                navigationStack: page.navigationStack
+                            }
                         )
                     } else {
                         console.warn("[NAV] navigation stack unavailable for WebReceivePage")

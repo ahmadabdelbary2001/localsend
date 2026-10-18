@@ -12,6 +12,7 @@ import "../dialogs"
 Page {
     id: page
     property var appTheme
+    property var navigationStack: null
 
     header: null
 
@@ -23,7 +24,12 @@ Page {
     property bool   _pinEnabled: false
 
     Component.onCompleted: {
-        _startWebReceive()
+        // If already active (e.g. reopen), just update status
+        if (serverController.web_receive_active) {
+            page._status = "running"
+        } else {
+            _startWebReceive()
+        }
     }
 
     Component.onDestruction: {
@@ -108,7 +114,22 @@ Page {
         function onWeb_receive_changed() {
             if (serverController.web_receive_active) {
                 page._status = "running"
+                initTimer.stop()
             } else if (page._status !== "stopping") {
+                page._status = "error"
+                page._errorMsg = translator.tr("webSharePage.error")
+                initTimer.stop()
+            }
+        }
+    }
+
+    // Fallback: if the server takes too long to initialize, show an error
+    Timer {
+        id: initTimer
+        interval: 8000
+        repeat: false
+        onTriggered: {
+            if (page._status === "initializing") {
                 page._status = "error"
                 page._errorMsg = translator.tr("webSharePage.error")
             }
@@ -145,7 +166,13 @@ Page {
                 width: units.gu(2.5); height: units.gu(2.5)
                 color: page.appTheme && page.appTheme.colors ? page.appTheme.colors.surfaceText : "#1B1D21"
             }
-            onClicked: pageStack.pop()
+            onClicked: {
+                if (typeof pageStack !== "undefined" && pageStack !== null) {
+                    pageStack.pop()
+                } else if (page.navigationStack) {
+                    page.navigationStack.pop()
+                }
+            }
         }
 
         Label {

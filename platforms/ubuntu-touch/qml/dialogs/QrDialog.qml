@@ -18,103 +18,109 @@ Dialog {
     width: Math.min(parent.width - units.gu(4), units.gu(44))
     header: null
 
-    contentItem: ColumnLayout {
-        spacing: units.gu(1.5)
-        leftPadding: units.gu(2); rightPadding: units.gu(2)
-        topPadding: units.gu(2); bottomPadding: units.gu(2)
+    contentItem: Item {
+        implicitWidth: qrContent.implicitWidth + units.gu(4)
+        implicitHeight: qrContent.implicitHeight + units.gu(4)
 
-        Label {
-            Layout.alignment: Qt.AlignHCenter
-            text: translator.tr("dialogs.qr.title")
-            fontSize: "large"
-            font.bold: true
-            color: root.appTheme && root.appTheme.colors ? root.appTheme.colors.surfaceText : "#1B1D21"
-        }
+        ColumnLayout {
+            id: qrContent
+            anchors.fill: parent
+            anchors.margins: units.gu(2)
+            spacing: units.gu(1.5)
 
-        Rectangle {
-            Layout.alignment: Qt.AlignHCenter
-            width: units.gu(26)
-            height: units.gu(26)
-            color: "#FFFFFF"
-            radius: units.gu(1)
-            border.color: "#E0E0E0"
-            border.width: units.dp(1)
+            Label {
+                Layout.alignment: Qt.AlignHCenter
+                text: translator.tr("dialogs.qr.title")
+                fontSize: "large"
+                font.bold: true
+                color: root.appTheme && root.appTheme.colors ? root.appTheme.colors.surfaceText : "#1B1D21"
+            }
 
-            Canvas {
-                id: qrCanvas
-                anchors.centerIn: parent
-                width: units.gu(24)
-                height: units.gu(24)
+            Rectangle {
+                Layout.alignment: Qt.AlignHCenter
+                width: units.gu(26)
+                height: units.gu(26)
+                color: "#FFFFFF"
+                radius: units.gu(1)
+                border.color: "#E0E0E0"
+                border.width: units.dp(1)
 
-                onPaint: {
-                    var ctx = getContext("2d");
-                    ctx.fillStyle = "#FFFFFF";
-                    ctx.fillRect(0, 0, width, height);
+                Canvas {
+                    id: qrCanvas
+                    anchors.centerIn: parent
+                    width: units.gu(24)
+                    height: units.gu(24)
 
-                    if (!root.qrData || root.qrData.length === 0) return;
+                    onPaint: {
+                        var ctx = getContext("2d");
+                        ctx.fillStyle = "#FFFFFF";
+                        ctx.fillRect(0, 0, width, height);
 
-                    try {
-                        var qr = QrLib.createQr(root.qrData, 'M');
-                        var count = qr.getModuleCount();
-                        var padding = 2;
-                        var total = count + (padding * 2);
-                        var cell = width / total;
+                        if (!root.qrData || root.qrData.length === 0) return;
 
-                        ctx.fillStyle = "#000000";
-                        for (var r = 0; r < count; r++) {
-                            for (var c = 0; c < count; c++) {
-                                if (qr.isDark(r, c)) {
-                                    ctx.fillRect(
-                                        Math.floor((c + padding) * cell),
-                                        Math.floor((r + padding) * cell),
-                                        Math.ceil(cell),
-                                        Math.ceil(cell)
-                                    );
+                        try {
+                            var qr = QrLib.createQr(root.qrData, 'M');
+                            var count = qr.getModuleCount();
+                            var padding = 2;
+                            var total = count + (padding * 2);
+                            var cell = width / total;
+
+                            ctx.fillStyle = "#000000";
+                            for (var r = 0; r < count; r++) {
+                                for (var c = 0; c < count; c++) {
+                                    if (qr.isDark(r, c)) {
+                                        ctx.fillRect(
+                                            Math.floor((c + padding) * cell),
+                                            Math.floor((r + padding) * cell),
+                                            Math.ceil(cell),
+                                            Math.ceil(cell)
+                                        );
+                                    }
                                 }
                             }
+                        } catch (e) {
+                            console.error("QR render error:", e);
                         }
-                    } catch (e) {
-                        console.error("QR render error:", e);
                     }
                 }
             }
-        }
-
-        Label {
-            Layout.fillWidth: true
-            Layout.alignment: Qt.AlignHCenter
-            text: root.qrLabel.length > 0 ? root.qrLabel : root.qrData
-            fontSize: "small"
-            horizontalAlignment: Text.AlignHCenter
-            color: root.appTheme && root.appTheme.colors ? root.appTheme.colors.surfaceText : "#1B1D21"
-            wrapMode: Text.WrapAnywhere
-        }
-
-        RowLayout {
-            Layout.alignment: Qt.AlignHCenter
-            visible: root.pin.length > 0
-            spacing: units.gu(0.5)
-
-            Icon {
-                name: "stock_key"
-                width: units.gu(2); height: units.gu(2)
-                color: root.appTheme && root.appTheme.colors ? root.appTheme.colors.warning : "#FF9800"
-            }
 
             Label {
-                text: "PIN: " + root.pin
-                fontSize: "medium"
-                font.bold: true
-                color: root.appTheme && root.appTheme.colors ? root.appTheme.colors.warning : "#FF9800"
+                Layout.fillWidth: true
+                Layout.alignment: Qt.AlignHCenter
+                text: root.qrLabel.length > 0 ? root.qrLabel : root.qrData
+                fontSize: "small"
+                horizontalAlignment: Text.AlignHCenter
+                color: root.appTheme && root.appTheme.colors ? root.appTheme.colors.surfaceText : "#1B1D21"
+                wrapMode: Text.WrapAnywhere
             }
-        }
 
-        Button {
-            Layout.alignment: Qt.AlignHCenter
-            Layout.preferredWidth: units.gu(16)
-            text: translator.tr("general.close")
-            color: root.appTheme && root.appTheme.colors ? root.appTheme.colors.primary : "#00695C"
-            onClicked: root.close()
+            RowLayout {
+                Layout.alignment: Qt.AlignHCenter
+                visible: root.pin.length > 0
+                spacing: units.gu(0.5)
+
+                Icon {
+                    name: "stock_key"
+                    width: units.gu(2); height: units.gu(2)
+                    color: root.appTheme && root.appTheme.colors ? root.appTheme.colors.warning : "#FF9800"
+                }
+
+                Label {
+                    text: "PIN: " + root.pin
+                    fontSize: "medium"
+                    font.bold: true
+                    color: root.appTheme && root.appTheme.colors ? root.appTheme.colors.warning : "#FF9800"
+                }
+            }
+
+            Button {
+                Layout.alignment: Qt.AlignHCenter
+                Layout.preferredWidth: units.gu(16)
+                text: translator.tr("general.close")
+                color: root.appTheme && root.appTheme.colors ? root.appTheme.colors.primary : "#00695C"
+                onClicked: root.close()
+            }
         }
     }
 

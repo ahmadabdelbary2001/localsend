@@ -21,14 +21,18 @@ Window {
     height: units.gu(90)
 
     Component.onCompleted: {
+        // Initialize translator with the persisted locale setting on startup.
+        translator.set_locale(settingsController.locale)
     }
 
     onVisibleChanged: {
     }
 
+    // Sync translator locale whenever any setting changes (the NOTIFY signal
+    // for the 'locale' property is the generic 'changed' signal, not 'localeChanged').
     Connections {
         target: settingsController
-        function onLocaleChanged() {
+        function onChanged() {
             translator.set_locale(settingsController.locale)
         }
     }
