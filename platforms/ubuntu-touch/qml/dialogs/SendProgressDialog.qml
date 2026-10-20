@@ -1,6 +1,9 @@
 import QtQuick 2.15
 import QtQuick.Layouts 1.15
+import QtQuick.Controls 2.15
 import Lomiri.Components 1.3
+
+import "../components"
 
 Rectangle {
     id: root
@@ -35,18 +38,18 @@ Rectangle {
                 Layout.fillWidth: true
                 text: {
                     var st = sendController.status
-                    if (st === "finished")           return qsTr("Send finished")
-                    if (st === "finishedWithErrors") return qsTr("Send finished with errors")
-                    if (st === "cancelled")          return qsTr("Cancelled")
-                    if (st === "pinRequired")        return qsTr("Waiting for PIN…")
-                    if (st === "declined")           return qsTr("Receiver declined")
-                    if (st === "recipientBusy")      return qsTr("Receiver is busy")
-                    if (st === "tooManyAttempts")    return qsTr("Too many attempts")
-                    if (st === "canceledBySender")   return qsTr("Canceled")
-                    if (st === "sending")            return qsTr("Sending…")
+                    if (st === "finished")           return translator.tr("general.finished")
+                    if (st === "finishedWithErrors") return translator.tr("progressPage.total.title.finishedError")
+                    if (st === "cancelled")          return translator.tr("progressPage.total.title.canceledSender")
+                    if (st === "pinRequired")        return translator.tr("web.enterPin")
+                    if (st === "declined")           return translator.tr("sendPage.rejected")
+                    if (st === "recipientBusy")      return translator.tr("sendPage.busy")
+                    if (st === "tooManyAttempts")    return translator.tr("web.tooManyAttempts")
+                    if (st === "canceledBySender")   return translator.tr("progressPage.total.title.canceledSender")
+                    if (st === "sending")            return translator.tr("progressPage.titleSending")
                     return root.failed > 0
-                        ? qsTr("Send finished with errors")
-                        : qsTr("Sending…")
+                        ? translator.tr("progressPage.total.title.finishedError")
+                        : translator.tr("progressPage.titleSending")
                 }
                 fontSize: "large"
                 color: root.appTheme && root.appTheme.colors ? root.appTheme.colors.surfaceText : "#1B1D21"
@@ -107,7 +110,7 @@ Rectangle {
                         Icon {
                             Layout.preferredWidth: units.gu(2)
                             Layout.preferredHeight: units.gu(2)
-                            name: model.status === "finished" ? "check"
+                            name: model.status === "finished" ? "tick"
                                 : model.status === "failed"   ? "close"
                                 : model.status === "sending"  ? "sync"
                                 : "stock_website"
@@ -148,8 +151,8 @@ Rectangle {
 
                     Label {
                         Layout.fillWidth: true
-                        visible: model.status === "failed" && model.error.length > 0
-                        text: model.error
+                        visible: model.status === "failed" && !!model.error
+                        text: model.error ? model.error : ""
                         fontSize: "x-small"
                         color: root.appTheme && root.appTheme.colors ? root.appTheme.colors.danger : "#C0392B"
                         elide: Text.ElideRight
@@ -175,7 +178,7 @@ Rectangle {
                 }
 
                 Button {
-                    text: qsTr("Details")
+                    text: translator.tr("dialogs.fileInfo.title")
                     onClicked: errorDetailsDialog.open()
                 }
             }
@@ -189,13 +192,13 @@ Rectangle {
                 Item { Layout.fillWidth: true }
 
                 Button {
-                    text: qsTr("Cancel")
+                    text: translator.tr("general.cancel")
                     visible: !sendController.done
                     onClicked: sendController.cancel()
                 }
 
                 Button {
-                    text: qsTr("Close")
+                    text: translator.tr("general.close")
                     visible: sendController.done
                     color: root.appTheme && root.appTheme.colors ? root.appTheme.colors.primary : "#00695C"
                     onClicked: sendController.dismiss()
@@ -220,7 +223,7 @@ Rectangle {
     Connections {
         target: sendController
 
-        function onStateChanged() {
+        function onState_changed() {
             if (sendController.status === "pinRequired" && !pinDialog.visible) {
                 pinDialog.open()
             } else if (sendController.status !== "pinRequired" && pinDialog.visible) {
@@ -231,10 +234,22 @@ Rectangle {
 
     Dialog {
         id: errorDetailsDialog
-        title: qsTr("Send errors")
+        title: translator.tr("general.error")
         modal: true
         anchors.centerIn: parent
         width: Math.min(parent.width - units.gu(4), units.gu(60))
+        padding: units.gu(2)
+
+        // QQuickControls popups are drawn with the application palette; mirror
+        // the app palette so this dialog stays readable in dark / OLED modes.
+        palette.window: root.appTheme && root.appTheme.colors ? root.appTheme.colors.surface : "#FFFFFF"
+        palette.windowText: root.appTheme && root.appTheme.colors ? root.appTheme.colors.surfaceText : "#1B1D21"
+        palette.base: root.appTheme && root.appTheme.colors ? root.appTheme.colors.surfaceTint : "#ECEFF1"
+        palette.text: root.appTheme && root.appTheme.colors ? root.appTheme.colors.surfaceText : "#1B1D21"
+        palette.button: root.appTheme && root.appTheme.colors ? root.appTheme.colors.surfaceTint : "#ECEFF1"
+        palette.buttonText: root.appTheme && root.appTheme.colors ? root.appTheme.colors.surfaceText : "#1B1D21"
+
+        background: DialogFrame { appTheme: root.appTheme }
 
         contentItem: ColumnLayout {
             spacing: units.gu(1)
@@ -249,7 +264,7 @@ Rectangle {
 
             Button {
                 Layout.alignment: Qt.AlignHCenter
-                text: qsTr("Close")
+                text: translator.tr("general.close")
                 onClicked: errorDetailsDialog.close()
             }
         }
@@ -257,10 +272,10 @@ Rectangle {
 
 
     function _statusText(status, progress) {
-        if (status === "queue")    return qsTr("Waiting…")
+        if (status === "queue")    return translator.tr("general.queue")
         if (status === "sending")  return Math.round(progress * 100) + "%"
-        if (status === "finished") return qsTr("Done")
-        if (status === "failed")   return qsTr("Failed")
+        if (status === "finished") return translator.tr("general.done")
+        if (status === "failed")   return translator.tr("general.error")
         return status
     }
 }

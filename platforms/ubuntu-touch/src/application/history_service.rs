@@ -13,7 +13,7 @@ use crate::platform::filesystem;
 
 const MAX_ENTRIES: usize = 30;
 
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct HistoryEntry {
     pub id: String,
     pub file_name: String,

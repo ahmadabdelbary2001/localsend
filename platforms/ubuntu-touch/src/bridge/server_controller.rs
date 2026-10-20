@@ -7,11 +7,15 @@ use qmetaobject::prelude::*;
 use crate::application::discovery_service::{
     DiscoveryCommand, DiscoveryServiceHandle, build_discovered_device,
 };
+use crate::application::favorites_service::FavoritesService;
 use crate::application::history_service::{HistoryEntry, HistoryService};
 use crate::application::identity_service::DeviceIdentity;
 use crate::application::server_service::{
-    IncomingFileEntry, IncomingSession, ServerCommand, ServerEvent, ServerHandle, ServerSnapshot,
+    AutoAcceptMode, IncomingFileEntry, IncomingSession, ServerCommand, ServerEvent, ServerHandle,
+    ServerSnapshot,
 };
+use crate::application::settings_service::{SettingsService, SettingsState};
+use crate::bridge::translator::resolve_locale;
 
 #[derive(QObject)]
 pub struct ServerController {
@@ -40,20 +44,23 @@ pub struct ServerController {
     entries_changed: qt_signal!(),
     web_receive_changed: qt_signal!(),
 
-    start: qt_method!(fn(&mut self, alias: QString, port: u32, https: bool, pin: QString)),
+    start_from_settings: qt_method!(fn(&mut self)),
+    restart_from_settings: qt_method!(fn(&mut self)),
     stop: qt_method!(fn(&mut self)),
     poll: qt_method!(fn(&mut self)),
     accept_incoming: qt_method!(fn(&mut self)),
     decline_incoming: qt_method!(fn(&mut self)),
     dismiss_incoming: qt_method!(fn(&mut self)),
-    start_web_receive: qt_method!(fn(&mut self, alias: QString, port: u32, https: bool, pin: QString)),
-    stop_web_receive: qt_method!(fn(&mut self)),
+    start_web_receive: qt_method!(fn(&mut self, https: bool, pin: QString)),
+    end_web_receive: qt_method!(fn(&mut self)),
     set_auto_accept: qt_method!(fn(&mut self, v: bool)),
+    apply_auto_accept_from_settings: qt_method!(fn(&mut self)),
 
     handle: Option<Arc<ServerHandle>>,
     discovery: Option<Arc<DiscoveryServiceHandle>>,
     last_snapshot: ServerSnapshot,
     history: Arc<HistoryService>,
+    settings: Arc<SettingsService>,
     current_session: Option<IncomingSession>,
     entries: Arc<RwLock<Vec<IncomingFileEntry>>>,
 }
@@ -64,8 +71,10 @@ impl ServerController {
         discovery: Arc<DiscoveryServiceHandle>,
         entries: Arc<RwLock<Vec<IncomingFileEntry>>>,
         history: Arc<HistoryService>,
+        settings: Arc<SettingsService>,
+        favorites: Arc<FavoritesService>,
     ) -> Self {
-        let handle = ServerHandle::spawn(identity);
+        let handle = ServerHandle::spawn(identity, favorites);
         Self {
             base: Default::default(),
             running: false,
@@ -86,46 +95,79 @@ impl ServerController {
             auto_accept: false,
             auto_accept_changed: Default::default(),
             set_auto_accept: Default::default(),
-            start: Default::default(),
+            start_from_settings: Default::default(),
+            restart_from_settings: Default::default(),
+            apply_auto_accept_from_settings: Default::default(),
             stop: Default::default(),
             poll: Default::default(),
             accept_incoming: Default::default(),
             decline_incoming: Default::default(),
             dismiss_incoming: Default::default(),
             start_web_receive: Default::default(),
-            stop_web_receive: Default::default(),
+            end_web_receive: Default::default(),
             handle: Some(Arc::new(handle)),
             discovery: Some(discovery),
             last_snapshot: ServerSnapshot::default(),
             current_session: None,
             entries,
             history,
+            settings,
         }
     }
 
-    pub fn start_now(&mut self, alias: String, port: u16, https: bool, pin: Option<String>) {
-        if let Some(h) = &self.handle {
-            h.send(ServerCommand::Start {
-                alias,
-                port,
-                https,
-                pin,
-                verify_checksums: false,
-            });
+    fn locale(&self) -> String {
+        resolve_locale(self.settings.snapshot().locale.as_deref())
+    }
+
+    fn normal_start_command(&self) -> ServerCommand {
+        let s = self.settings.snapshot();
+        ServerCommand::Start {
+            alias: s.alias.clone(),
+            port: s.port,
+            https: s.https,
+            pin: normal_pin(&s),
+            verify_checksums: s.verify_checksums,
+            destination: s.destination.clone(),
+            locale: resolve_locale(s.locale.as_deref()),
         }
     }
 
-    pub fn start(&mut self, alias: QString, port: u32, https: bool, pin: QString) {
-        let pin_s = pin.to_string();
-        let pin_opt = if pin_s.is_empty() { None } else { Some(pin_s) };
+    /// Starts the normal receive server using the persisted settings.
+    pub fn start_from_settings(&mut self) {
         if let Some(h) = &self.handle {
-            h.send(ServerCommand::Start {
-                alias: alias.to_string(),
-                port: port.min(u16::MAX as u32) as u16,
-                https,
-                pin: pin_opt,
-                verify_checksums: false,
-            });
+            h.send(self.normal_start_command());
+        }
+    }
+
+    /// Restarts the server so changed settings (alias, port, https, pin,
+    /// checksums, destination) take effect.
+    pub fn restart_from_settings(&mut self) {
+        let command = self.normal_start_command();
+        if let Some(h) = &self.handle {
+            h.send(ServerCommand::Stop);
+            h.send(command);
+        }
+        self.web_receive_active = false;
+        self.web_receive_port = 0;
+        self.web_receive_changed();
+        self.reset_incoming();
+        self.apply_auto_accept_from_settings();
+    }
+
+    /// Called by the settings UI after quick-save toggles.
+    pub fn apply_auto_accept_from_settings(&mut self) {
+        let s = self.settings.snapshot();
+        let mode = if s.quick_save {
+            AutoAcceptMode::All
+        } else if s.quick_save_from_favorites {
+            AutoAcceptMode::Favorites
+        } else {
+            AutoAcceptMode::Off
+        };
+        self.auto_accept = mode != AutoAcceptMode::Off;
+        self.auto_accept_changed();
+        if let Some(h) = &self.handle {
+            h.send(ServerCommand::SetAutoAcceptMode(mode));
         }
     }
 
@@ -140,7 +182,12 @@ impl ServerController {
         self.auto_accept = v;
         self.auto_accept_changed();
         if let Some(h) = &self.handle {
-            h.send(ServerCommand::SetAutoAccept(v));
+            let mode = if v {
+                AutoAcceptMode::All
+            } else {
+                AutoAcceptMode::Off
+            };
+            h.send(ServerCommand::SetAutoAcceptMode(mode));
         }
     }
 
@@ -186,28 +233,50 @@ impl ServerController {
         self.reset_incoming();
     }
 
-    pub fn start_web_receive(&mut self, alias: QString, port: u32, https: bool, pin: QString) {
+    /// Restarts the server in upload (browser) mode. The alias, port,
+    /// checksum and destination settings are taken from the persisted
+    /// settings, so the web page behaves exactly like normal receive.
+    pub fn start_web_receive(&mut self, https: bool, pin: QString) {
+        let s = self.settings.snapshot();
         let pin_s = pin.to_string();
-        let pin_opt = if pin_s.is_empty() { None } else { Some(pin_s) };
+        let pin_opt = if pin_s.trim().is_empty() {
+            None
+        } else {
+            Some(pin_s)
+        };
         if let Some(h) = &self.handle {
             h.send(ServerCommand::StartWebReceive {
-                alias: alias.to_string(),
-                port: port.min(u16::MAX as u32) as u16,
+                alias: s.alias.clone(),
+                port: s.port,
                 https,
                 pin: pin_opt,
+                verify_checksums: s.verify_checksums,
+                destination: s.destination.clone(),
+                locale: self.locale(),
             });
+            h.send(ServerCommand::SetAutoAcceptMode(
+                if s.receive_via_link_auto_accept {
+                    AutoAcceptMode::All
+                } else {
+                    AutoAcceptMode::Off
+                },
+            ));
         }
+        self.auto_accept = s.receive_via_link_auto_accept;
+        self.auto_accept_changed();
     }
 
-    pub fn stop_web_receive(&mut self) {
-        // Stop the server (returns to normal receive mode) by sending Stop
-        // then immediately restarting as regular server.
+    /// Leaves web-receive mode and restores the normal server from settings.
+    pub fn end_web_receive(&mut self) {
         if let Some(h) = &self.handle {
             h.send(ServerCommand::Stop);
         }
         self.web_receive_active = false;
         self.web_receive_port = 0;
         self.web_receive_changed();
+        self.reset_incoming();
+        self.start_from_settings();
+        self.apply_auto_accept_from_settings();
     }
 
     pub fn poll(&mut self) {
@@ -333,13 +402,15 @@ impl ServerController {
                         }
                     }
                     if let Some((name, size, p)) = recorded {
-                        let alias = self
-                            .current_session
-                            .as_ref()
-                            .map(|s| s.sender_alias.clone())
-                            .unwrap_or_default();
-                        self.history
-                            .add(HistoryEntry::new(name, size, Some(p), alias, false));
+                        if self.settings.snapshot().save_to_history {
+                            let alias = self
+                                .current_session
+                                .as_ref()
+                                .map(|s| s.sender_alias.clone())
+                                .unwrap_or_default();
+                            self.history
+                                .add(HistoryEntry::new(name, size, Some(p), alias, false));
+                        }
                     }
                     self.entries_changed();
                 }
@@ -363,4 +434,12 @@ impl ServerController {
             }
         }
     }
+}
+
+/// The normal receive server uses the configured receive pin.
+fn normal_pin(settings: &SettingsState) -> Option<String> {
+    settings
+        .receive_pin
+        .clone()
+        .filter(|pin| !pin.trim().is_empty())
 }

@@ -24,7 +24,10 @@ use crate::application::identity_service::DeviceIdentity;
 
 #[derive(Clone, Debug)]
 pub struct SendTarget {
-    pub fingerprint: String,
+    /// Fingerprint pinned by the TLS client. `None` for manual addresses,
+    /// where the expected certificate is unknown and pinning would reject
+    /// the peer.
+    pub expected_fingerprint: Option<String>,
     pub host: String,
     pub port: u16,
     pub protocol: ProtocolType,
@@ -50,6 +53,7 @@ pub enum SendCommand {
         sender_https: bool,
         sender_fingerprint: String,
         pin: Option<String>,
+        create_checksums: bool,
     },
     SubmitPin {
         session_id: String,
@@ -170,6 +174,7 @@ async fn send_task(
                 sender_https,
                 sender_fingerprint,
                 pin,
+                create_checksums,
             } => {
                 let (cancel_tx, cancel_rx) = oneshot::channel::<()>();
                 let (pin_tx, pin_rx) = mpsc::unbounded_channel::<String>();
@@ -190,6 +195,7 @@ async fn send_task(
                         sender_https,
                         sender_fingerprint,
                         pin,
+                        create_checksums,
                         evt_tx.clone(),
                         cancel_rx,
                         pin_rx,
@@ -231,6 +237,7 @@ async fn do_send(
     sender_https: bool,
     sender_fingerprint: String,
     pin: Option<String>,
+    create_checksums: bool,
     evt_tx: mpsc::UnboundedSender<SendEvent>,
     cancel_rx: oneshot::Receiver<()>,
     mut pin_rx: mpsc::UnboundedReceiver<String>,
@@ -238,7 +245,7 @@ async fn do_send(
     let client = LsHttpClientV2::try_new(
         &identity.private_key_pem,
         &identity.certificate_pem,
-        Some(target.fingerprint.clone()),
+        target.expected_fingerprint.clone(),
         None,
     )
     .context("create client")?;
@@ -262,6 +269,20 @@ async fn do_send(
     for f in &files {
         let file_type = guess_file_type(&f.name);
         let metadata = localsend::model::transfer::FileMetadata::from_path(&f.path);
+        let sha256 = if create_checksums {
+            match sha256_file(&f.path).await {
+                Ok(hash) => Some(hash),
+                Err(e) => {
+                    let _ = evt_tx.send(SendEvent::Log(format!(
+                        "checksum failed for {}: {e}",
+                        f.name
+                    )));
+                    None
+                }
+            }
+        } else {
+            None
+        };
         files_dto.insert(
             f.file_id.clone(),
             FileDto {
@@ -269,7 +290,7 @@ async fn do_send(
                 file_name: f.name.clone(),
                 size: f.size,
                 file_type: file_type.to_string(),
-                sha256: None,
+                sha256,
                 preview: None,
                 metadata,
             },
@@ -471,6 +492,19 @@ async fn do_send(
         error,
     });
     Ok(())
+}
+
+/// Computes the hex-encoded SHA-256 of a file (used when the user enables
+/// "Create checksums when sending files").
+async fn sha256_file(path: &std::path::Path) -> Result<String> {
+    use sha2::{Digest, Sha256};
+
+    let data = tokio::fs::read(path)
+        .await
+        .with_context(|| format!("read {}", path.display()))?;
+    let mut hasher = Sha256::new();
+    hasher.update(&data);
+    Ok(format!("{:x}", hasher.finalize()))
 }
 
 /// Map a filename extension to the LocalSend protocol `file_type` string.

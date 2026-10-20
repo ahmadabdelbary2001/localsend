@@ -15,9 +15,22 @@ Window {
     visible: true
     visibility: Window.FullScreen
     title: "LocalSend"
-    color: "#F6F6F6"
+    color: localSendTheme.colors.background
 
     property string lastAppliedLocale: ""
+
+    // Qt Quick only re-evaluates bindings when a property they read changes.
+    // Text bindings call the translator's tr() method (methods never register a
+    // dependency), so switching the locale in the language picker would leave
+    // the UI in the previous language. Rebuild the page stack instead: the
+    // pages are cheap to recreate and none of the runtime state lives in QML.
+    property bool translationsReady: false
+
+    // `MainView` (a StyledItem) exposes the resolved Lomiri theme; its palette
+    // is updated in place when the system theme changes, so these bindings
+    // re-evaluate on their own. There is no global ThemeSettings singleton in
+    // Lomiri.Components (it is only a creatable per-component theme override).
+    readonly property bool systemDark: root.theme.palette.normal.background.hsvValue < 0.5
 
     width: units.gu(50)
     height: units.gu(90)
@@ -42,6 +55,19 @@ Window {
         }
     }
 
+    Connections {
+        target: translator
+        function onLocaleChanged() {
+            if (!appWindow.translationsReady) {
+                // Initial application of the persisted locale.
+                appWindow.translationsReady = true
+                return
+            }
+            mainStack.clear()
+            mainStack.push(shellComponent)
+        }
+    }
+
     MainView {
         id: root
         objectName: "localsendMain"
@@ -54,11 +80,18 @@ Window {
         applicationName: "localsend.ahmadabdelbary"
         backgroundColor: localSendTheme.colors.background
 
+        // Right-to-left languages (Arabic, Persian, Hebrew, Urdu) mirror the
+        // whole UI, matching Flutter's Directionality handling.
+        LayoutMirroring.enabled: translator.rtl
+        LayoutMirroring.childrenInherit: true
+
         LocalSendThemeComponents.Theme {
             id: localSendTheme
             mode: settingsController.theme
             colorMode: settingsController.color_mode
             customColor: settingsController.custom_color
+            systemDark: appWindow.systemDark
+            systemAccent: root.theme.palette.normal.activity
         }
 
         PageStack {
@@ -128,6 +161,9 @@ Window {
 
                 if (typeof deviceListModel !== "undefined")
                     deviceListModel.refresh()
+
+                if (typeof localIpsModel !== "undefined")
+                    localIpsModel.refresh()
 
                 if (typeof incomingFilesModel !== "undefined")
                     incomingFilesModel.refresh()

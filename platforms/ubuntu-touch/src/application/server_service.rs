@@ -33,7 +33,9 @@ use localsend::http::server::{
 use localsend::http::state::ClientInfo;
 use localsend::model::discovery::DeviceType;
 
+use crate::application::favorites_service::FavoritesService;
 use crate::application::identity_service::DeviceIdentity;
+use crate::bridge::translator::translate;
 use crate::platform::filesystem;
 
 // -------------------- snapshots & DTOs exposed to the bridge --------------------
@@ -63,7 +65,7 @@ pub struct IncomingSession {
     pub files: Vec<IncomingFile>,
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct IncomingFileEntry {
     pub file_id: String,
     pub file_name: String,
@@ -76,6 +78,17 @@ pub struct IncomingFileEntry {
 
 // -------------------- commands & events --------------------
 
+/// How incoming upload requests are answered without asking the user.
+#[derive(Clone, Debug, PartialEq)]
+pub enum AutoAcceptMode {
+    /// Ask the user (default).
+    Off,
+    /// Accept everything (quick save).
+    All,
+    /// Accept only devices in the favorites list.
+    Favorites,
+}
+
 #[derive(Debug)]
 pub enum ServerCommand {
     Start {
@@ -84,6 +97,8 @@ pub enum ServerCommand {
         https: bool,
         pin: Option<String>,
         verify_checksums: bool,
+        destination: Option<String>,
+        locale: String,
     },
     Stop,
     AcceptUpload {
@@ -98,11 +113,14 @@ pub enum ServerCommand {
         port: u16,
         https: bool,
         pin: Option<String>,
+        verify_checksums: bool,
+        destination: Option<String>,
+        locale: String,
     },
     /// Set pin for active web-receive session.
     SetWebPin(Option<String>),
-    /// For headless testing: auto-accept every incoming upload.
-    SetAutoAccept(bool),
+    /// Auto-accept policy (quick save / quick save favorites / web receive).
+    SetAutoAcceptMode(AutoAcceptMode),
     Shutdown,
 }
 
@@ -152,7 +170,7 @@ pub struct ServerHandle {
 }
 
 impl ServerHandle {
-    pub fn spawn(identity: Arc<DeviceIdentity>) -> Self {
+    pub fn spawn(identity: Arc<DeviceIdentity>, favorites: Arc<FavoritesService>) -> Self {
         let (cmd_tx, cmd_rx) = mpsc::unbounded_channel::<ServerCommand>();
         let (evt_tx, evt_rx) = mpsc::unbounded_channel::<ServerEvent>();
 
@@ -169,7 +187,7 @@ impl ServerHandle {
                         return;
                     }
                 };
-                rt.block_on(server_task(identity, cmd_rx, evt_tx));
+                rt.block_on(server_task(identity, favorites, cmd_rx, evt_tx));
             })
             .expect("failed to spawn localsend-server thread");
 
@@ -194,6 +212,7 @@ impl ServerHandle {
 
 async fn server_task(
     identity: Arc<DeviceIdentity>,
+    favorites: Arc<FavoritesService>,
     mut cmd_rx: mpsc::UnboundedReceiver<ServerCommand>,
     evt_tx: mpsc::UnboundedSender<ServerEvent>,
 ) {
@@ -201,7 +220,8 @@ async fn server_task(
     let mut pending_decisions: HashMap<String, oneshot::Sender<PrepareUploadDecisionV2>> =
         HashMap::new();
     let mut incoming: HashMap<String, IncomingSession> = HashMap::new();
-    let mut auto_accept = false;
+    let mut auto_accept = AutoAcceptMode::Off;
+    let mut destination: Option<PathBuf> = None;
 
     let (core_tx, mut core_rx) = mpsc::unbounded_channel::<ServerEventV2>();
 
@@ -210,14 +230,15 @@ async fn server_task(
             cmd = cmd_rx.recv() => {
                 let Some(cmd) = cmd else { break; };
                 match cmd {
-                    ServerCommand::Start { alias, port, https, pin, verify_checksums } => {
+                    ServerCommand::Start { alias, port, https, pin, verify_checksums, destination: dest, locale } => {
                         if running.is_some() {
                             let _ = evt_tx.send(ServerEvent::Log("already running".into()));
                             continue;
                         }
+                        destination = dest.map(PathBuf::from).filter(|p| !p.as_os_str().is_empty());
                         match start_one(
                             &identity, &alias, port, https, pin, verify_checksums,
-                            WebMode::Disabled,
+                            WebMode::Disabled, &locale,
                             core_tx.clone(), evt_tx.clone(),
                         ).await {
                             Ok(server) => {
@@ -252,16 +273,17 @@ async fn server_task(
                         pending_decisions.clear();
                         incoming.clear();
                     }
-                    ServerCommand::StartWebReceive { alias, port, https, pin } => {
+                    ServerCommand::StartWebReceive { alias, port, https, pin, verify_checksums, destination: dest, locale } => {
                         // Stop any running server first.
                         if let Some(server) = running.take() {
                             server.stop().await;
                         }
                         pending_decisions.clear();
                         incoming.clear();
+                        destination = dest.map(PathBuf::from).filter(|p| !p.as_os_str().is_empty());
                         match start_one(
-                            &identity, &alias, port, https, pin, false,
-                            WebMode::Upload,
+                            &identity, &alias, port, https, pin, verify_checksums,
+                            WebMode::Upload, &locale,
                             core_tx.clone(), evt_tx.clone(),
                         ).await {
                             Ok(server) => {
@@ -291,8 +313,9 @@ async fn server_task(
                         }
                     }
                     ServerCommand::SetWebPin(_new_pin) => {
-                        // Future: restart web-receive with updated pin.
-                        let _ = evt_tx.send(ServerEvent::Log("SetWebPin: restart not yet implemented".into()));
+                        // The pin is fixed at server start; the UI restarts the
+                        // server instead of changing it in place.
+                        let _ = evt_tx.send(ServerEvent::Log("SetWebPin: restart required".into()));
                     }
                     ServerCommand::AcceptUpload { session_id } => {
                         if let Some(tx) = pending_decisions.remove(&session_id) {
@@ -315,11 +338,22 @@ async fn server_task(
                         }
                         incoming.remove(&session_id);
                     }
-                    ServerCommand::SetAutoAccept(v) => {
-                        auto_accept = v;
-                        if v {
+                    ServerCommand::SetAutoAcceptMode(mode) => {
+                        auto_accept = mode.clone();
+                        if mode != AutoAcceptMode::Off {
                             let ids: Vec<String> = pending_decisions.keys().cloned().collect();
                             for session_id in ids {
+                                let allowed = match &mode {
+                                    AutoAcceptMode::All => true,
+                                    AutoAcceptMode::Favorites => incoming
+                                        .get(&session_id)
+                                        .map(|s| favorites.is_favorite(&s.sender_fingerprint))
+                                        .unwrap_or(false),
+                                    AutoAcceptMode::Off => false,
+                                };
+                                if !allowed {
+                                    continue;
+                                }
                                 if let Some(tx) = pending_decisions.remove(&session_id) {
                                     let file_ids: HashSet<String> = incoming
                                         .get(&session_id)
@@ -344,7 +378,9 @@ async fn server_task(
                     &evt_tx,
                     &mut pending_decisions,
                     &mut incoming,
-                    auto_accept,
+                    &auto_accept,
+                    &favorites,
+                    destination.as_deref(),
                 );
             }
         }
@@ -360,7 +396,9 @@ fn handle_core_event(
     evt_tx: &mpsc::UnboundedSender<ServerEvent>,
     pending_decisions: &mut HashMap<String, oneshot::Sender<PrepareUploadDecisionV2>>,
     incoming: &mut HashMap<String, IncomingSession>,
-    auto_accept: bool,
+    auto_accept: &AutoAcceptMode,
+    favorites: &FavoritesService,
+    destination: Option<&Path>,
 ) {
     match evt {
         ServerEventV2::Register { ip, info } => {
@@ -396,9 +434,14 @@ fn handle_core_event(
                 files: file_list.clone(),
             };
 
-            // If auto-accept is on, answer immediately; otherwise store the
-            // decision_tx for the bridge to answer.
-            if auto_accept {
+            // Quick save accepts everything, quick save for favorites only
+            // accepts known devices. Otherwise the bridge answers later.
+            let accept_now = match auto_accept {
+                AutoAcceptMode::All => true,
+                AutoAcceptMode::Favorites => favorites.is_favorite(&session.sender_fingerprint),
+                AutoAcceptMode::Off => false,
+            };
+            if accept_now {
                 let file_ids: HashSet<String> =
                     file_list.iter().map(|f| f.file_id.clone()).collect();
                 let _ = decision_tx.send(PrepareUploadDecisionV2::Accept(file_ids));
@@ -418,9 +461,9 @@ fn handle_core_event(
             file,
             target_tx,
         } => {
-            let dest = destination_dir();
-            let safe_name = sanitize_file_name(&file.file_name);
-            let save_path = unique_path(&dest, &safe_name);
+            let dest = destination_dir(destination);
+            let relative_name = sanitize_relative_path(&file.file_name);
+            let save_path = unique_path(&dest, &relative_name);
             if let Some(parent) = save_path.parent() {
                 let _ = std::fs::create_dir_all(parent);
             }
@@ -522,6 +565,24 @@ fn handle_core_event(
     }
 }
 
+/// Localized strings for the browser upload page, which is rendered by the
+/// Rust core rather than QML.
+fn web_i18n(locale: &str) -> WebI18n {
+    WebI18n {
+        waiting: translate(locale, "web.waiting"),
+        enter_pin: translate(locale, "web.enterPin"),
+        invalid_pin: translate(locale, "web.invalidPin"),
+        too_many_attempts: translate(locale, "web.tooManyAttempts"),
+        rejected: translate(locale, "web.rejected"),
+        upload_rejected: translate(locale, "sendPage.rejected"),
+        busy: translate(locale, "sendPage.busy"),
+        files: translate(locale, "web.files"),
+        file_name: translate(locale, "web.fileName"),
+        size: translate(locale, "web.size"),
+        drop_hint: translate(locale, "sendTab.placeItems"),
+    }
+}
+
 // -------------------- running server --------------------
 
 struct RunningServer {
@@ -548,6 +609,7 @@ async fn start_one(
     pin: Option<String>,
     verify_checksums: bool,
     web_mode: WebMode,
+    locale: &str,
     core_tx: mpsc::UnboundedSender<ServerEventV2>,
     _evt_tx: mpsc::UnboundedSender<ServerEvent>,
 ) -> Result<RunningServer> {
@@ -573,19 +635,7 @@ async fn start_one(
 
     let web_config = WebConfig {
         mode: web_mode,
-        i18n: WebI18n {
-            waiting: "Waiting for response…".into(),
-            enter_pin: "Enter PIN".into(),
-            invalid_pin: "Invalid PIN".into(),
-            too_many_attempts: "Too many attempts".into(),
-            rejected: "Rejected".into(),
-            upload_rejected: "Rejected".into(),
-            busy: "Busy".into(),
-            files: "Files".into(),
-            file_name: "File name".into(),
-            size: "Size".into(),
-            drop_hint: "Drop files here".into(),
-        },
+        i18n: web_i18n(locale),
         pages: WebPages {
             download_html: None,
             upload_html: None,
@@ -627,7 +677,28 @@ async fn start_one(
 
 // -------------------- filesystem helpers --------------------
 
-fn destination_dir() -> PathBuf {
+/// Resolves the receive directory:
+/// 1. the configured destination (settings -> "Save to folder"),
+/// 2. `~/Downloads` when it exists,
+/// 3. the app-private received dir.
+fn destination_dir(configured: Option<&Path>) -> PathBuf {
+    if let Some(dir) = configured {
+        if std::fs::create_dir_all(dir).is_ok() {
+            return dir.to_path_buf();
+        }
+        log::warn!(
+            "configured destination {} is not writable, falling back",
+            dir.display()
+        );
+    }
+
+    if let Some(home) = std::env::var_os("HOME") {
+        let downloads = PathBuf::from(home).join("Downloads");
+        if downloads.is_dir() && std::fs::create_dir_all(&downloads).is_ok() {
+            return downloads;
+        }
+    }
+
     let base =
         filesystem::app_data_dir().unwrap_or_else(|| PathBuf::from("/tmp/localsend-received"));
     let dir = base.join("received");
@@ -635,31 +706,56 @@ fn destination_dir() -> PathBuf {
     dir
 }
 
-fn sanitize_file_name(name: &str) -> String {
-    // Take the last component of either separator; reject traversal.
-    let base = name.rsplit(['/', '\\']).next().unwrap_or(name);
-    let base = base.trim();
-    if base.is_empty() || base == "." || base == ".." {
+/// Keeps the relative directory structure of folder sends
+/// (`<folder>/<relative path>`) while rejecting traversal and absolute paths.
+fn sanitize_relative_path(name: &str) -> String {
+    let mut parts: Vec<String> = Vec::new();
+    for part in name.split(['/', '\\']) {
+        let part = part.trim();
+        if part.is_empty() || part == "." || part == ".." {
+            continue;
+        }
+        // Drop a Windows drive prefix such as "C:".
+        if parts.is_empty() && part.len() == 2 && part.ends_with(':') {
+            continue;
+        }
+        parts.push(part.to_string());
+    }
+    if parts.is_empty() {
         return "file".to_string();
     }
-    base.to_string()
+    parts.join("/")
 }
 
-fn unique_path(dir: &Path, name: &str) -> PathBuf {
-    let mut candidate = dir.join(name);
+fn unique_path(dir: &Path, relative: &str) -> PathBuf {
+    let rel = Path::new(relative);
+    let parent = rel.parent().filter(|p| !p.as_os_str().is_empty());
+    let file_name = rel
+        .file_name()
+        .and_then(|s| s.to_str())
+        .unwrap_or("file")
+        .to_string();
+
+    let candidate = dir.join(rel);
     if !candidate.exists() {
         return candidate;
     }
-    let path = Path::new(name);
-    let stem = path.file_stem().and_then(|s| s.to_str()).unwrap_or(name);
-    let ext = path.extension().and_then(|s| s.to_str());
+
+    let stem = Path::new(&file_name)
+        .file_stem()
+        .and_then(|s| s.to_str())
+        .unwrap_or(&file_name);
+    let ext = Path::new(&file_name).extension().and_then(|s| s.to_str());
     let mut n = 1u32;
     loop {
         let new_name = match ext {
             Some(e) => format!("{stem} ({n}).{e}"),
             None => format!("{stem} ({n})"),
         };
-        candidate = dir.join(&new_name);
+        let candidate = match parent {
+            Some(parent) => dir.join(parent).join(&new_name),
+            None => dir.join(&new_name),
+        };
         if !candidate.exists() {
             return candidate;
         }

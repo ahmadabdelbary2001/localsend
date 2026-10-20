@@ -6,7 +6,7 @@ import "../dialogs"
 
 Page {
     id: page
-    header: null
+    header: Item { } // hides MainView's deprecated app header
     property var appTheme
     property var navigationStack: null
 
@@ -23,13 +23,31 @@ Page {
         }
     }
 
-    function _ipsLabel() {
+    function _ips() {
         var parts = []
         for (var i = 0; i < localIpsModel.rowCount(); i++) {
             var idx = localIpsModel.index(i, 0)
-            parts.push(localIpsModel.data(idx, 0))
+            var ip = localIpsModel.data(idx, 0)
+            if (ip && ip.length > 0)
+                parts.push(ip)
         }
-        return parts.join("   ")
+        return parts
+    }
+
+    function _ipsLabel() {
+        return _ips().join("   ")
+    }
+
+    // Flutter shows the last IPv4 octet (`#42`) instead of the full address.
+    function _visualIds() {
+        var ids = []
+        var ips = _ips()
+        for (var i = 0; i < ips.length; i++) {
+            var value = "#" + ips[i].split(".").pop()
+            if (ids.indexOf(value) === -1)
+                ids.push(value)
+        }
+        return ids.join(" ")
     }
 
     Timer {
@@ -79,7 +97,7 @@ Page {
                     visible: status === Image.Ready
 
                     RotationAnimator on rotation {
-                        running: serverController.running
+                        running: serverController.running && settingsController.enable_animations
                         loops: Animation.Infinite
                         from: 0; to: 360
                         duration: 15000
@@ -103,12 +121,12 @@ Page {
                         anchors.centerIn: parent
                         width: units.gu(5)
                         height: units.gu(5)
-                        name: "save"
+                        name: "transfer-progress-download"
                         color: serverController.running
                                ? (page.appTheme && page.appTheme.colors ? page.appTheme.colors.primary : "#00695C")
                                : (page.appTheme && page.appTheme.colors ? page.appTheme.colors.surfaceTextMuted : "#888")
                         SequentialAnimation on opacity {
-                            running: serverController.running && logoImg.status !== Image.Ready
+                            running: serverController.running && settingsController.enable_animations && logoImg.status !== Image.Ready
                             loops: Animation.Infinite
                             NumberAnimation { to: 0.5; duration: 1200; easing.type: Easing.InOutSine }
                             NumberAnimation { to: 1.0; duration: 1200; easing.type: Easing.InOutSine }
@@ -124,85 +142,79 @@ Page {
                 text: serverController.alias.length > 0
                       ? serverController.alias
                       : settingsController.alias
-                fontSize: "xx-large"
+                // Lomiri's Label has no "xx-large"; Flutter renders the alias
+                // at 48px, so an explicit pixel size keeps the same hierarchy.
+                font.pixelSize: units.dp(36)
                 color: page.appTheme && page.appTheme.colors ? page.appTheme.colors.surfaceText : "#1B1D21"
                 elide: Text.ElideRight
                 horizontalAlignment: Text.AlignHCenter
             }
 
-            // Online/offline indicator
-            RowLayout {
-                Layout.alignment: Qt.AlignHCenter
-                spacing: units.gu(1)
-
-                Rectangle {
-                    width: units.gu(1)
-                    height: width
-                    radius: width / 2
-                    color: serverController.running
-                           ? (page.appTheme && page.appTheme.colors ? page.appTheme.colors.primary : "#00695C")
-                           : (page.appTheme && page.appTheme.colors ? page.appTheme.colors.surfaceTextMuted : "#888")
-                }
-
-                Label {
-                    text: serverController.running
-                          ? translator.tr("general.online")
-                          : translator.tr("general.offline")
-                    fontSize: "medium"
-                    color: page.appTheme && page.appTheme.colors ? page.appTheme.colors.surfaceTextMuted : "#5F6368"
-                }
-            }
-
-            // IPs
+            // Offline, or the visual IP ids (#42 #7) exactly like Flutter.
             Label {
                 Layout.alignment: Qt.AlignHCenter
                 Layout.fillWidth: true
-                text: page._ipsLabel()
-                visible: serverController.running && text.length > 0
-                fontSize: "small"
+                text: serverController.running
+                      ? (page._visualIds().length > 0
+                         ? page._visualIds()
+                         : translator.tr("general.unknown"))
+                      : translator.tr("general.offline")
+                fontSize: "large"
                 color: page.appTheme && page.appTheme.colors ? page.appTheme.colors.surfaceTextMuted : "#5F6368"
                 horizontalAlignment: Text.AlignHCenter
-                wrapMode: Text.Wrap
+                elide: Text.ElideRight
             }
 
-            // Receive via link
-            Button {
+            // Receive via link (server controls live in the settings tab).
+            // Flutter uses an OutlinedButton with a globe icon; Lomiri's
+            // default Button is a dark pill, which clashes with the light
+            // palette, so the outline is drawn directly.
+            Rectangle {
+                id: linkButton
                 Layout.alignment: Qt.AlignHCenter
                 Layout.topMargin: units.gu(2)
-                text: translator.tr("receiveTab.link")
-                onClicked: {
-                    if (page.navigationStack) {
-                        page.navigationStack.push(
-                            Qt.resolvedUrl("WebReceivePage.qml"),
-                            {
-                                appTheme: page.appTheme,
-                                navigationStack: page.navigationStack
-                            }
-                        )
-                    } else {
-                        console.warn("[NAV] navigation stack unavailable for WebReceivePage")
+                implicitWidth: linkRow.implicitWidth + units.gu(5)
+                implicitHeight: units.gu(5)
+                radius: height / 2
+                color: "transparent"
+                border.width: units.dp(1)
+                border.color: page.appTheme && page.appTheme.colors ? page.appTheme.colors.primary : "#00695C"
+
+                Row {
+                    id: linkRow
+                    anchors.centerIn: parent
+                    spacing: units.gu(1)
+
+                    Icon {
+                        anchors.verticalCenter: parent.verticalCenter
+                        width: units.gu(2.4)
+                        height: width
+                        name: "stock_website"
+                        color: page.appTheme && page.appTheme.colors ? page.appTheme.colors.primary : "#00695C"
+                    }
+
+                    Label {
+                        anchors.verticalCenter: parent.verticalCenter
+                        text: translator.tr("receiveTab.link")
+                        fontSize: "small"
+                        color: page.appTheme && page.appTheme.colors ? page.appTheme.colors.primary : "#00695C"
                     }
                 }
-            }
 
-            // Server start/stop
-            Button {
-                Layout.alignment: Qt.AlignHCenter
-                text: serverController.running
-                      ? translator.tr("general.stop")
-                      : translator.tr("general.start")
-                color: serverController.running
-                       ? (page.appTheme && page.appTheme.colors ? page.appTheme.colors.danger : "#C0392B")
-                       : (page.appTheme && page.appTheme.colors ? page.appTheme.colors.primary : "#00695C")
-                onClicked: {
-                    if (serverController.running) {
-                        serverController.stop()
-                    } else {
-                        serverController.start(
-                            settingsController.alias,
-                            settingsController.port,
-                            settingsController.https,
-                            settingsController.receive_pin)
+                MouseArea {
+                    anchors.fill: parent
+                    onClicked: {
+                        if (page.navigationStack) {
+                            page.navigationStack.push(
+                                Qt.resolvedUrl("WebReceivePage.qml"),
+                                {
+                                    appTheme: page.appTheme,
+                                    navigationStack: page.navigationStack
+                                }
+                            )
+                        } else {
+                            console.warn("[NAV] navigation stack unavailable for WebReceivePage")
+                        }
                     }
                 }
             }

@@ -26,15 +26,16 @@ Rectangle {
         spacing: units.gu(1)
 
         Label {
+            visible: root.title.length > 0
             text: root.title
             fontSize: "medium"
             color: appTheme && appTheme.colors ? appTheme.colors.surfaceText : "#1B1D21"
         }
 
-        Column {
+        ColumnLayout {
             id: content
             width: parent.width
-            spacing: units.gu(1)
+            spacing: units.gu(1.2)
         }
     }
 }

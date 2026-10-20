@@ -106,6 +106,13 @@ pub struct SettingsController {
     receive_pin: qt_property!(QString; NOTIFY changed),
     auto_finish: qt_property!(bool; NOTIFY changed),
     save_to_history: qt_property!(bool; NOTIFY changed),
+    verify_checksums: qt_property!(bool; NOTIFY changed),
+    destination: qt_property!(QString; NOTIFY changed),
+    create_checksums: qt_property!(bool; NOTIFY changed),
+    share_via_link_auto_accept: qt_property!(bool; NOTIFY changed),
+    receive_via_link_auto_accept: qt_property!(bool; NOTIFY changed),
+    discovery_timeout: qt_property!(u32; NOTIFY changed),
+    multicast_group: qt_property!(QString; NOTIFY changed),
 
     changed: qt_signal!(),
 
@@ -127,6 +134,13 @@ pub struct SettingsController {
     set_receive_pin: qt_method!(fn(&mut self, v: QString)),
     set_auto_finish: qt_method!(fn(&mut self, v: bool)),
     set_save_to_history: qt_method!(fn(&mut self, v: bool)),
+    set_verify_checksums: qt_method!(fn(&mut self, v: bool)),
+    set_destination: qt_method!(fn(&mut self, v: QString)),
+    set_create_checksums: qt_method!(fn(&mut self, v: bool)),
+    set_share_via_link_auto_accept: qt_method!(fn(&mut self, v: bool)),
+    set_receive_via_link_auto_accept: qt_method!(fn(&mut self, v: bool)),
+    set_discovery_timeout: qt_method!(fn(&mut self, v: u32)),
+    set_multicast_group: qt_method!(fn(&mut self, v: QString)),
     random_alias: qt_method!(fn(&mut self)),
     use_system_name: qt_method!(fn(&mut self)),
 }
@@ -155,6 +169,13 @@ impl SettingsController {
             receive_pin: QString::from(s.receive_pin.unwrap_or_default()),
             auto_finish: s.auto_finish,
             save_to_history: s.save_to_history,
+            verify_checksums: s.verify_checksums,
+            destination: QString::from(s.destination.unwrap_or_default()),
+            create_checksums: s.create_checksums,
+            share_via_link_auto_accept: s.share_via_link_auto_accept,
+            receive_via_link_auto_accept: s.receive_via_link_auto_accept,
+            discovery_timeout: s.discovery_timeout,
+            multicast_group: QString::from(s.multicast_group),
             changed: Default::default(),
             set_alias: Default::default(),
             set_theme: Default::default(),
@@ -173,6 +194,13 @@ impl SettingsController {
             set_receive_pin: Default::default(),
             set_auto_finish: Default::default(),
             set_save_to_history: Default::default(),
+            set_verify_checksums: Default::default(),
+            set_destination: Default::default(),
+            set_create_checksums: Default::default(),
+            set_share_via_link_auto_accept: Default::default(),
+            set_receive_via_link_auto_accept: Default::default(),
+            set_discovery_timeout: Default::default(),
+            set_multicast_group: Default::default(),
             random_alias: Default::default(),
             use_system_name: Default::default(),
         };
@@ -274,6 +302,15 @@ impl SettingsController {
 
     fn set_device_type(&mut self, v: QString) {
         let s = v.to_string();
+        if !s.is_empty()
+            && !matches!(
+                s.as_str(),
+                "mobile" | "desktop" | "laptop" | "tablet" | "web" | "headless" | "server"
+            )
+        {
+            log::warn!("set_device_type: invalid value '{s}'");
+            return;
+        }
         let opt = if s.is_empty() { None } else { Some(s.clone()) };
         self.service.update(|st| st.device_type = opt);
         self.device_type = QString::from(s);
@@ -333,6 +370,69 @@ impl SettingsController {
     fn set_save_to_history(&mut self, v: bool) {
         self.service.update(|st| st.save_to_history = v);
         self.save_to_history = v;
+        self.changed();
+    }
+
+    fn set_verify_checksums(&mut self, v: bool) {
+        self.service.update(|st| st.verify_checksums = v);
+        self.verify_checksums = v;
+        self.changed();
+    }
+
+    fn set_destination(&mut self, v: QString) {
+        let s = v.to_string();
+        let opt = if s.trim().is_empty() {
+            None
+        } else {
+            Some(s.clone())
+        };
+        self.service.update(|st| st.destination = opt);
+        self.destination = QString::from(s);
+        self.changed();
+    }
+
+    fn set_create_checksums(&mut self, v: bool) {
+        self.service.update(|st| st.create_checksums = v);
+        self.create_checksums = v;
+        self.changed();
+    }
+
+    fn set_share_via_link_auto_accept(&mut self, v: bool) {
+        self.service.update(|st| st.share_via_link_auto_accept = v);
+        self.share_via_link_auto_accept = v;
+        self.changed();
+    }
+
+    fn set_receive_via_link_auto_accept(&mut self, v: bool) {
+        self.service.update(|st| st.receive_via_link_auto_accept = v);
+        self.receive_via_link_auto_accept = v;
+        self.changed();
+    }
+
+    fn set_discovery_timeout(&mut self, v: u32) {
+        // Mirrors Flutter: a timeout of 0 would make discovery useless.
+        if v == 0 || v > 60_000 {
+            log::warn!("set_discovery_timeout: out of range {v}");
+            return;
+        }
+        self.service.update(|st| st.discovery_timeout = v);
+        self.discovery_timeout = v;
+        self.changed();
+    }
+
+    fn set_multicast_group(&mut self, v: QString) {
+        let s = v.trimmed().to_string();
+        if !s.is_empty() {
+            match s.parse::<std::net::Ipv4Addr>() {
+                Ok(ip) if ip.is_multicast() => {}
+                _ => {
+                    log::warn!("set_multicast_group: invalid IPv4 multicast address '{s}'");
+                    return;
+                }
+            }
+        }
+        self.service.update(|st| st.multicast_group = s.clone());
+        self.multicast_group = QString::from(s);
         self.changed();
     }
 

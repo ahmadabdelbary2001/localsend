@@ -38,7 +38,7 @@ pub struct DiscoveryParams {
 }
 
 /// A device as exposed to the bridge.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct DeviceSnapshot {
     pub fingerprint: String,
     pub alias: String,

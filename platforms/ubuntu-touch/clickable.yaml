@@ -1,40 +1,48 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# Local development packaging for the Ubuntu Touch frontend.
+#
+# CI does not use Clickable: it stages the same directory layout with plain
+# Docker and runs "click build" itself (see .github/workflows/ubuntu-touch.yml).
+# Keep both in sync — in particular the binary name/path (usr/bin/localsend),
+# which localsend.desktop ("Exec=usr/bin/localsend") depends on.
+
 clickable_minimum_required: 8.0.0
 
-builder: custom
+# Ubuntu Touch 24.04 ships Qt 5.15, which also selects the 24.04 SDK images.
+# Must stay in sync with "framework" in manifest.json.
+qt_version: "5.15"
 
-build:
+builder: rust
+
+# Clickable's rust builder runs "cargo install", so the binary lands in
+# lib/<triplet>/bin/localsend-ubuntu-touch. localsend.desktop
+# ("Exec=usr/bin/localsend") and the CI staging both expect usr/bin/localsend,
+# so move it there (same file, no duplicate copy in the click).
+postbuild:
   - |
     set -euo pipefail
-    echo "=== staging prebuilt binary ==="
-    ls -la prebuilt/
-    mkdir -p "$INSTALL_DIR/usr/bin"
-    mkdir -p "$INSTALL_DIR/apparmor"
-    mkdir -p "$INSTALL_DIR/qml"
-    mkdir -p "$INSTALL_DIR/assets"
-    cp prebuilt/localsend-ubuntu-touch "$INSTALL_DIR/usr/bin/localsend.ahmadabdelbary"
-    cp apparmor/localsend.ahmadabdelbary.json "$INSTALL_DIR/apparmor/"
-    cp localsend.ahmadabdelbary.desktop "$INSTALL_DIR/"
-    cp -r qml/. "$INSTALL_DIR/qml/"
-    cp -r assets/. "$INSTALL_DIR/assets/" 2>/dev/null || true
-    cp assets/logo.png "$INSTALL_DIR/logo.png"
-    echo "=== staged ==="
-    ls -la "$INSTALL_DIR/usr/bin/"
+    install -Dm755 "$INSTALL_DIR/lib/$ARCH_TRIPLET/bin/localsend-ubuntu-touch" "$INSTALL_DIR/usr/bin/localsend"
+    rm -f "$INSTALL_DIR/lib/$ARCH_TRIPLET/bin/localsend-ubuntu-touch"
 
-kill: localsend.ahmadabdelbary
+# Everything below is copied into the click root. QML and the logo are also
+# embedded in the binary (see src/resources.rs), but shipping them keeps the
+# click inspectable and byte-comparable with the CI artifacts.
+install_root_data:
+  - "manifest.json"
+  - "localsend.desktop"
+  - "apparmor"
+  - "assets"
+  - "assets/logo.png"
+  - "qml"
+
+# "clickable launch" runs pkill -f with this pattern before starting the app.
+# The install path of a click contains the app id, so this only matches our app.
+kill: "localsend.ahmadabdelbary"
 
 dependencies_target:
+  - build-essential
+  - pkg-config
+  - libssl-dev
   - qtbase5-dev
   - qtdeclarative5-dev
-  - qtdeclarative5-dev-tools
-  - qml-module-qtquick2
-  - qml-module-qtquick-controls2
-  - qml-module-qtquick-layouts
-  - qml-module-qtquick-window2
-  - qml-module-qtqml-workerscript2
-  - qml-module-lomiri-components
-  - qml-module-lomiri-components-extras
-  - qml-module-lomiri-content
-  - qml-module-lomiri-content-doc
-  - liblomiri-connectivity-qt1-1
-  - lomiri-components
-  - lomiri-components-extras

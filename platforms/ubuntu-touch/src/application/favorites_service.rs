@@ -11,7 +11,7 @@ use uuid::Uuid;
 
 use crate::platform::filesystem;
 
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct Favorite {
     pub id: String,
     pub fingerprint: String,

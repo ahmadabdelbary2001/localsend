@@ -18,15 +18,21 @@ RowLayout {
         color: appTheme && appTheme.colors ? appTheme.colors.surfaceText : "#1B1D21"
         fontSize: "small"
         wrapMode: Text.Wrap
+        opacity: root.enabled ? 1.0 : 0.5
     }
 
     Switch {
+        id: control
         Layout.preferredWidth: units.gu(6)
         checked: root.checked
-        onCheckedChanged: {
-            if (checked !== root.checked) {
-                root.toggled(checked)
-            }
+        enabled: root.enabled
+
+        // `onClicked` is only emitted for user interaction. Re-establish the
+        // binding afterwards so a rejected change (e.g. cancelled PIN dialog)
+        // snaps the switch back to the persisted value.
+        onClicked: {
+            root.toggled(control.checked)
+            control.checked = Qt.binding(function() { return root.checked })
         }
     }
 }

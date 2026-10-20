@@ -4,6 +4,10 @@
 // Reads directly from the shared Vec maintained by
 // application::discovery_service, so it stays in sync with Rust
 // without copying on every poll.
+//
+// The view is only reset when the device list actually changed; a reset
+// recreates every delegate, so doing it on every poll tick made the list
+// flicker and killed scroll position.
 
 use std::sync::{Arc, RwLock};
 
@@ -21,6 +25,9 @@ pub struct DeviceListModel {
     /// Shared with DiscoveryServiceHandle.
     items: Arc<RwLock<Vec<DeviceSnapshot>>>,
 
+    /// Last snapshot the view has been reset for.
+    last: Vec<DeviceSnapshot>,
+
     /// Called from QML after discoveryController.poll() to force
     /// the view to re-read the shared Vec.
     refresh: qt_method!(fn(&mut self)),
@@ -28,22 +35,30 @@ pub struct DeviceListModel {
 
 impl DeviceListModel {
     pub fn new(items: Arc<RwLock<Vec<DeviceSnapshot>>>) -> Self {
-        let count = items.read().map(|g| g.len() as i32).unwrap_or(0);
+        let last = items.read().map(|g| g.clone()).unwrap_or_default();
+        let count = last.len() as i32;
         Self {
             base: Default::default(),
             count,
             count_changed: Default::default(),
             items,
+            last,
             refresh: Default::default(),
         }
     }
 
     pub fn refresh(&mut self) {
-        self.begin_reset_model();
-        self.end_reset_model();
-        let new_count = self.row_count();
-        if self.count != new_count {
-            self.count = new_count;
+        let snapshot = self.items.read().map(|g| g.clone()).unwrap_or_default();
+        let count = snapshot.len() as i32;
+
+        if snapshot != self.last {
+            self.begin_reset_model();
+            self.last = snapshot;
+            self.end_reset_model();
+        }
+
+        if self.count != count {
+            self.count = count;
             self.count_changed();
         }
     }

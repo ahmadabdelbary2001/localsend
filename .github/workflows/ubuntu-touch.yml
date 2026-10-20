@@ -183,6 +183,25 @@ jobs:
           fi
           echo "nested QtObject grep OK"
 
+      - name: Verify QML files are embedded in the binary
+        run: |
+          set -euo pipefail
+          cd platforms/ubuntu-touch
+
+          # QML is loaded from qrc:/qml/..., so every runtime file must be
+          # listed in src/resources.rs. A missing entry compiles fine but
+          # makes the app fail with "<Type> is not a type" at startup.
+          MISSING=0
+          while read -r f; do
+            [ "$(basename "$f")" = ".gitkeep" ] && continue
+            if ! grep -q "\"$f\"" src/resources.rs; then
+              echo "::error::$f is not registered in src/resources.rs; it will not exist at runtime."
+              MISSING=1
+            fi
+          done < <(find qml -type f | sort)
+          [ "$MISSING" -eq 0 ] || exit 1
+          echo "qrc registration OK"
+
       - name: Verify QML imports resolve
         run: |
           set -euo pipefail

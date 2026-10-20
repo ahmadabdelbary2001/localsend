@@ -3,6 +3,9 @@
 // QAbstractListModel for files in the current incoming transfer.
 // Shares the entry list with ServerController via Arc<RwLock<...>>.
 // QML calls `refresh()` after ServerController emits entriesChanged.
+//
+// Resetting the model recreates all delegates, so we only do it when the
+// entries actually changed (names/sizes/progress are compared).
 
 use std::sync::{Arc, RwLock};
 
@@ -17,21 +20,30 @@ pub struct IncomingFilesModel {
     /// Shared with ServerController.
     entries: Arc<RwLock<Vec<IncomingFileEntry>>>,
 
+    last: Vec<IncomingFileEntry>,
+
     /// Call after ServerController.poll() to reflect the shared state.
     refresh: qt_method!(fn(&mut self)),
 }
 
 impl IncomingFilesModel {
     pub fn new(entries: Arc<RwLock<Vec<IncomingFileEntry>>>) -> Self {
+        let last = entries.read().map(|g| g.clone()).unwrap_or_default();
         Self {
             base: Default::default(),
             entries,
+            last,
             refresh: Default::default(),
         }
     }
 
     pub fn refresh(&mut self) {
+        let snapshot = self.entries.read().map(|g| g.clone()).unwrap_or_default();
+        if snapshot == self.last {
+            return;
+        }
         self.begin_reset_model();
+        self.last = snapshot;
         self.end_reset_model();
     }
 }

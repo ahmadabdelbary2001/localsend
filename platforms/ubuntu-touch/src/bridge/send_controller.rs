@@ -16,7 +16,7 @@ use crate::application::send_service::{
     SendCommand, SendEvent, SendFileEntry, SendServiceHandle, SendTarget,
 };
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct OutgoingEntry {
     pub file_id: String,
     pub name: String,
@@ -60,6 +60,8 @@ pub struct SendController {
     collect_directory_files: qt_method!(fn(&mut self, dir_path: QString) -> QString),
     list_directory: qt_method!(fn(&mut self, dir_path: QString) -> QString),
     list_installed_apps: qt_method!(fn(&mut self) -> QString),
+    selection_info: qt_method!(fn(&mut self, paths_json: QString) -> QString),
+    home_directory: qt_method!(fn(&self) -> QString),
     submit_pin: qt_method!(fn(&mut self, pin: QString)),
     cancel: qt_method!(fn(&mut self)),
     dismiss: qt_method!(fn(&mut self)),
@@ -103,6 +105,8 @@ impl SendController {
             collect_directory_files: Default::default(),
             list_directory: Default::default(),
             list_installed_apps: Default::default(),
+            selection_info: Default::default(),
+            home_directory: Default::default(),
             submit_pin: Default::default(),
             cancel: Default::default(),
             dismiss: Default::default(),
@@ -131,7 +135,7 @@ impl SendController {
                 ProtocolType::Http
             };
             SendTarget {
-                fingerprint: d.fingerprint,
+                expected_fingerprint: Some(d.fingerprint),
                 host: d.ip,
                 port: d.port,
                 protocol,
@@ -139,7 +143,7 @@ impl SendController {
             }
         } else if let Some(fav) = self.favorites.as_ref().and_then(|f| f.find(&fp)) {
             SendTarget {
-                fingerprint: fav.fingerprint,
+                expected_fingerprint: Some(fav.fingerprint),
                 host: fav.ip,
                 port: fav.port,
                 protocol: ProtocolType::Https,
@@ -170,7 +174,8 @@ impl SendController {
         }
         let alias_str = alias.to_string();
         let target = SendTarget {
-            fingerprint: Uuid::new_v4().to_string(),
+            // Unknown certificate for a manual address: do not pin.
+            expected_fingerprint: None,
             host: host.clone(),
             port: port.min(u16::MAX as u32) as u16,
             protocol: if https {
@@ -186,10 +191,23 @@ impl SendController {
     fn dispatch_send(&mut self, target: SendTarget, paths_json: QString) {
         let json = paths_json.to_string();
 
-        let paths: Vec<String> = match serde_json::from_str::<Value>(&json) {
+        // Entries are either absolute path strings or objects
+        // { "path": ..., "name": ... } (folder sends keep their relative name).
+        let items: Vec<(PathBuf, Option<String>)> = match serde_json::from_str::<Value>(&json) {
             Ok(Value::Array(a)) => a
                 .into_iter()
-                .filter_map(|v| v.as_str().map(|s| s.to_string()))
+                .filter_map(|v| match v {
+                    Value::String(path) => Some((PathBuf::from(path), None)),
+                    Value::Object(map) => {
+                        let path = map.get("path")?.as_str()?.to_string();
+                        let name = map
+                            .get("name")
+                            .and_then(|n| n.as_str())
+                            .map(str::to_string);
+                        Some((PathBuf::from(path), name))
+                    }
+                    _ => None,
+                })
                 .collect(),
             _ => {
                 self.error_message = QString::from("invalid paths JSON");
@@ -197,7 +215,7 @@ impl SendController {
                 return;
             }
         };
-        if paths.is_empty() {
+        if items.is_empty() {
             return;
         }
 
@@ -214,13 +232,14 @@ impl SendController {
         let mut entries: Vec<OutgoingEntry> = Vec::new();
         let mut validation_errors: Vec<String> = Vec::new();
 
-        for p in &paths {
-            let path = PathBuf::from(p);
-            let name = path
-                .file_name()
-                .and_then(|s| s.to_str())
-                .unwrap_or("file")
-                .to_string();
+        for (path, custom_name) in &items {
+            let path = path.clone();
+            let name = custom_name.clone().unwrap_or_else(|| {
+                path.file_name()
+                    .and_then(|s| s.to_str())
+                    .unwrap_or("file")
+                    .to_string()
+            });
 
             // C03: explicit validation. A file that cannot be stat'ed or
             // opened must not silently become a 0-byte transfer.
@@ -286,6 +305,7 @@ impl SendController {
                 sender_https: snap.https,
                 sender_fingerprint: self.identity.fingerprint.clone(),
                 pin: None,
+                create_checksums: snap.create_checksums,
             });
         }
 
@@ -315,28 +335,116 @@ impl SendController {
         QString::from(file_path.to_string_lossy().to_string())
     }
 
+    /// Recursively collects files below `dir_path`. Every entry carries the
+    /// relative name `<folder>/<relative path>` so the receiver keeps the
+    /// directory structure, matching Flutter's AddDirectoryAction.
     pub fn collect_directory_files(&mut self, dir_path: QString) -> QString {
+        #[derive(serde::Serialize)]
+        struct FolderFile {
+            path: String,
+            name: String,
+        }
+
         let dir = PathBuf::from(dir_path.to_string());
         if !dir.is_dir() {
             return QString::from("[]");
         }
-        let mut files = Vec::new();
-        fn scan(dir: &std::path::Path, acc: &mut Vec<String>) {
-            if let Ok(entries) = std::fs::read_dir(dir) {
-                for entry in entries.flatten() {
-                    let p = entry.path();
-                    if p.is_file() {
-                        if let Some(s) = p.to_str() {
-                            acc.push(s.to_string());
-                        }
-                    } else if p.is_dir() {
-                        scan(&p, acc);
-                    }
+        let folder_name = dir
+            .file_name()
+            .and_then(|s| s.to_str())
+            .filter(|s| !s.is_empty())
+            .unwrap_or("folder")
+            .to_string();
+
+        let mut files: Vec<FolderFile> = Vec::new();
+        fn scan(
+            root: &std::path::Path,
+            dir: &std::path::Path,
+            folder_name: &str,
+            acc: &mut Vec<FolderFile>,
+        ) {
+            let Ok(entries) = std::fs::read_dir(dir) else {
+                return;
+            };
+            let mut entries: Vec<_> = entries.flatten().collect();
+            entries.sort_by_key(|entry| entry.file_name());
+            for entry in entries {
+                let path = entry.path();
+                if path.is_file() {
+                    let Some(full) = path.to_str() else { continue };
+                    let relative = path
+                        .strip_prefix(root)
+                        .ok()
+                        .map(|p| p.to_string_lossy().replace('\\', "/"))
+                        .unwrap_or_else(|| {
+                            path.file_name()
+                                .map(|n| n.to_string_lossy().to_string())
+                                .unwrap_or_default()
+                        });
+                    acc.push(FolderFile {
+                        path: full.to_string(),
+                        name: format!("{}/{}", folder_name, relative),
+                    });
+                } else if path.is_dir() {
+                    scan(root, &path, folder_name, acc);
                 }
             }
         }
-        scan(&dir, &mut files);
+        scan(&dir, &dir, &folder_name, &mut files);
         serde_json::to_string(&files).unwrap_or_else(|_| "[]".into()).into()
+    }
+
+    /// Summary for the selection card: number of files, total size and names.
+    pub fn selection_info(&mut self, paths_json: QString) -> QString {
+        let json = paths_json.to_string();
+        let items: Vec<(PathBuf, Option<String>)> = match serde_json::from_str::<Value>(&json) {
+            Ok(Value::Array(a)) => a
+                .into_iter()
+                .filter_map(|v| match v {
+                    Value::String(path) => Some((PathBuf::from(path), None)),
+                    Value::Object(map) => {
+                        let path = map.get("path")?.as_str()?.to_string();
+                        let name = map
+                            .get("name")
+                            .and_then(|n| n.as_str())
+                            .map(str::to_string);
+                        Some((PathBuf::from(path), name))
+                    }
+                    _ => None,
+                })
+                .collect(),
+            _ => Vec::new(),
+        };
+
+        let mut size: u64 = 0;
+        let mut names: Vec<String> = Vec::new();
+        let mut missing: usize = 0;
+        for (path, custom_name) in &items {
+            match std::fs::metadata(path) {
+                Ok(meta) => size = size.saturating_add(meta.len()),
+                Err(_) => missing += 1,
+            }
+            names.push(custom_name.clone().unwrap_or_else(|| {
+                path.file_name()
+                    .and_then(|s| s.to_str())
+                    .unwrap_or("file")
+                    .to_string()
+            }));
+        }
+
+        let info = serde_json::json!({
+            "count": items.len(),
+            "size": size,
+            "names": names,
+            "missing": missing,
+        });
+        QString::from(info.to_string())
+    }
+
+    pub fn home_directory(&self) -> QString {
+        QString::from(
+            std::env::var("HOME").unwrap_or_else(|_| "/home/phablet".to_string()),
+        )
     }
 
     pub fn list_directory(&mut self, dir_path: QString) -> QString {
@@ -381,6 +489,9 @@ impl SendController {
         serde_json::to_string(&entries_list).unwrap_or_else(|_| "[]".into()).into()
     }
 
+    /// Lists sendable package files (click/deb/apk/snap/appimage) found in
+    /// the usual user folders. Unlike Flutter's Android APK picker, Ubuntu
+    /// Touch has no installed-app archive to share, so only files are listed.
     pub fn list_installed_apps(&mut self) -> QString {
         #[derive(serde::Serialize)]
         struct AppItem {
@@ -388,105 +499,61 @@ impl SendController {
             path: String,
             icon: String,
         }
-        let mut apps = Vec::new();
 
-        // 1. Scan Click packages in /opt/click.ubuntu.com
-        let click_dir = PathBuf::from("/opt/click.ubuntu.com");
-        if let Ok(entries) = std::fs::read_dir(&click_dir) {
-            for entry in entries.flatten() {
-                let p = entry.path();
-                if p.is_dir() {
-                    let pkg_name = p.file_name().and_then(|n| n.to_str()).unwrap_or("").to_string();
-                    if pkg_name.is_empty() || pkg_name.starts_with('.') {
-                        continue;
-                    }
-                    if let Ok(sub_entries) = std::fs::read_dir(&p) {
-                        for sub in sub_entries.flatten() {
-                            let manifest = sub.path().join("manifest.json");
-                            if manifest.is_file() {
-                                if let Ok(data) = std::fs::read_to_string(&manifest) {
-                                    if let Ok(json) = serde_json::from_str::<serde_json::Value>(&data) {
-                                        let title = json.get("title").and_then(|v| v.as_str()).unwrap_or(&pkg_name);
-                                        let icon = json.get("icon").and_then(|v| v.as_str()).unwrap_or("package");
-                                        let path = sub.path().to_string_lossy().to_string();
-                                        apps.push(AppItem {
-                                            name: title.to_string(),
-                                            path,
-                                            icon: icon.to_string(),
-                                        });
-                                    }
-                                }
-                                break;
-                            }
-                        }
-                    }
-                }
-            }
-        }
-
-        // 2. Scan desktop files in /usr/share/applications and ~/.local/share/applications
-        let home = std::env::var("HOME").map(PathBuf::from).ok();
-        let desktop_dirs = [
-            PathBuf::from("/usr/share/applications"),
-            home.as_ref().map(|h| h.join(".local/share/applications")).unwrap_or_default(),
+        const EXTENSIONS: &[&str] = &[
+            "click", "deb", "apk", "snap", "appimage", "flatpakref", "flatpak", "run",
         ];
-        for ddir in &desktop_dirs {
-            if let Ok(entries) = std::fs::read_dir(ddir) {
-                for entry in entries.flatten() {
-                    let p = entry.path();
-                    if p.extension().map_or(false, |ext| ext == "desktop") {
-                        if let Ok(content) = std::fs::read_to_string(&p) {
-                            let mut name = None;
-                            let mut icon = None;
-                            let mut no_display = false;
-                            for line in content.lines() {
-                                if line.starts_with("Name=") && name.is_none() {
-                                    name = Some(line["Name=".len()..].trim().to_string());
-                                } else if line.starts_with("Icon=") && icon.is_none() {
-                                    icon = Some(line["Icon=".len()..].trim().to_string());
-                                } else if line.starts_with("NoDisplay=true") {
-                                    no_display = true;
-                                }
-                            }
-                            if !no_display {
-                                if let Some(n) = name {
-                                    if !n.is_empty() {
-                                        apps.push(AppItem {
-                                            name: n,
-                                            path: p.to_string_lossy().to_string(),
-                                            icon: icon.unwrap_or_else(|| "software-properties".into()),
-                                        });
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
+
+        let home = std::env::var_os("HOME").map(PathBuf::from);
+        let mut roots: Vec<PathBuf> = Vec::new();
+        if let Some(home) = &home {
+            for sub in ["Downloads", "Documents", "Desktop"] {
+                roots.push(home.join(sub));
             }
+            roots.push(home.clone());
+        }
+        for system in ["/opt/click.ubuntu.com", "/var/cache/click"] {
+            roots.push(PathBuf::from(system));
         }
 
-        // 3. Scan ~/Downloads for any .click or .deb packages
-        if let Some(h) = &home {
-            let downloads = h.join("Downloads");
-            if let Ok(entries) = std::fs::read_dir(&downloads) {
-                for entry in entries.flatten() {
-                    let p = entry.path();
-                    if let Some(ext) = p.extension() {
-                        if ext == "click" || ext == "deb" {
-                            let fname = p.file_name().and_then(|n| n.to_str()).unwrap_or("package").to_string();
-                            apps.push(AppItem {
-                                name: format!("{fname} (installer)"),
-                                path: p.to_string_lossy().to_string(),
-                                icon: "package".to_string(),
-                            });
-                        }
-                    }
+        let mut apps: Vec<AppItem> = Vec::new();
+        for root in &roots {
+            let Ok(entries) = std::fs::read_dir(root) else {
+                continue;
+            };
+            for entry in entries.flatten() {
+                let path = entry.path();
+                if !path.is_file() {
+                    continue;
                 }
+                let Some(ext) = path.extension().and_then(|e| e.to_str()) else {
+                    continue;
+                };
+                if !EXTENSIONS.iter().any(|known| known.eq_ignore_ascii_case(ext)) {
+                    continue;
+                }
+                let name = path
+                    .file_name()
+                    .and_then(|n| n.to_str())
+                    .unwrap_or("package")
+                    .to_string();
+                let icon = match ext.to_ascii_lowercase().as_str() {
+                    "apk" => "package-x-generic-symbolic",
+                    "deb" | "click" | "snap" | "appimage" | "flatpakref" | "flatpak" | "run" => {
+                        "stock_application"
+                    }
+                    _ => "stock_application",
+                };
+                apps.push(AppItem {
+                    name,
+                    path: path.to_string_lossy().to_string(),
+                    icon: icon.to_string(),
+                });
             }
         }
 
         apps.sort_by(|a, b| a.name.to_lowercase().cmp(&b.name.to_lowercase()));
-        apps.dedup_by(|a, b| a.name == b.name);
+        apps.dedup_by(|a, b| a.path == b.path);
 
         serde_json::to_string(&apps).unwrap_or_else(|_| "[]".into()).into()
     }

@@ -7,12 +7,40 @@ import "../dialogs" as LocalSendDialogs
 
 Page {
     id: page
-    header: null
+    header: Item { } // hides MainView's deprecated app header
     property var appTheme
     property string pendingFingerprint: ""
     property var pendingAddress: null // { ip: "", port: 53317, https: true }
     property var selectedPaths: []
     property string pickerType: "all" // "all" | "pictures"
+    property string lastError: ""
+
+    // Live summary of the current selection (count / total size / names).
+    // Re-evaluates whenever selectedPaths changes.
+    readonly property var selection: {
+        if (page.selectedPaths.length === 0)
+            return { count: 0, size: 0, names: [], missing: 0 }
+        try {
+            return JSON.parse(sendController.selection_info(JSON.stringify(page.selectedPaths)))
+        } catch (e) {
+            return { count: page.selectedPaths.length, size: 0, names: [], missing: 0 }
+        }
+    }
+
+    function _formatSize(bytes) {
+        var b = bytes || 0
+        if (b < 1024) return b + " B"
+        if (b < 1024 * 1024) return (b / 1024).toFixed(1) + " KB"
+        if (b < 1024 * 1024 * 1024) return (b / 1024 / 1024).toFixed(1) + " MB"
+        return (b / 1024 / 1024 / 1024).toFixed(2) + " GB"
+    }
+
+    function _namesLabel() {
+        var names = page.selection.names || []
+        if (names.length === 0) return ""
+        var shown = names.slice(0, 3).join(", ")
+        return names.length > 3 ? shown + " …" : shown
+    }
 
     function sendToDevice(fingerprint) {
         if (sendController.active) return
@@ -71,7 +99,7 @@ Page {
         }
 
         if (!text || text.length === 0) {
-            page.showToast(qsTr("Clipboard is empty"))
+            page.showToast(translator.tr("general.noItemInClipboard"))
             return
         }
 
@@ -91,7 +119,7 @@ Page {
                 page.pendingAddress = null
             } else {
                 page.selectedPaths = page.selectedPaths.concat([path])
-                page.showToast(qsTr("Pasted from clipboard"))
+                page.showToast(translator.tr("sendTab.picker.clipboard"))
             }
         }
     }
@@ -102,7 +130,7 @@ Page {
             var filesJson = sendController.collect_directory_files(folderPath)
             var files = JSON.parse(filesJson)
             if (!files || files.length === 0) {
-                page.showToast(qsTr("Folder is empty"))
+                page.showToast(translator.tr("dialogs.noFiles.title"))
                 return
             }
 
@@ -120,7 +148,7 @@ Page {
                 page.pendingAddress = null
             } else {
                 page.selectedPaths = page.selectedPaths.concat(files)
-                page.showToast(files.length + " " + qsTr("files added from folder"))
+                page.showToast(files.length + " " + translator.tr("general.files"))
             }
         } catch (e) {
             console.warn("[SendPage] error adding folder:", e)
@@ -143,7 +171,7 @@ Page {
             page.pendingAddress = null
         } else {
             page.selectedPaths = page.selectedPaths.concat([appPath])
-            page.showToast(qsTr("App added to selection"))
+            page.showToast(translator.tr("dialogs.addFile.title"))
         }
     }
 
@@ -151,6 +179,21 @@ Page {
         toastLabel.text = message
         toastBanner.visible = true
         toastTimer.restart()
+    }
+
+    Connections {
+        target: sendController
+        function onState_changed() {
+            var message = sendController.error_message
+            if (!message || message.length === 0) {
+                page.lastError = ""
+                return
+            }
+            if (message !== page.lastError) {
+                page.lastError = message
+                page.showToast(message)
+            }
+        }
     }
 
     // ---------- File Picker Loader ----------
@@ -246,7 +289,7 @@ Page {
                     // 1. File (ملف) — Flutter: Icons.description
                     BigButton {
                         appTheme: page.appTheme
-                        iconName: "text-x-generic"
+                        iconName: "text-x-generic-symbolic"
                         label: translator.tr("sendTab.picker.file")
                         onClicked: {
                             page.pickerType = "all"
@@ -257,7 +300,7 @@ Page {
                     // 2. Media (وسائط) — Flutter: Icons.image
                     BigButton {
                         appTheme: page.appTheme
-                        iconName: "camera-photo"
+                        iconName: "camera-photo-symbolic"
                         label: translator.tr("sendTab.picker.media")
                         onClicked: {
                             page.pickerType = "pictures"
@@ -288,7 +331,7 @@ Page {
                     // 5. Folder (مجلد) — Flutter: Icons.folder
                     BigButton {
                         appTheme: page.appTheme
-                        iconName: "folder"
+                        iconName: "folder-symbolic"
                         label: translator.tr("sendTab.picker.folder")
                         onClicked: {
                             folderDialogLoader.active = true
@@ -310,49 +353,74 @@ Page {
             // ---------- Selected Items Summary (When not empty) ----------
             Rectangle {
                 Layout.fillWidth: true
-                Layout.preferredHeight: units.gu(7.5)
+                implicitHeight: summaryCol.implicitHeight + units.gu(2.4)
                 radius: units.gu(0.8)
                 visible: page.selectedPaths.length > 0
                 color: page.appTheme && page.appTheme.colors ? page.appTheme.colors.surface : "#ffffff"
                 border.color: page.appTheme && page.appTheme.colors ? page.appTheme.colors.divider : "#e0e0e0"
                 border.width: units.dp(1)
 
-                RowLayout {
-                    anchors.fill: parent
-                    anchors.margins: units.gu(1.2)
-                    spacing: units.gu(1)
+                ColumnLayout {
+                    id: summaryCol
+                    anchors {
+                        left: parent.left
+                        right: parent.right
+                        top: parent.top
+                        margins: units.gu(1.2)
+                    }
+                    spacing: units.gu(0.4)
 
-                    ColumnLayout {
+                    RowLayout {
                         Layout.fillWidth: true
-                        spacing: units.gu(0.2)
+                        spacing: units.gu(1)
 
                         Label {
+                            Layout.fillWidth: true
                             text: translator.tr("sendTab.selection.title")
                             fontSize: "small"
                             color: page.appTheme && page.appTheme.colors ? page.appTheme.colors.surfaceTextMuted : "#5F6368"
                         }
 
                         Label {
-                            text: page.selectedPaths.length === 1
-                                ? qsTr("1 item ready")
-                                : page.selectedPaths.length + " " + qsTr("items ready")
-                            fontSize: "medium"
-                            font.bold: true
-                            color: page.appTheme && page.appTheme.colors ? page.appTheme.colors.primary : "#00695C"
+                            text: translator.tr_args("sendTab.selection.files",
+                                                     JSON.stringify({ files: page.selection.count }))
+                            fontSize: "small"
+                            color: page.appTheme && page.appTheme.colors ? page.appTheme.colors.surfaceTextMuted : "#5F6368"
                         }
                     }
 
-                    Button {
-                        text: qsTr("+ Add")
-                        onClicked: {
-                            addMenuPopup.visible = !addMenuPopup.visible
-                        }
+                    Label {
+                        Layout.fillWidth: true
+                        text: translator.tr_args("sendTab.selection.size",
+                                                 JSON.stringify({ size: page._formatSize(page.selection.size) }))
+                        fontSize: "medium"
+                        font.bold: true
+                        color: page.appTheme && page.appTheme.colors ? page.appTheme.colors.primary : "#00695C"
                     }
 
-                    Button {
-                        text: qsTr("Clear")
-                        onClicked: {
-                            page.selectedPaths = []
+                    Label {
+                        Layout.fillWidth: true
+                        visible: text.length > 0
+                        text: page._namesLabel()
+                        fontSize: "x-small"
+                        elide: Text.ElideRight
+                        color: page.appTheme && page.appTheme.colors ? page.appTheme.colors.surfaceTextMuted : "#5F6368"
+                    }
+
+                    RowLayout {
+                        Layout.fillWidth: true
+                        spacing: units.gu(1)
+
+                        Item { Layout.fillWidth: true }
+
+                        Button {
+                            text: translator.tr("general.add")
+                            onClicked: addMenuPopup.visible = !addMenuPopup.visible
+                        }
+
+                        Button {
+                            text: translator.tr("general.delete")
+                            onClicked: page.selectedPaths = []
                         }
                     }
                 }
@@ -379,13 +447,13 @@ Page {
 
                     BigButton {
                         appTheme: page.appTheme
-                        iconName: "text-x-generic"
+                        iconName: "text-x-generic-symbolic"
                         label: translator.tr("sendTab.picker.file")
                         onClicked: { addMenuPopup.visible = false; page.pickerType = "all"; pickerLoader.active = true; }
                     }
                     BigButton {
                         appTheme: page.appTheme
-                        iconName: "camera-photo"
+                        iconName: "camera-photo-symbolic"
                         label: translator.tr("sendTab.picker.media")
                         onClicked: { addMenuPopup.visible = false; page.pickerType = "pictures"; pickerLoader.active = true; }
                     }
@@ -403,7 +471,7 @@ Page {
                     }
                     BigButton {
                         appTheme: page.appTheme
-                        iconName: "folder"
+                        iconName: "folder-symbolic"
                         label: translator.tr("sendTab.picker.folder")
                         onClicked: { addMenuPopup.visible = false; folderDialogLoader.active = true; }
                     }
@@ -432,24 +500,11 @@ Page {
                         font.bold: true
                         color: page.appTheme && page.appTheme.colors ? page.appTheme.colors.surfaceText : "#1B1D21"
                     }
-
-                    Label {
-                        Layout.fillWidth: true
-                        text: {
-                            var n = Math.max(discoveryController.device_count, deviceListModel.count)
-                            if (discoveryController.scanning) return qsTr("Scanning…")
-                            if (n === 0) return qsTr("No devices found")
-                            if (n === 1) return qsTr("1 device found")
-                            return n + " " + qsTr("devices found")
-                        }
-                        fontSize: "x-small"
-                        color: page.appTheme && page.appTheme.colors ? page.appTheme.colors.surfaceTextMuted : "#5F6368"
-                    }
                 }
 
                 // Send by IP Button
                 Button {
-                    text: qsTr("IP")
+                    text: translator.tr("dialogs.addressInput.ip")
                     onClicked: {
                         manualSendLoader.active = true
                     }
@@ -457,7 +512,7 @@ Page {
 
                 // Refresh / Scan Button
                 Button {
-                    text: discoveryController.scanning ? "…" : translator.tr("sendTab.scan")
+                    text: translator.tr("sendTab.scan")
                     enabled: !discoveryController.scanning
                     color: page.appTheme && page.appTheme.colors ? page.appTheme.colors.surfaceTint : "#ECEFF1"
                     onClicked: {
@@ -473,18 +528,22 @@ Page {
                 Layout.fillWidth: true
                 Layout.topMargin: units.gu(0.5)
                 visible: favoritesController.count > 0
-                text: qsTr("Favorites") + " (" + favoritesController.count + ")"
+                text: translator.tr("dialogs.favoriteDialog.title") + " (" + favoritesController.count + ")"
                 fontSize: "small"
                 font.bold: true
                 color: page.appTheme && page.appTheme.colors ? page.appTheme.colors.surfaceTextMuted : "#5F6368"
             }
 
-            Repeater {
-                model: favoritesController
+            Column {
+                Layout.fillWidth: true
+                spacing: units.gu(1)
                 visible: favoritesController.count > 0
 
-                delegate: DeviceCard {
-                    Layout.fillWidth: true
+                Repeater {
+                    model: favoritesController
+
+                    delegate: DeviceCard {
+                        width: parent.width
                     appTheme: page.appTheme
                     fingerprint: model.fingerprint
                     alias: model.alias
@@ -544,29 +603,23 @@ Page {
                     onToggleFavorite: favoritesController.remove(model.fingerprint)
                 }
             }
-
-            // ---------- Nearby Devices Section ----------
-            Label {
-                Layout.fillWidth: true
-                Layout.topMargin: units.gu(0.5)
-                visible: discoveryController.device_count > 0 || deviceListModel.count > 0
-                text: qsTr("Nearby")
-                fontSize: "small"
-                font.bold: true
-                color: page.appTheme && page.appTheme.colors ? page.appTheme.colors.surfaceTextMuted : "#5F6368"
             }
 
-            Repeater {
-                id: nearbyRepeater
-                model: deviceListModel
+            Column {
+                Layout.fillWidth: true
+                spacing: units.gu(1)
 
-                delegate: DeviceCard {
-                    // ── KEY FIX: Hide if this device is already shown in Favorites ──
-                    // Flutter does the same: nearbyDevices list excludes favorites shown above
-                    visible: !favoritesController.is_favorite(model.fingerprint)
-                    Layout.fillWidth: true
-                    // When hidden, collapse height so layout has no gap
-                    Layout.preferredHeight: visible ? implicitHeight : 0
+                Repeater {
+                    id: nearbyRepeater
+                    model: deviceListModel
+
+                    delegate: DeviceCard {
+                        // Nearby devices already shown under Favorites are hidden
+                        // here, exactly like Flutter.
+                        visible: !favoritesController.is_favorite(model.fingerprint)
+                        width: parent.width
+                        // When hidden, collapse height so the column has no gap.
+                        height: visible ? implicitHeight : 0
                     appTheme: page.appTheme
                     fingerprint: model.fingerprint
                     alias: {
@@ -605,6 +658,7 @@ Page {
                     }
                 }
             }
+            }
 
             // ---------- Empty State Placeholder ----------
             Rectangle {
@@ -636,17 +690,7 @@ Page {
                     Label {
                         Layout.alignment: Qt.AlignHCenter
                         Layout.fillWidth: true
-                        text: qsTr("No devices found nearby")
-                        fontSize: "medium"
-                        font.bold: true
-                        horizontalAlignment: Text.AlignHCenter
-                        color: page.appTheme && page.appTheme.colors ? page.appTheme.colors.surfaceText : "#1B1D21"
-                    }
-
-                    Label {
-                        Layout.alignment: Qt.AlignHCenter
-                        Layout.fillWidth: true
-                        text: qsTr("Make sure LocalSend is running on the other device and both devices are connected to the same Wi-Fi network.")
+                        text: translator.tr("sendTab.help")
                         fontSize: "small"
                         horizontalAlignment: Text.AlignHCenter
                         wrapMode: Text.Wrap
@@ -658,7 +702,7 @@ Page {
                         spacing: units.gu(1.5)
 
                         Button {
-                            text: qsTr("Scan again")
+                            text: translator.tr("sendTab.scan")
                             color: page.appTheme && page.appTheme.colors ? page.appTheme.colors.primary : "#00695C"
                             onClicked: {
                                 discoveryController.scan_now()
@@ -668,7 +712,7 @@ Page {
                         }
 
                         Button {
-                            text: qsTr("Send by IP")
+                            text: translator.tr("sendTab.manualSending")
                             onClicked: {
                                 manualSendLoader.active = true
                             }

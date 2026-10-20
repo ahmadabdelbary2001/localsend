@@ -5,21 +5,18 @@ import Lomiri.Components 1.3
 Page {
     id: page
     property var appTheme
+    // Lomiri PageStack that owns this page, used to open the changelog.
+    property var navigationStack
 
+    // The PageStack installs a working back action on the PageHeader
+    // automatically, so no custom leading action is needed here.
     header: PageHeader {
         title: translator.tr("aboutPage.title")
-        leadingActionBar.actions: [
-            Action {
-                iconName: "back"
-                text: qsTr("Back")
-                onTriggered: pageStack.pop()
-            }
-        ]
     }
 
     Flickable {
-        anchors.fill: parent
-        contentHeight: col.implicitHeight + units.gu(6)
+        anchors { top: page.header.bottom; left: parent.left; right: parent.right; bottom: parent.bottom }
+        contentHeight: col.height + units.gu(6)
         clip: true
 
         ColumnLayout {
@@ -97,7 +94,10 @@ Page {
                 Button {
                     Layout.fillWidth: true
                     text: translator.tr("changelogPage.title")
-                    onClicked: pageStack.push(Qt.resolvedUrl("ChangelogPage.qml"), { appTheme: page.appTheme })
+                    onClicked: if (page.navigationStack) page.navigationStack.push(Qt.resolvedUrl("ChangelogPage.qml"), {
+                        appTheme: page.appTheme,
+                        navigationStack: page.navigationStack
+                    })
                 }
             }
         }

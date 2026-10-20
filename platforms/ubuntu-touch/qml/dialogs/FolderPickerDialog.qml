@@ -3,19 +3,37 @@ import QtQuick.Layouts 1.15
 import QtQuick.Controls 2.15
 import Lomiri.Components 1.3
 
+import "../components"
+
 Dialog {
     id: root
     property var appTheme
+
+    // QQuickControls popups are drawn with the application palette; mirror the
+    // app palette so dialogs stay readable in dark / OLED modes.
+    palette.window: appTheme && appTheme.colors ? appTheme.colors.surface : "#FFFFFF"
+    palette.windowText: appTheme && appTheme.colors ? appTheme.colors.surfaceText : "#1B1D21"
+    palette.base: appTheme && appTheme.colors ? appTheme.colors.surfaceTint : "#ECEFF1"
+    palette.text: appTheme && appTheme.colors ? appTheme.colors.surfaceText : "#1B1D21"
+    palette.button: appTheme && appTheme.colors ? appTheme.colors.surfaceTint : "#ECEFF1"
+    palette.buttonText: appTheme && appTheme.colors ? appTheme.colors.surfaceText : "#1B1D21"
+
+    background: DialogFrame { appTheme: root.appTheme }
     property string currentPath: ""
     property var entries: []
+
+    readonly property string homePath: sendController.home_directory()
 
     signal folderSelected(string path)
     signal canceled()
 
     function loadPath(dirPath) {
-        root.currentPath = dirPath || ""
+        var path = (dirPath && dirPath.length > 0) ? dirPath : root.homePath
+        if (path.length > 1 && path.charAt(path.length - 1) === "/")
+            path = path.substring(0, path.length - 1)
+        root.currentPath = path
         try {
-            var json = sendController.list_directory(root.currentPath)
+            var json = sendController.list_directory(path)
             root.entries = JSON.parse(json)
         } catch (e) {
             console.warn("[FolderPicker] error reading directory:", e)
@@ -24,9 +42,8 @@ Dialog {
     }
 
     function goUp() {
-        if (!root.currentPath || root.currentPath === "/" || root.currentPath === "/home/phablet") {
+        if (!root.currentPath || root.currentPath === "/")
             return
-        }
         var parts = root.currentPath.split("/")
         parts.pop()
         var parentPath = parts.join("/")
@@ -34,13 +51,17 @@ Dialog {
         root.loadPath(parentPath)
     }
 
-    Component.onCompleted: {
-        root.loadPath("")
-    }
+    // Reload every time the dialog opens: callers may set `currentPath`
+    // before calling open() (e.g. the receive destination setting).
+    onOpened: root.loadPath(root.currentPath)
 
-    title: qsTr("Select Folder")
+    title: translator.tr("settingsTab.receive.destination")
     modal: true
-    anchors.centerIn: parent
+    // Instantiated through a Loader, so the declared parent (the
+    // zero-sized Loader item) cannot be used for centering.
+    parent: Overlay.overlay
+    x: Math.round((parent.width - width) / 2)
+    y: Math.round((parent.height - height) / 2)
     width: Math.min(parent.width - units.gu(4), units.gu(65))
     height: Math.min(parent.height - units.gu(6), units.gu(75))
 
@@ -67,7 +88,7 @@ Dialog {
                 Label {
                     anchors { fill: parent; leftMargin: units.gu(1); rightMargin: units.gu(1) }
                     verticalAlignment: Text.AlignVCenter
-                    text: root.currentPath.length > 0 ? root.currentPath : "/home/phablet"
+                    text: root.currentPath.length > 0 ? root.currentPath : root.homePath
                     elide: Text.ElideMiddle
                     font.family: "monospace"
                     fontSize: "x-small"
@@ -92,12 +113,7 @@ Dialog {
                     model: ["Documents", "Downloads", "Music", "Pictures", "Videos"]
                     delegate: Button {
                         text: modelData
-                        onClicked: {
-                            var p = (root.currentPath.indexOf("/home/") === 0
-                                ? root.currentPath.split("/").slice(0, 3).join("/")
-                                : "/home/phablet") + "/" + modelData
-                            root.loadPath(p)
-                        }
+                        onClicked: root.loadPath(root.homePath + "/" + modelData)
                     }
                 }
             }
@@ -130,7 +146,11 @@ Dialog {
                         Icon {
                             width: units.gu(2.8)
                             height: units.gu(2.8)
-                            name: modelData.is_dir ? "folder" : "text-x-generic"
+                            name: modelData.is_dir
+                                      ? "folder-symbolic"
+                                      : (/\.(click|deb|apk|snap|appimage|flatpak|flatpakref|run)$/i.test(modelData.name)
+                                         ? "package-x-generic-symbolic"
+                                         : "text-x-generic-symbolic")
                             color: modelData.is_dir
                                 ? (root.appTheme && root.appTheme.colors ? root.appTheme.colors.primary : "#00695C")
                                 : "#888888"
@@ -172,7 +192,7 @@ Dialog {
                 Label {
                     anchors.centerIn: parent
                     visible: root.entries.length === 0
-                    text: qsTr("No subfolders found")
+                    text: translator.tr("assetPicker.emptyList")
                     fontSize: "small"
                     color: root.appTheme && root.appTheme.colors ? root.appTheme.colors.surfaceTextMuted : "#888888"
                 }
@@ -186,7 +206,7 @@ Dialog {
 
             Button {
                 Layout.fillWidth: true
-                text: qsTr("Cancel")
+                text: translator.tr("general.cancel")
                 onClicked: {
                     root.canceled()
                     root.close()
@@ -195,7 +215,8 @@ Dialog {
 
             Button {
                 Layout.fillWidth: true
-                text: qsTr("Select This Folder")
+                text: translator.tr("assetPicker.select")
+                enabled: root.currentPath.length > 0
                 color: root.appTheme && root.appTheme.colors ? root.appTheme.colors.primary : "#00695C"
                 onClicked: {
                     root.folderSelected(root.currentPath)

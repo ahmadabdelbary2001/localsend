@@ -22,13 +22,13 @@ Rectangle {
 
     function _deviceIcon(type) {
         var t = (type || "").toLowerCase()
-        if (t === "mobile" || t === "phone")   return "phone"
-        if (t === "desktop")                     return "computer"
-        if (t === "laptop")                      return "computer"
-        if (t === "tablet")                      return "tablet-portrait"
+        if (t === "mobile" || t === "phone")   return "phone-symbolic"
+        if (t === "desktop")                     return "computer-symbolic"
+        if (t === "laptop")                      return "computer-symbolic"
+        if (t === "tablet")                      return "tablet-symbolic"
         if (t === "web" || t === "browser")      return "stock_website"
-        if (t === "server" || t === "headless")  return "network-server"
-        return "computer"
+        if (t === "server" || t === "headless")  return "network-server-symbolic"
+        return "computer-symbolic"
     }
 
     implicitHeight: units.gu(9)
@@ -102,7 +102,7 @@ Rectangle {
 
                 Label {
                     Layout.fillWidth: true
-                    text: card.alias.length > 0 ? card.alias : qsTr("Unknown Device")
+                    text: card.alias.length > 0 ? card.alias : translator.tr("general.unknown")
                     fontSize: "medium"
                     font.bold: true
                     elide: Text.ElideRight

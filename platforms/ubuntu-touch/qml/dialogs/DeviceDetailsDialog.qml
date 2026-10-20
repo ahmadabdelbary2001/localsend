@@ -3,9 +3,22 @@ import QtQuick.Layouts 1.15
 import QtQuick.Controls 2.15
 import Lomiri.Components 1.3
 
+import "../components"
+
 Dialog {
     id: root
     property var appTheme
+
+    // QQuickControls popups are drawn with the application palette; mirror the
+    // app palette so dialogs stay readable in dark / OLED modes.
+    palette.window: appTheme && appTheme.colors ? appTheme.colors.surface : "#FFFFFF"
+    palette.windowText: appTheme && appTheme.colors ? appTheme.colors.surfaceText : "#1B1D21"
+    palette.base: appTheme && appTheme.colors ? appTheme.colors.surfaceTint : "#ECEFF1"
+    palette.text: appTheme && appTheme.colors ? appTheme.colors.surfaceText : "#1B1D21"
+    palette.button: appTheme && appTheme.colors ? appTheme.colors.surfaceTint : "#ECEFF1"
+    palette.buttonText: appTheme && appTheme.colors ? appTheme.colors.surfaceText : "#1B1D21"
+
+    background: DialogFrame { appTheme: root.appTheme }
     property string fingerprint: ""
     property string alias: ""
     property string deviceModel: ""
@@ -30,22 +43,24 @@ Dialog {
     /// Emitted when user taps the "Favorite" toggle.
     signal toggleFavorite()
 
-    title: qsTr("Device Details")
+    title: translator.tr("deviceDetailsPage.title")
     modal: true
     anchors.centerIn: parent
     width: Math.min(parent.width - units.gu(4), units.gu(60))
+    // Height is driven by the content; binding it here (instead of via the
+    // Flickable's implicitHeight) avoids a width -> implicitHeight -> height
+    // -> width binding loop.
+    height: Math.min(col.implicitHeight + topPadding + bottomPadding, units.gu(55))
 
     contentItem: Flickable {
         id: flickable
-        implicitHeight: Math.min(col.implicitHeight, units.gu(55))
         contentHeight: col.implicitHeight
         contentWidth: width
         clip: true
 
         ColumnLayout {
             id: col
-            anchors.left: parent.left
-            anchors.right: parent.right
+            width: flickable.width
             spacing: units.gu(1.5)
 
             // ── Device header ──
@@ -78,7 +93,7 @@ Dialog {
 
                     Label {
                         Layout.fillWidth: true
-                        text: root.alias.length > 0 ? root.alias : qsTr("Unknown Device")
+                        text: root.alias.length > 0 ? root.alias : translator.tr("general.unknown")
                         fontSize: "large"
                         font.bold: true
                         elide: Text.ElideRight
@@ -151,7 +166,7 @@ Dialog {
                 columnSpacing: units.gu(2)
                 rowSpacing: units.gu(0.6)
 
-                Label { text: qsTr("Model"); fontSize: "small"; opacity: 0.6 }
+                Label { text: translator.tr("settingsTab.network.deviceModel"); fontSize: "small"; opacity: 0.6 }
                 Label {
                     text: root.deviceModel.length > 0 ? root.deviceModel : "—"
                     fontSize: "small"
@@ -159,7 +174,7 @@ Dialog {
                     Layout.fillWidth: true
                 }
 
-                Label { text: qsTr("Address"); fontSize: "small"; opacity: 0.6 }
+                Label { text: translator.tr("deviceDetailsPage.info.address"); fontSize: "small"; opacity: 0.6 }
                 Label {
                     text: root.ip + ":" + root.port
                     fontSize: "small"
@@ -167,7 +182,7 @@ Dialog {
                     Layout.fillWidth: true
                 }
 
-                Label { text: qsTr("Protocol"); fontSize: "small"; opacity: 0.6 }
+                Label { text: translator.tr("deviceDetailsPage.info.version"); fontSize: "small"; opacity: 0.6 }
                 Label {
                     text: root.protocolVersion.length > 0 ? root.protocolVersion : "—"
                     fontSize: "small"
@@ -195,7 +210,7 @@ Dialog {
 
                     Label {
                         Layout.fillWidth: true
-                        text: qsTr("Device Fingerprint (verify before sending)")
+                        text: translator.tr("deviceDetailsPage.verify")
                         fontSize: "small"
                         font.bold: true
                         color: root.appTheme && root.appTheme.colors
@@ -221,7 +236,7 @@ Dialog {
                         anchors { fill: parent; margins: units.gu(1) }
                         text: root.fingerprint.length > 0
                               ? root.fingerprint
-                              : qsTr("No fingerprint available")
+                              : translator.tr("general.unknown")
                         wrapMode: Text.WrapAnywhere
                         font.family: "Ubuntu Mono, Monospace"
                         fontSize: "x-small"
@@ -240,8 +255,8 @@ Dialog {
                 Button {
                     Layout.fillWidth: true
                     text: root.isFavorite
-                          ? qsTr("★ Remove from Favorites")
-                          : qsTr("☆ Add to Favorites")
+                          ? translator.tr("dialogs.favoriteDeleteDialog.title")
+                          : translator.tr("dialogs.favoriteEditDialog.titleAdd")
                     color: root.isFavorite
                            ? (root.appTheme && root.appTheme.colors ? root.appTheme.colors.danger : "#C0392B")
                            : (root.appTheme && root.appTheme.colors ? root.appTheme.colors.primary : "#00695C")
@@ -250,7 +265,7 @@ Dialog {
 
                 Button {
                     Layout.preferredWidth: units.gu(12)
-                    text: qsTr("Close")
+                    text: translator.tr("general.close")
                     onClicked: root.close()
                 }
             }

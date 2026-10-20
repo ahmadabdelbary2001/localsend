@@ -10,26 +10,13 @@ Rectangle {
     color: Qt.rgba(0, 0, 0, 0.55)
     z: 100
 
-    // ContentHubPicker loaded lazily so a missing Lomiri.Content does
-    // not break the dialog itself.
-    Loader {
-        id: pickerLoader
-        active: false
-        source: "../pickers/ContentHubPicker.qml"
-
-        onLoaded: {
-            item.filesPicked.connect(function(paths) {
-                pickerLoader.active = false
-                console.log("Shared", paths.length, "file(s)")
-            })
-            item.pickCancelled.connect(function() {
-                pickerLoader.active = false
-            })
-            item.open()
-        }
-        onStatusChanged: {
-            if (status === Loader.Error) {
-                pickerLoader.active = false
+    // Match Flutter's auto-finish: close the dialog once the session ends.
+    Connections {
+        target: serverController
+        function onIncoming_changed() {
+            if (settingsController.auto_finish
+                    && serverController.incoming_phase === "done") {
+                serverController.dismiss_incoming()
             }
         }
     }
@@ -52,9 +39,9 @@ Rectangle {
                 Layout.fillWidth: true
                 text: {
                     var p = serverController.incoming_phase
-                    if (p === "waiting")   return qsTr("Incoming transfer")
-                    if (p === "receiving") return qsTr("Receiving…")
-                    return qsTr("Transfer finished")
+                    if (p === "waiting")   return translator.tr("progressPage.titleReceiving")
+                    if (p === "receiving") return translator.tr("progressPage.titleReceiving")
+                    return translator.tr("general.finished")
                 }
                 fontSize: "large"
                 color: root.appTheme && root.appTheme.colors ? root.appTheme.colors.surfaceText : "#1B1D21"
@@ -65,7 +52,7 @@ Rectangle {
                 text: serverController.incoming_sender
                       + " · "
                       + serverController.incoming_file_count
-                      + " " + qsTr("file(s)")
+                      + " " + translator.tr("general.files")
                 fontSize: "small"
                 opacity: 0.7
                 color: root.appTheme && root.appTheme.colors ? root.appTheme.colors.surfaceTextMuted : "#5F6368"
@@ -124,10 +111,10 @@ Rectangle {
                     Label {
                         text: {
                             var s = model.status
-                            if (s === "queue")    return qsTr("Waiting…")
+                            if (s === "queue")    return translator.tr("general.queue")
                             if (s === "sending")  return Math.round(model.progress * 100) + "%"
-                            if (s === "finished") return qsTr("Saved")
-                            if (s === "failed")   return qsTr("Failed") + (model.error ? ": " + model.error : "")
+                            if (s === "finished") return translator.tr("general.done")
+                            if (s === "failed")   return translator.tr("general.error") + (model.error ? ": " + model.error : "")
                             return s
                         }
                         fontSize: "x-small"
@@ -146,29 +133,20 @@ Rectangle {
                 Item { Layout.fillWidth: true }
 
                 Button {
-                    text: qsTr("Decline")
+                    text: translator.tr("general.decline")
                     visible: serverController.incoming_phase === "waiting"
                     onClicked: serverController.decline_incoming()
                 }
 
                 Button {
-                    text: qsTr("Accept")
+                    text: translator.tr("general.accept")
                     color: root.appTheme && root.appTheme.colors ? root.appTheme.colors.primary : "#00695C"
                     visible: serverController.incoming_phase === "waiting"
                     onClicked: serverController.accept_incoming()
                 }
 
                 Button {
-                    text: qsTr("Share")
-                    visible: serverController.incoming_phase === "done"
-                    onClicked: {
-                        pickerLoader.active = false
-                        pickerLoader.active = true
-                    }
-                }
-
-                Button {
-                    text: qsTr("Close")
+                    text: translator.tr("general.close")
                     visible: serverController.incoming_phase === "done"
                     onClicked: serverController.dismiss_incoming()
                 }

@@ -7,11 +7,20 @@ RowLayout {
     property var appTheme
     property string label: ""
     property string placeholder: ""
-    property alias text: field.text
-    signal edited(string value)
+    /// Persisted value. When it changes (random alias, reset), the field is
+    /// refreshed; typing only updates `field.text` and is persisted via
+    /// `edited` after the debounce.
+    property string value: ""
+    property int inputMethodHints: Qt.ImhNone
+    signal edited(string editedValue)
 
     Layout.fillWidth: true
     spacing: units.gu(1)
+
+    onValueChanged: {
+        if (field.text !== value)
+            field.text = value
+    }
 
     Label {
         Layout.fillWidth: true
@@ -23,8 +32,9 @@ RowLayout {
 
     TextField {
         id: field
-        Layout.preferredWidth: units.gu(15)
+        Layout.preferredWidth: units.gu(16)
         placeholderText: root.placeholder
+        inputMethodHints: root.inputMethodHints
         onTextChanged: debounce.restart()
     }
 

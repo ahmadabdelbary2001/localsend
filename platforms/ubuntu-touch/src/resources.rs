@@ -29,6 +29,7 @@ pub fn register() {
             "qml/components/SettingsSwitch.qml"    as "components/SettingsSwitch.qml",
             "qml/components/SettingsButton.qml"    as "components/SettingsButton.qml",
             "qml/components/SettingsTextField.qml" as "components/SettingsTextField.qml",
+            "qml/components/DialogFrame.qml"       as "components/DialogFrame.qml",
             "qml/dialogs/IncomingTransferDialog.qml" as "dialogs/IncomingTransferDialog.qml",
             "qml/dialogs/SendProgressDialog.qml" as "dialogs/SendProgressDialog.qml",
             "qml/dialogs/HistoryDialog.qml" as "dialogs/HistoryDialog.qml",
@@ -39,6 +40,7 @@ pub fn register() {
             "qml/dialogs/FolderPickerDialog.qml"   as "dialogs/FolderPickerDialog.qml",
             "qml/dialogs/AppPickerDialog.qml"      as "dialogs/AppPickerDialog.qml",
             "qml/dialogs/LanguageDialog.qml"       as "dialogs/LanguageDialog.qml",
+            "qml/dialogs/OptionPickDialog.qml"     as "dialogs/OptionPickDialog.qml",
             "assets/logo.png" as "assets/logo.png",
         }
     );

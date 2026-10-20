@@ -9,19 +9,28 @@ use crate::bridge::send_controller::OutgoingEntry;
 pub struct OutgoingFilesModel {
     base: qt_base_class!(trait QAbstractListModel),
     entries: Arc<RwLock<Vec<OutgoingEntry>>>,
+    last: Vec<OutgoingEntry>,
     refresh: qt_method!(fn(&mut self)),
 }
 
 impl OutgoingFilesModel {
     pub fn new(entries: Arc<RwLock<Vec<OutgoingEntry>>>) -> Self {
+        let last = entries.read().map(|g| g.clone()).unwrap_or_default();
         Self {
             base: Default::default(),
             entries,
+            last,
             refresh: Default::default(),
         }
     }
+
     pub fn refresh(&mut self) {
+        let snapshot = self.entries.read().map(|g| g.clone()).unwrap_or_default();
+        if snapshot == self.last {
+            return;
+        }
         self.begin_reset_model();
+        self.last = snapshot;
         self.end_reset_model();
     }
 }

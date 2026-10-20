@@ -91,6 +91,8 @@ fn main() -> ExitCode {
         discovery_handle.clone(),
         incoming_entries.clone(),
         history.clone(),
+        settings.clone(),
+        favorites.clone(),
     ));
 
     let send_controller = RefCell::new(SendController::new(
@@ -101,13 +103,13 @@ fn main() -> ExitCode {
         favorites.clone(),
     ));
 
-    let settings_controller = RefCell::new(SettingsController::new(settings));
+    let settings_controller = RefCell::new(SettingsController::new(settings.clone()));
     let local_ips = list_local_ips(
         settings_snapshot.network_whitelist.as_deref(),
         settings_snapshot.network_blacklist.as_deref(),
     );
 
-    let mut local_ips_model_value = LocalIpsModel::new();
+    let mut local_ips_model_value = LocalIpsModel::new(settings.clone());
     local_ips_model_value.replace_all(local_ips);
 
     let local_ips_model = RefCell::new(local_ips_model_value);
@@ -118,15 +120,11 @@ fn main() -> ExitCode {
     let favorites_controller = RefCell::new(FavoritesController::new(favorites));
     let history_controller = RefCell::new(HistoryController::new(history));
 
-    // Start server first.
+    // Start server first, honoring quick-save settings.
     {
         let mut sc = server_controller.borrow_mut();
-        sc.start_now(
-            settings_snapshot.alias.clone(),
-            settings_snapshot.port,
-            settings_snapshot.https,
-            settings_snapshot.receive_pin.clone(),
-        );
+        sc.start_from_settings();
+        sc.apply_auto_accept_from_settings();
     }
 
     // Start discovery.

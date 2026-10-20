@@ -3,9 +3,22 @@ import QtQuick.Layouts 1.15
 import QtQuick.Controls 2.15
 import Lomiri.Components 1.3
 
+import "../components"
+
 Dialog {
     id: root
     property var appTheme
+
+    // QQuickControls popups are drawn with the application palette; mirror the
+    // app palette so dialogs stay readable in dark / OLED modes.
+    palette.window: appTheme && appTheme.colors ? appTheme.colors.surface : "#FFFFFF"
+    palette.windowText: appTheme && appTheme.colors ? appTheme.colors.surfaceText : "#1B1D21"
+    palette.base: appTheme && appTheme.colors ? appTheme.colors.surfaceTint : "#ECEFF1"
+    palette.text: appTheme && appTheme.colors ? appTheme.colors.surfaceText : "#1B1D21"
+    palette.button: appTheme && appTheme.colors ? appTheme.colors.surfaceTint : "#ECEFF1"
+    palette.buttonText: appTheme && appTheme.colors ? appTheme.colors.surfaceText : "#1B1D21"
+
+    background: DialogFrame { appTheme: root.appTheme }
     property var allApps: []
     property var filteredApps: []
 
@@ -41,9 +54,13 @@ Dialog {
         root.refreshApps()
     }
 
-    title: qsTr("Select App")
+    title: translator.tr("apkPickerPage.title")
     modal: true
-    anchors.centerIn: parent
+    // Instantiated through a Loader, so the declared parent (the
+    // zero-sized Loader item) cannot be used for centering.
+    parent: Overlay.overlay
+    x: Math.round((parent.width - width) / 2)
+    y: Math.round((parent.height - height) / 2)
     width: Math.min(parent.width - units.gu(4), units.gu(65))
     height: Math.min(parent.height - units.gu(6), units.gu(75))
 
@@ -55,7 +72,7 @@ Dialog {
         TextField {
             id: searchField
             Layout.fillWidth: true
-            placeholderText: qsTr("Search apps…")
+            placeholderText: ""
             onTextChanged: root.filterApps(text)
         }
 
@@ -93,7 +110,7 @@ Dialog {
                                 anchors.centerIn: parent
                                 width: units.gu(3)
                                 height: units.gu(3)
-                                name: modelData.icon && modelData.icon.length > 0 ? modelData.icon : "package"
+                                name: modelData.icon && modelData.icon.length > 0 ? modelData.icon : "package-x-generic-symbolic"
                                 color: root.appTheme && root.appTheme.colors ? root.appTheme.colors.primary : "#00695C"
                             }
                         }
@@ -135,7 +152,7 @@ Dialog {
                 Label {
                     anchors.centerIn: parent
                     visible: root.filteredApps.length === 0
-                    text: qsTr("No apps found")
+                    text: translator.tr("dialogs.noFiles.title")
                     fontSize: "small"
                     color: root.appTheme && root.appTheme.colors ? root.appTheme.colors.surfaceTextMuted : "#888888"
                 }
@@ -149,7 +166,7 @@ Dialog {
 
             Button {
                 Layout.fillWidth: true
-                text: qsTr("Browse File (.click)")
+                text: translator.tr("general.open")
                 onClicked: {
                     root.pickCustomFile()
                     root.close()
@@ -158,7 +175,7 @@ Dialog {
 
             Button {
                 Layout.preferredWidth: units.gu(12)
-                text: qsTr("Cancel")
+                text: translator.tr("general.cancel")
                 onClicked: {
                     root.canceled()
                     root.close()

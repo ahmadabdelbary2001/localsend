@@ -10,7 +10,10 @@ Page {
     property var appTheme
     property var navigationStack: null
 
-    header: null
+    // Lomiri's MainView shows a deprecated application header whenever the
+    // active page has no header. An empty Item hides it so the tabs get the
+    // same edge-to-edge layout as the Flutter app.
+    header: Item { }
 
     // StackLayout manages one page at a time. Each page is wrapped in
     // a plain Item with Layout.fillWidth/Height so the layout sizes

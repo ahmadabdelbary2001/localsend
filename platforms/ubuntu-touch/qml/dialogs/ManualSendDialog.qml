@@ -3,33 +3,54 @@ import QtQuick.Layouts 1.15
 import QtQuick.Controls 2.15
 import Lomiri.Components 1.3
 
+import "../components"
+
 Dialog {
     id: root
     property var appTheme
 
+    // QQuickControls popups are drawn with the application palette; mirror the
+    // app palette so dialogs stay readable in dark / OLED modes.
+    palette.window: appTheme && appTheme.colors ? appTheme.colors.surface : "#FFFFFF"
+    palette.windowText: appTheme && appTheme.colors ? appTheme.colors.surfaceText : "#1B1D21"
+    palette.base: appTheme && appTheme.colors ? appTheme.colors.surfaceTint : "#ECEFF1"
+    palette.text: appTheme && appTheme.colors ? appTheme.colors.surfaceText : "#1B1D21"
+    palette.button: appTheme && appTheme.colors ? appTheme.colors.surfaceTint : "#ECEFF1"
+    palette.buttonText: appTheme && appTheme.colors ? appTheme.colors.surfaceText : "#1B1D21"
+
+    background: DialogFrame { appTheme: root.appTheme }
+
     signal submitted(string ip, int port, bool https)
     signal canceled()
 
-    title: qsTr("Send to address")
+    // No QQuickControls header: it is drawn inside the same padded area as
+    // the content item and overlaps it once the dialog has a custom background.
+    header: null
     modal: true
-    anchors.centerIn: parent
+    // This dialog is instantiated through a Loader, so its declared parent
+    // (the zero-sized Loader item) cannot be used for centering. Attach the
+    // popup to the window overlay instead.
+    parent: Overlay.overlay
     width: Math.min(parent.width - units.gu(4), units.gu(50))
-    height: Math.min(parent.height - units.gu(6), units.gu(48))
+    x: Math.round((parent.width - width) / 2)
+    y: Math.round((parent.height - height) / 2)
+    padding: units.gu(2)
 
     contentItem: ColumnLayout {
-        anchors.margins: units.gu(1.5)
         spacing: units.gu(1.5)
 
         Label {
-            text: qsTr("Enter the recipient IP address and port:")
-            fontSize: "small"
+            Layout.fillWidth: true
+            text: translator.tr("dialogs.addressInput.title")
+            fontSize: "large"
+            font.bold: true
             wrapMode: Text.Wrap
-            color: root.appTheme && root.appTheme.colors ? root.appTheme.colors.surfaceTextMuted : "#5F6368"
+            color: root.appTheme && root.appTheme.colors ? root.appTheme.colors.surfaceText : "#1B1D21"
         }
 
         // IP Address input
         Label {
-            text: qsTr("IP address / Host")
+            text: translator.tr("dialogs.addressInput.ip")
             fontSize: "small"
             font.bold: true
             color: root.appTheme && root.appTheme.colors ? root.appTheme.colors.surfaceText : "#1B1D21"
@@ -52,7 +73,7 @@ Dialog {
                 spacing: units.gu(0.5)
 
                 Label {
-                    text: qsTr("Port")
+                    text: translator.tr("settingsTab.network.port")
                     fontSize: "small"
                     font.bold: true
                     color: root.appTheme && root.appTheme.colors ? root.appTheme.colors.surfaceText : "#1B1D21"
@@ -83,8 +104,6 @@ Dialog {
             }
         }
 
-        Item { Layout.fillHeight: true }
-
         // Buttons
         RowLayout {
             Layout.fillWidth: true
@@ -92,7 +111,7 @@ Dialog {
 
             Button {
                 Layout.fillWidth: true
-                text: qsTr("Cancel")
+                text: translator.tr("general.cancel")
                 onClicked: {
                     root.canceled()
                     root.close()
@@ -101,7 +120,7 @@ Dialog {
 
             Button {
                 Layout.fillWidth: true
-                text: qsTr("Send")
+                text: translator.tr("sendTab.title")
                 color: root.appTheme && root.appTheme.colors ? root.appTheme.colors.primary : "#00695C"
                 enabled: ipField.text.trim().length > 0
                 onClicked: {

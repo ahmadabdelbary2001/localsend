@@ -3,9 +3,22 @@ import QtQuick.Layouts 1.15
 import QtQuick.Controls 2.15
 import Lomiri.Components 1.3
 
+import "../components"
+
 Dialog {
     id: root
     property var appTheme
+
+    // QQuickControls popups are drawn with the application palette; mirror the
+    // app palette so dialogs stay readable in dark / OLED modes.
+    palette.window: appTheme && appTheme.colors ? appTheme.colors.surface : "#FFFFFF"
+    palette.windowText: appTheme && appTheme.colors ? appTheme.colors.surfaceText : "#1B1D21"
+    palette.base: appTheme && appTheme.colors ? appTheme.colors.surfaceTint : "#ECEFF1"
+    palette.text: appTheme && appTheme.colors ? appTheme.colors.surfaceText : "#1B1D21"
+    palette.button: appTheme && appTheme.colors ? appTheme.colors.surfaceTint : "#ECEFF1"
+    palette.buttonText: appTheme && appTheme.colors ? appTheme.colors.surfaceText : "#1B1D21"
+
+    background: DialogFrame { appTheme: root.appTheme }
 
     title: translator.tr("receiveHistoryPage.title")
     modal: true
@@ -19,15 +32,10 @@ Dialog {
         RowLayout {
             Layout.fillWidth: true
 
-            Label {
-                Layout.fillWidth: true
-                text: historyController.count + " " + qsTr("entries")
-                fontSize: "small"
-                color: root.appTheme && root.appTheme.colors ? root.appTheme.colors.surfaceTextMuted : "#5F6368"
-            }
+            Item { Layout.fillWidth: true }
 
             Button {
-                text: qsTr("Clear")
+                text: translator.tr("receiveHistoryPage.deleteHistory")
                 enabled: historyController.count > 0
                 onClicked: historyController.clear()
             }
@@ -64,7 +72,7 @@ Dialog {
                     actions: [
                         Action {
                             iconName: "delete"
-                            text: qsTr("Delete")
+                            text: translator.tr("general.delete")
                             onTriggered: historyController.remove(model.id)
                         }
                     ]

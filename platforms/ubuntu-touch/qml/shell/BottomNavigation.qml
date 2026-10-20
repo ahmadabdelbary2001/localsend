@@ -3,7 +3,7 @@ import Lomiri.Components 1.3
 
 Item {
     id: nav
-    implicitHeight: units.gu(7)
+    implicitHeight: units.gu(8)
     height: implicitHeight
 
     property var appTheme
@@ -27,7 +27,7 @@ Item {
 
         Repeater {
             model: [
-                { labelKey: "receiveTab.title",  icon: "download" },
+                { labelKey: "receiveTab.title",  icon: "transfer-progress-download" },
                 { labelKey: "sendTab.title",     icon: "send"     },
                 { labelKey: "settingsTab.title", icon: "settings" }
             ]

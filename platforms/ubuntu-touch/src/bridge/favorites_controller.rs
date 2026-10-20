@@ -94,9 +94,12 @@ impl FavoritesController {
     }
 
     fn reload(&mut self) {
-        self.begin_reset_model();
-        self.items = self.service.snapshot();
-        self.end_reset_model();
+        let snapshot = self.service.snapshot();
+        if snapshot != self.items {
+            self.begin_reset_model();
+            self.items = snapshot;
+            self.end_reset_model();
+        }
         self.count = self.items.len() as i32;
         self.changed();
     }

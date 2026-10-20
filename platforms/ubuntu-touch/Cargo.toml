@@ -28,6 +28,7 @@ anyhow = "1"
 futures = "0.3"
 uuid = { version = "1", features = ["v4"] }
 bytes = "1"
+sha2 = "0.10"
 
 # Bridge core's tracing logs into the log facade,
 # so env_logger can print them.
