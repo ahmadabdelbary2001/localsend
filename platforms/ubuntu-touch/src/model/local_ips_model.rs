@@ -22,6 +22,11 @@ pub struct LocalIpsModel {
     settings: Option<Arc<SettingsService>>,
     last_refresh: Instant,
 
+    /// Number of addresses. QML binds to it, so the address list updates
+    /// when the network changes.
+    count: qt_property!(i32; NOTIFY count_changed),
+    count_changed: qt_signal!(),
+
     /// Re-enumerate interfaces (no-op if called more often than 2s).
     refresh: qt_method!(fn(&mut self)),
 }
@@ -33,11 +38,14 @@ impl LocalIpsModel {
             snapshot.network_whitelist.as_deref(),
             snapshot.network_blacklist.as_deref(),
         );
+        let count = items.len() as i32;
         Self {
             base: Default::default(),
             items,
             settings: Some(settings),
             last_refresh: Instant::now(),
+            count,
+            count_changed: Default::default(),
             refresh: Default::default(),
         }
     }
@@ -49,6 +57,11 @@ impl LocalIpsModel {
         self.begin_reset_model();
         self.items = ips;
         self.end_reset_model();
+        let count = self.items.len() as i32;
+        if self.count != count {
+            self.count = count;
+            self.count_changed();
+        }
     }
 
     pub fn refresh(&mut self) {

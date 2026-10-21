@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
 use std::path::{Path, PathBuf};
-use std::sync::{Arc, RwLock};
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::{Arc, Mutex, RwLock};
 
 use qmetaobject::prelude::*;
 use serde_json::Value;
@@ -15,6 +16,7 @@ use crate::application::settings_service::SettingsService;
 use crate::application::send_service::{
     SendCommand, SendEvent, SendFileEntry, SendServiceHandle, SendTarget,
 };
+use crate::platform::packages::{self, PackageFile};
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct OutgoingEntry {
@@ -24,6 +26,18 @@ pub struct OutgoingEntry {
     pub progress: f64,
     pub status: String, // "queue" | "sending" | "finished" | "failed"
     pub error: Option<String>,
+}
+
+/// How long a package scan result is reused before the storage is searched
+/// again.
+const APP_SCAN_MAX_AGE_SECS: u64 = 60;
+
+/// State of the background package scan.
+#[derive(Default)]
+struct AppScanState {
+    running: bool,
+    /// Time of the last finished scan (seconds since the epoch).
+    last_scan: u64,
 }
 
 #[derive(QObject)]
@@ -43,6 +57,9 @@ pub struct SendController {
     state_changed: qt_signal!(),
     log_message: qt_signal!(message: QString),
     files_changed: qt_signal!(),
+    /// Emitted when the background package scan finished, so the app picker
+    /// can show the results.
+    app_packages_changed: qt_signal!(),
 
     /// paths_json = JSON array of absolute file paths.
     send_files: qt_method!(fn(&mut self, fingerprint: QString, paths_json: QString)),
@@ -60,7 +77,11 @@ pub struct SendController {
     collect_directory_files: qt_method!(fn(&mut self, dir_path: QString) -> QString),
     list_directory: qt_method!(fn(&mut self, dir_path: QString) -> QString),
     /// `kind` is "click" (default) or "apk".
-    list_installed_apps: qt_method!(fn(&mut self, kind: QString) -> QString),
+    /// Lists package files (.click / .apk) that can be shared.
+    ///
+    /// `kind` selects the package format: `"click"` (Ubuntu Touch), `"apk"`
+    /// (Android) or `"all"`. `query` filters by name or path.
+    list_app_packages: qt_method!(fn(&mut self, kind: QString, query: QString) -> QString),
     selection_info: qt_method!(fn(&mut self, paths_json: QString) -> QString),
     /// Per-file details for the selection list (name / size / image / ext).
     selection_items: qt_method!(fn(&mut self, paths_json: QString) -> QString),
@@ -81,6 +102,13 @@ pub struct SendController {
     session_id: Option<String>,
     settings: Arc<SettingsService>,
     entries: Arc<RwLock<Vec<OutgoingEntry>>>,
+
+    /// Package files found on the device (see platform::packages).
+    app_packages: Arc<RwLock<Vec<PackageFile>>>,
+    /// State of the background scan: running flag and time of the last scan.
+    app_scan: Arc<Mutex<AppScanState>>,
+    /// Set by the scan thread, read by poll() to emit the change signal.
+    app_scan_finished: Arc<AtomicBool>,
 }
 
 impl SendController {
@@ -106,12 +134,13 @@ impl SendController {
             state_changed: Default::default(),
             log_message: Default::default(),
             files_changed: Default::default(),
+            app_packages_changed: Default::default(),
             send_files: Default::default(),
             send_to_address: Default::default(),
             create_text_file: Default::default(),
             collect_directory_files: Default::default(),
             list_directory: Default::default(),
-            list_installed_apps: Default::default(),
+            list_app_packages: Default::default(),
             selection_info: Default::default(),
             selection_items: Default::default(),
             home_directory: Default::default(),
@@ -128,6 +157,9 @@ impl SendController {
             session_id: None,
             entries,
             settings,
+            app_packages: Arc::new(RwLock::new(Vec::new())),
+            app_scan: Arc::new(Mutex::new(AppScanState::default())),
+            app_scan_finished: Arc::new(AtomicBool::new(false)),
         }
     }
 
@@ -499,74 +531,108 @@ impl SendController {
         serde_json::to_string(&entries_list).unwrap_or_else(|_| "[]".into()).into()
     }
 
-    /// Lists sendable application packages found in the usual user folders.
-    /// Unlike Flutter's Android APK picker, Ubuntu Touch has no installed-app
-    /// archive to share, so only package files are listed.
+    /// Lists package files (.click / .apk) that can be shared with a peer.
     ///
-    /// `kind` selects the package format: `"click"` (Ubuntu Touch, default) or
-    /// `"apk"` (Android). Anything else falls back to `"click"`.
-    pub fn list_installed_apps(&mut self, kind: QString) -> QString {
-        #[derive(serde::Serialize)]
-        struct AppItem {
-            name: String,
-            path: String,
-            icon: String,
-        }
+    /// Unlike Flutter's Android APK picker, Ubuntu Touch has no installed-app
+    /// archive to share, so the package *files* stored on the device are
+    /// listed. They can live anywhere (download folder, home directory, SD
+    /// card), so the whole storage is searched.
+    ///
+    /// The search runs in a background thread: the first call starts it and
+    /// returns the current (possibly empty) result, every later call returns
+    /// the cached packages. QML polls while the picker is open.
+    ///
+    /// `kind` selects the package format: `"click"` (Ubuntu Touch), `"apk"`
+    /// (Android) or `"all"`. `query` filters by name or path.
+    pub fn list_app_packages(&mut self, kind: QString, query: QString) -> QString {
+        self.ensure_app_scan();
 
-        let kind = kind.to_string().to_ascii_lowercase();
-        let extensions: &[&str] = match kind.as_str() {
-            "apk" => &["apk"],
-            _ => &["click"],
-        };
-        // Both formats render with the package icon: "stock_application" is
-        // not part of the Ubuntu Touch icon theme and falls back to a random
-        // glyph there.
-        let icon = "package-x-generic-symbolic";
+        let kind = kind.to_string();
+        let query = query.to_string();
 
-        let home = std::env::var_os("HOME").map(PathBuf::from);
-        let mut roots: Vec<PathBuf> = Vec::new();
-        if let Some(home) = &home {
-            for sub in ["Downloads", "Documents", "Desktop"] {
-                roots.push(home.join(sub));
-            }
-            roots.push(home.clone());
-        }
-        roots.push(PathBuf::from("/var/cache/click"));
-        roots.push(PathBuf::from("/opt/click.ubuntu.com"));
+        let packages = self
+            .app_packages
+            .read()
+            .map(|p| p.clone())
+            .unwrap_or_default();
+        let matching = packages::filter(&packages, &kind, &query);
 
-        let mut apps: Vec<AppItem> = Vec::new();
-        for root in &roots {
-            let Ok(entries) = std::fs::read_dir(root) else {
-                continue;
-            };
-            for entry in entries.flatten() {
-                let path = entry.path();
-                if !path.is_file() {
-                    continue;
-                }
-                let Some(ext) = path.extension().and_then(|e| e.to_str()) else {
-                    continue;
-                };
-                if !extensions.iter().any(|known| known.eq_ignore_ascii_case(ext)) {
-                    continue;
-                }
-                let name = path
-                    .file_name()
-                    .and_then(|n| n.to_str())
-                    .unwrap_or("package")
-                    .to_string();
-                apps.push(AppItem {
-                    name,
-                    path: path.to_string_lossy().to_string(),
-                    icon: icon.to_string(),
-                });
-            }
-        }
-
-        apps.sort_by_key(|app| app.name.to_lowercase());
-        apps.dedup_by(|a, b| a.path == b.path);
+        let apps: Vec<serde_json::Value> = matching
+            .iter()
+            .map(|p| {
+                serde_json::json!({
+                    "name": p.name,
+                    "path": p.path,
+                    "size": p.size,
+                    "modified": p.modified,
+                    "kind": p.kind(),
+                    // Both formats render with the package icon:
+                    // "stock_application" is not part of the Ubuntu Touch icon
+                    // theme and falls back to a random glyph there.
+                    "icon": "package-x-generic-symbolic",
+                })
+            })
+            .collect();
 
         serde_json::to_string(&apps).unwrap_or_else(|_| "[]".into()).into()
+    }
+
+    /// Starts the package scan when it is not running and the cache is stale.
+    fn ensure_app_scan(&mut self) {
+        let now = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map(|d| d.as_secs())
+            .unwrap_or(0);
+
+        let should_start = {
+            let mut state = match self.app_scan.lock() {
+                Ok(g) => g,
+                Err(p) => p.into_inner(),
+            };
+            if state.running {
+                false
+            } else {
+                let stale = now.saturating_sub(state.last_scan) > APP_SCAN_MAX_AGE_SECS;
+                let empty = self
+                    .app_packages
+                    .read()
+                    .map(|p| p.is_empty())
+                    .unwrap_or(true);
+                if stale || empty {
+                    state.running = true;
+                    true
+                } else {
+                    false
+                }
+            }
+        };
+
+        if !should_start {
+            return;
+        }
+
+        let packages = self.app_packages.clone();
+        let scan_state = self.app_scan.clone();
+        let scan_finished = self.app_scan_finished.clone();
+        std::thread::spawn(move || {
+            let roots = packages::search_roots();
+            let found = packages::scan(&roots);
+            log::info!("package scan found {} file(s)", found.len());
+            if let Ok(mut cache) = packages.write() {
+                *cache = found;
+            }
+            let mut state = match scan_state.lock() {
+                Ok(g) => g,
+                Err(p) => p.into_inner(),
+            };
+            state.running = false;
+            state.last_scan = std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .map(|d| d.as_secs())
+                .unwrap_or(0);
+            drop(state);
+            scan_finished.store(true, Ordering::Relaxed);
+        });
     }
 
     pub fn directory_exists(&self, path: QString) -> bool {
@@ -689,6 +755,12 @@ impl SendController {
     }
 
     pub fn poll(&mut self) {
+        // The package scan runs in a background thread; tell QML when it is
+        // done so the app picker can show the results.
+        if self.app_scan_finished.swap(false, Ordering::Relaxed) {
+            self.app_packages_changed();
+        }
+
         let events: Vec<SendEvent> = {
             let Some(h) = &self.handle else { return };
             let mut out = Vec::new();

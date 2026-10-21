@@ -7,13 +7,61 @@ import "../dialogs" as LocalSendDialogs
 
 Page {
     id: page
-    header: Item { } // hides MainView's deprecated app header
     property var appTheme
+
+    // The tab pages live inside the shell, not in the MainView page
+    // stack. An empty header keeps Lomiri from falling back to the
+    // deprecated application header handling for them (the visible top
+    // bar is the PageHeader of the shell).
+    header: Item { }
     property string pendingFingerprint: ""
     property var pendingAddress: null // { ip: "", port: 53317, https: true }
     property var selectedPaths: []
     property string pickerType: "all" // "all" | "pictures"
     property string lastError: ""
+
+    // Favorites are shown in their own section above the nearby devices.
+    property bool showFavorites: true
+
+    // Local addresses of this device. The Android app shows them next to the
+    // scan button, they are the addresses a peer can be reached at.
+    readonly property string localIps: {
+        var ips = []
+        try {
+            for (var i = 0; i < localIpsModel.rowCount(); i++) {
+                var idx = localIpsModel.index(i, 0)
+                var ip = localIpsModel.data(idx, 0)
+                if (ip && ip.length > 0)
+                    ips.push(ip)
+            }
+        } catch (e) {
+            console.warn("[SendPage] cannot read local addresses:", e)
+        }
+        return ips.join("  ·  ")
+    }
+
+    // Devices that are currently visible in the discovery list. The bridge
+    // exposes the snapshot as JSON, so the favorites list can look up the
+    // live model / type / address of a peer (QML cannot query the list model
+    // by fingerprint).
+    readonly property var devices: {
+        try {
+            return JSON.parse(discoveryController.devices_json)
+        } catch (e) {
+            return []
+        }
+    }
+
+    // Live information about a device, or null when it is not visible
+    // (an offline favorite for example).
+    function deviceInfo(fingerprint) {
+        var list = page.devices
+        for (var i = 0; i < list.length; i++) {
+            if (list[i].fingerprint === fingerprint)
+                return list[i]
+        }
+        return null
+    }
 
     // Live summary of the current selection (count / total size / names).
     // Re-evaluates whenever selectedPaths changes.
@@ -633,25 +681,50 @@ Page {
                         font.bold: true
                         color: page.appTheme && page.appTheme.colors ? page.appTheme.colors.surfaceText : "#1B1D21"
                     }
+
+                    // Own addresses, like the scan button of the Android app.
+                    Label {
+                        Layout.fillWidth: true
+                        visible: page.localIps.length > 0
+                        text: page.localIps
+                        fontSize: "x-small"
+                        elide: Text.ElideRight
+                        color: page.appTheme && page.appTheme.colors ? page.appTheme.colors.surfaceTextMuted : "#5F6368"
+                    }
                 }
 
-                // Send by IP Button
-                Button {
-                    text: translator.tr("dialogs.addressInput.ip")
+                // Scan for devices
+                IconButton {
+                    appTheme: page.appTheme
+                    iconName: "view-refresh"
+                    enabled: !discoveryController.scanning
+                    opacity: enabled ? 1.0 : 0.4
+                    onClicked: {
+                        discoveryController.scan_now()
+                        discoveryController.poll()
+                        deviceListModel.refresh()
+                    }
+                }
+
+                // Send to a manually entered address
+                IconButton {
+                    appTheme: page.appTheme
+                    iconName: "insert-link"
                     onClicked: {
                         manualSendLoader.active = true
                     }
                 }
 
-                // Refresh / Scan Button
-                Button {
-                    text: translator.tr("sendTab.scan")
-                    enabled: !discoveryController.scanning
-                    color: page.appTheme && page.appTheme.colors ? page.appTheme.colors.surfaceTint : "#ECEFF1"
+                // Show / hide the favorites
+                IconButton {
+                    appTheme: page.appTheme
+                    iconName: page.showFavorites ? "starred" : "non-starred"
+                    active: page.showFavorites
+                    iconColor: page.showFavorites
+                               ? (page.appTheme && page.appTheme.colors ? page.appTheme.colors.primary : "#00695C")
+                               : (page.appTheme && page.appTheme.colors ? page.appTheme.colors.surfaceTextMuted : "#5F6368")
                     onClicked: {
-                        discoveryController.scan_now()
-                        discoveryController.poll()
-                        deviceListModel.refresh()
+                        page.showFavorites = !page.showFavorites
                     }
                 }
             }
@@ -660,7 +733,7 @@ Page {
             Label {
                 Layout.fillWidth: true
                 Layout.topMargin: units.gu(0.5)
-                visible: favoritesController.count > 0
+                visible: favoritesController.count > 0 && page.showFavorites
                 text: translator.tr("dialogs.favoriteDialog.title") + " (" + favoritesController.count + ")"
                 fontSize: "small"
                 font.bold: true
@@ -670,72 +743,73 @@ Page {
             Column {
                 Layout.fillWidth: true
                 spacing: units.gu(1)
-                visible: favoritesController.count > 0
+                visible: favoritesController.count > 0 && page.showFavorites
 
                 Repeater {
                     model: favoritesController
 
                     delegate: DeviceCard {
                         width: parent.width
-                    appTheme: page.appTheme
-                    fingerprint: model.fingerprint
-                    alias: model.alias
-                    // Try to get live info if device is also discovered nearby (role2=deviceModel)
-                    deviceModel: {
-                        for (var i = 0; i < deviceListModel.count; i++) {
-                            var idx = deviceListModel.index(i, 0)
-                            if (deviceListModel.data(idx, 0) === model.fingerprint)
-                                return deviceListModel.data(idx, 2)
-                        }
-                        return ""
-                    }
-                    deviceType: {
-                        for (var i = 0; i < deviceListModel.count; i++) {
-                            var idx = deviceListModel.index(i, 0)
-                            if (deviceListModel.data(idx, 0) === model.fingerprint)
-                                return deviceListModel.data(idx, 3)
-                        }
-                        return ""
-                    }
-                    ip: model.ip
-                    port: model.port
-                    https: {
-                        // role6=https; fallback true for saved favorites
-                        for (var i = 0; i < deviceListModel.count; i++) {
-                            var idx = deviceListModel.index(i, 0)
-                            if (deviceListModel.data(idx, 0) === model.fingerprint)
-                                return deviceListModel.data(idx, 6)
-                        }
-                        return true
-                    }
-                    isFavorite: true
-                    // offline = not found in current discovery snapshot
-                    offline: (function() {
-                        for (var i = 0; i < deviceListModel.count; i++) {
-                            var idx = deviceListModel.index(i, 0)
-                            if (deviceListModel.data(idx, 0) === model.fingerprint)
-                                return false
-                        }
-                        return true
-                    })()
+                        appTheme: page.appTheme
+                        fingerprint: model.fingerprint
 
-                    onTapped: page.sendToDevice(model.fingerprint)
-                    onSendTextRequested: page.sendTextToDevice(model.fingerprint)
-                    onDetailsRequested: {
-                        detailsDialog.fingerprint = model.fingerprint
-                        detailsDialog.alias = model.alias
-                        detailsDialog.deviceModel = ""
-                        detailsDialog.deviceType = ""
-                        detailsDialog.ip = model.ip
-                        detailsDialog.port = model.port
-                        detailsDialog.https = true
-                        detailsDialog.protocolVersion = ""
-                        detailsDialog.isFavorite = true
-                        detailsDialog.open()
+                        // A favorite keeps the name it had when it was added,
+                        // unless the user renamed it or the device is visible
+                        // right now and reports a different name.
+                        alias: {
+                            var custom = favoritesController.alias_for(model.fingerprint)
+                            if (custom && custom.length > 0)
+                                return custom
+                            var live = page.deviceInfo(model.fingerprint)
+                            if (live && live.alias && live.alias.length > 0)
+                                return live.alias
+                            return model.alias
+                        }
+
+                        // Live information of the device, empty when it is not
+                        // discovered (an offline favorite).
+                        deviceModel: {
+                            var live = page.deviceInfo(model.fingerprint)
+                            return live ? live.deviceModel : ""
+                        }
+                        deviceType: {
+                            var live = page.deviceInfo(model.fingerprint)
+                            return live ? live.deviceType : ""
+                        }
+                        ip: {
+                            var live = page.deviceInfo(model.fingerprint)
+                            return live ? live.ip : model.ip
+                        }
+                        port: {
+                            var live = page.deviceInfo(model.fingerprint)
+                            return live ? live.port : model.port
+                        }
+                        https: {
+                            var live = page.deviceInfo(model.fingerprint)
+                            return live ? live.https : true
+                        }
+                        isFavorite: true
+                        // Offline = not visible in the current discovery list.
+                        offline: page.deviceInfo(model.fingerprint) === null
+
+                        onTapped: page.sendToDevice(model.fingerprint)
+                        onSendTextRequested: page.sendTextToDevice(model.fingerprint)
+                        onDetailsRequested: {
+                            var live = page.deviceInfo(model.fingerprint)
+                            detailsDialog.fingerprint = model.fingerprint
+                            detailsDialog.alias = live && live.alias ? live.alias : model.alias
+                            detailsDialog.deviceModel = live ? live.deviceModel : ""
+                            detailsDialog.deviceType = live ? live.deviceType : ""
+                            detailsDialog.ip = live ? live.ip : model.ip
+                            detailsDialog.port = live ? live.port : model.port
+                            detailsDialog.https = live ? live.https : true
+                            detailsDialog.protocolVersion = live ? live.version : ""
+                            detailsDialog.isFavorite = true
+                            detailsDialog.open()
+                        }
+                        onToggleFavorite: favoritesController.remove(model.fingerprint)
                     }
-                    onToggleFavorite: favoritesController.remove(model.fingerprint)
                 }
-            }
             }
 
             Column {
@@ -747,25 +821,37 @@ Page {
                     model: deviceListModel
 
                     delegate: DeviceCard {
-                        // Nearby devices already shown under Favorites are hidden
-                        // here, exactly like Flutter.
-                        visible: !favoritesController.is_favorite(model.fingerprint)
+                        // Nearby devices that are shown in the favorites
+                        // section are hidden here, exactly like Flutter. The
+                        // favorites count is read so the row disappears as
+                        // soon as the device is favorited (a method call
+                        // alone would not update the binding).
+                        visible: {
+                            var favoriteCount = favoritesController.count
+                            return favoriteCount === 0 || !favoritesController.is_favorite(model.fingerprint)
+                        }
                         width: parent.width
                         // When hidden, collapse height so the column has no gap.
                         height: visible ? implicitHeight : 0
-                    appTheme: page.appTheme
-                    fingerprint: model.fingerprint
-                    alias: {
-                        var custom = favoritesController.alias_for(model.fingerprint)
-                        return (custom && custom.length > 0) ? custom : model.alias
-                    }
-                    deviceModel: model.deviceModel
-                    deviceType: model.deviceType
-                    ip: model.ip
-                    port: model.port
-                    https: model.https
-                    isFavorite: favoritesController.is_favorite(model.fingerprint)
-                    offline: false
+                        appTheme: page.appTheme
+                        fingerprint: model.fingerprint
+                        alias: {
+                            // Read the count so the binding is re-evaluated
+                            // when a favorite is added, renamed or removed.
+                            var favoriteCount = favoritesController.count
+                            var custom = favoritesController.alias_for(model.fingerprint)
+                            return (custom && custom.length > 0) ? custom : model.alias
+                        }
+                        deviceModel: model.deviceModel
+                        deviceType: model.deviceType
+                        ip: model.ip
+                        port: model.port
+                        https: model.https
+                        isFavorite: {
+                            var favoriteCount = favoritesController.count
+                            return favoritesController.is_favorite(model.fingerprint)
+                        }
+                        offline: false
 
                     onTapped: page.sendToDevice(model.fingerprint)
                     onSendTextRequested: page.sendTextToDevice(model.fingerprint)

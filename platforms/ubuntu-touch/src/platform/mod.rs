@@ -5,3 +5,4 @@
 
 pub mod content_hub;
 pub mod filesystem;
+pub mod packages;

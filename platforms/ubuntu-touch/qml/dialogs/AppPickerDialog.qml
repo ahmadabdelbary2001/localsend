@@ -7,9 +7,10 @@ import "../components"
 
 // Package picker for the send tab.
 //
-// Ubuntu Touch ships Click packages, Android ships APKs: Click is listed by
-// default, the switch on top toggles to APK. Only package files found in the
-// usual user folders are listed; "Open" still allows picking any file.
+// Ubuntu Touch ships Click packages, Android ships APKs: the switch on top
+// selects the format (Click, APK or both). The whole storage is searched for
+// package files, so a .click that sits in a subfolder or on the SD card is
+// listed as well; "Open" still allows picking any file.
 Dialog {
     id: root
     property var appTheme
@@ -25,8 +26,8 @@ Dialog {
 
     background: DialogFrame { appTheme: root.appTheme }
 
-    /// Package format: "click" (Ubuntu Touch, default) or "apk".
-    property string kind: "click"
+    /// Package format: "click" (Ubuntu Touch), "apk" (Android) or "all".
+    property string kind: "all"
 
     property var allApps: []
     property var filteredApps: []
@@ -35,26 +36,21 @@ Dialog {
     signal pickCustomFile()
     signal canceled()
 
+    // The storage is searched in a background thread, so the results arrive
+    // a moment after the dialog was opened. Poll until they show up.
     function refreshApps() {
         try {
-            root.allApps = JSON.parse(sendController.list_installed_apps(root.kind))
+            var apps = JSON.parse(sendController.list_app_packages(root.kind, searchField.text))
+            if (apps.length !== root.allApps.length) {
+                root.allApps = apps
+                root.filteredApps = apps
+                appListView.positionViewAtBeginning()
+            } else {
+                root.allApps = apps
+            }
         } catch (e) {
             console.warn("[AppPicker] failed to list app packages:", e)
-            root.allApps = []
         }
-        root.filterApps(searchField.text)
-    }
-
-    function filterApps(query) {
-        var q = (query || "").toLowerCase().trim()
-        if (q.length === 0) {
-            root.filteredApps = root.allApps
-            return
-        }
-        root.filteredApps = root.allApps.filter(function(item) {
-            return (item.name || "").toLowerCase().indexOf(q) !== -1 ||
-                   (item.path || "").toLowerCase().indexOf(q) !== -1
-        })
     }
 
     function setKind(value) {
@@ -65,7 +61,21 @@ Dialog {
         appListView.positionViewAtBeginning()
     }
 
-    onOpened: root.refreshApps()
+    onOpened: {
+        root.allApps = []
+        root.filteredApps = []
+        root.refreshApps()
+    }
+
+    // The storage is searched in a background thread; the controller reports
+    // when the results are ready.
+    Connections {
+        target: sendController
+        function onApp_packages_changed() {
+            if (root.visible)
+                root.refreshApps()
+        }
+    }
 
     title: translator.tr("appPicker.title")
     modal: true
@@ -93,6 +103,7 @@ Dialog {
 
             Repeater {
                 model: [
+                    { value: "all", label: translator.tr("appPicker.all") },
                     { value: "click", label: translator.tr("appPicker.click") },
                     { value: "apk", label: translator.tr("appPicker.apk") }
                 ]
@@ -126,12 +137,12 @@ Dialog {
             }
         }
 
-        // Search bar
+        // Search bar: matches the file name and the folder it is stored in.
         TextField {
             id: searchField
             Layout.fillWidth: true
-            placeholderText: ""
-            onTextChanged: root.filterApps(text)
+            placeholderText: translator.tr("appPicker.search")
+            onTextChanged: root.refreshApps()
         }
 
         Label {

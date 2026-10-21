@@ -8,3 +8,4 @@ pub mod bridge;
 pub mod model;
 pub mod platform;
 pub mod resources;
+pub mod util;

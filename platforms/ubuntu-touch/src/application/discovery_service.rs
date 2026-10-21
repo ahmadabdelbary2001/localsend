@@ -230,9 +230,10 @@ async fn start_one(
         device: MulticastDevice {
             alias: params.alias.clone(),
             version: "2.2".to_string(),
-            device_model: None,
-            // TODO: derive from settings.device_type.
-            device_type: Some(DeviceType::Desktop),
+            device_model: device_model(),
+            // Ubuntu Touch runs on a phone: announce ourselves as a mobile
+            // device, like the Android app does.
+            device_type: Some(DeviceType::Mobile),
             fingerprint: params.fingerprint.clone(),
             port: params.port,
             protocol,
@@ -294,6 +295,29 @@ fn snapshot(handle: &CoreDiscoveryHandle) -> Vec<DeviceSnapshot> {
         .into_iter()
         .map(stateful_to_snapshot)
         .collect()
+}
+
+/// Model of the device the app runs on ("Pixel 3a", ...).
+///
+/// Ubuntu Touch does not expose the model through an environment variable, but
+/// the device tree carries it. The Android app shows the same information
+/// (device_info_plus), so the peer sees a model badge here as well.
+pub fn device_model() -> Option<String> {
+    let from_env = ["DEVICE_MODEL", "MODEL"]
+        .into_iter()
+        .filter_map(|key| std::env::var(key).ok())
+        .map(|value| value.trim().to_string())
+        .find(|value| !value.is_empty());
+    if from_env.is_some() {
+        return from_env;
+    }
+
+    let raw = std::fs::read("/sys/firmware/devicetree/base/model").ok()?;
+    let text = String::from_utf8_lossy(&raw)
+        .trim_end_matches('\0')
+        .trim()
+        .to_string();
+    if text.is_empty() { None } else { Some(text) }
 }
 
 fn stateful_to_snapshot(sd: StatefulDevice) -> DeviceSnapshot {

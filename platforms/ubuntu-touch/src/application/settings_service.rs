@@ -95,10 +95,11 @@ impl Default for SettingsState {
     }
 }
 
-/// TODO: port app/lib/util/alias_generator.dart to Rust and use the
-/// same "Adjective Fruit" combination. For now we use a fixed default.
+/// The default alias is a random "Adjective Fruit" name (like the Flutter
+/// app). Devices that still carry the old fixed alias are migrated once, so
+/// the own device does not look like the peer in the device list.
 fn default_alias() -> String {
-    "LocalSend".to_string()
+    crate::util::alias::random_alias()
 }
 
 pub struct SettingsService {
@@ -114,7 +115,7 @@ impl SettingsService {
         std::fs::create_dir_all(&dir)?;
         let path = dir.join("settings.json");
 
-        let state = if path.exists() {
+        let mut state = if path.exists() {
             match std::fs::read_to_string(&path)
                 .ok()
                 .and_then(|s| serde_json::from_str::<SettingsState>(&s).ok())
@@ -128,6 +129,14 @@ impl SettingsService {
         } else {
             SettingsState::default()
         };
+
+        // Migrate the old fixed alias to a random one (see default_alias).
+        let alias_is_legacy = state.alias.trim().is_empty()
+            || state.alias == crate::util::alias::LEGACY_DEFAULT_ALIAS;
+        if alias_is_legacy {
+            state.alias = crate::util::alias::random_alias();
+            log::info!("using generated alias {:?}", state.alias);
+        }
 
         let svc = Self {
             state: Arc::new(Mutex::new(state)),

@@ -3,7 +3,9 @@
   "appPicker": {
     "title": "Apps",
     "click": "Click",
-    "apk": "APK"
+    "apk": "APK",
+    "all": "All",
+    "search": "Search packages"
   },
   "folderPicker": {
     "title": "Select folder",

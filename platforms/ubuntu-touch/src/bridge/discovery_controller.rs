@@ -18,6 +18,10 @@ pub struct DiscoveryController {
     running: qt_property!(bool; NOTIFY state_changed),
     scanning: qt_property!(bool; NOTIFY state_changed),
     device_count: qt_property!(i32; NOTIFY state_changed),
+    /// The discovered devices as a JSON array. QML bindings that look up a
+    /// device by fingerprint depend on this property, so they are re-evaluated
+    /// when a peer is discovered or refreshed.
+    devices_json: qt_property!(QString; NOTIFY state_changed),
 
     state_changed: qt_signal!(),
     log_message: qt_signal!(message: QString),
@@ -37,6 +41,7 @@ pub struct DiscoveryController {
     stop: qt_method!(fn(&mut self)),
     poll: qt_method!(fn(&mut self)),
 
+
     /// Public for DeviceListModel.
     pub snapshot: Vec<DeviceSnapshot>,
 
@@ -50,6 +55,7 @@ impl DiscoveryController {
             running: false,
             scanning: false,
             device_count: 0,
+            devices_json: QString::default(),
             state_changed: Default::default(),
             log_message: Default::default(),
             start: Default::default(),
@@ -113,6 +119,7 @@ impl DiscoveryController {
                     self.snapshot = snaps;
                     self.device_count = self.snapshot.len() as i32;
                     self.scanning = false;
+                    self.devices_json = QString::from(self.snapshot_json());
                     changed = true;
                 }
                 DiscoveryEvent::Log(msg) => {
@@ -129,6 +136,31 @@ impl DiscoveryController {
     /// Rust-only getter for the current device count.
     pub fn device_count(&self) -> i32 {
         self.device_count
+    }
+
+    /// The snapshot as a JSON array.
+    ///
+    /// The favorites list shows devices that are not necessarily online, so it
+    /// needs the current model / type / address of a peer. QML cannot query
+    /// the list model by fingerprint, so the whole snapshot is exposed here.
+    fn snapshot_json(&self) -> String {
+        let devices: Vec<serde_json::Value> = self
+            .snapshot
+            .iter()
+            .map(|d| {
+                serde_json::json!({
+                    "fingerprint": d.fingerprint,
+                    "alias": d.alias,
+                    "deviceModel": d.device_model.clone().unwrap_or_default(),
+                    "deviceType": d.device_type.clone().unwrap_or_default(),
+                    "ip": d.ip,
+                    "port": d.port,
+                    "https": d.https,
+                    "version": d.version,
+                })
+            })
+            .collect();
+        serde_json::to_string(&devices).unwrap_or_else(|_| "[]".into())
     }
 
     /// Rust-only accessor for the current snapshot (updated on poll).

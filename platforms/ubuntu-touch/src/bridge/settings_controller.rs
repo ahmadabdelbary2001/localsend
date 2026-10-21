@@ -10,77 +10,6 @@ use qmetaobject::prelude::*;
 
 use crate::application::settings_service::SettingsService;
 
-// Word lists for random alias generation (Adjective + Fruit).
-const ADJECTIVES: &[&str] = &[
-    "Adorable",
-    "Beautiful",
-    "Big",
-    "Bright",
-    "Clean",
-    "Clever",
-    "Cool",
-    "Cute",
-    "Cunning",
-    "Determined",
-    "Energetic",
-    "Efficient",
-    "Fantastic",
-    "Fast",
-    "Fine",
-    "Fresh",
-    "Good",
-    "Gorgeous",
-    "Great",
-    "Handsome",
-    "Hot",
-    "Kind",
-    "Lovely",
-    "Mystic",
-    "Neat",
-    "Nice",
-    "Patient",
-    "Pretty",
-    "Powerful",
-    "Rich",
-    "Secret",
-    "Smart",
-    "Solid",
-    "Special",
-    "Strategic",
-    "Strong",
-    "Tidy",
-    "Wise",
-];
-
-const FRUITS: &[&str] = &[
-    "Apple",
-    "Avocado",
-    "Banana",
-    "Blackberry",
-    "Blueberry",
-    "Broccoli",
-    "Carrot",
-    "Cherry",
-    "Coconut",
-    "Grape",
-    "Lemon",
-    "Lettuce",
-    "Mango",
-    "Melon",
-    "Mushroom",
-    "Onion",
-    "Orange",
-    "Papaya",
-    "Peach",
-    "Pear",
-    "Pineapple",
-    "Potato",
-    "Pumpkin",
-    "Raspberry",
-    "Strawberry",
-    "Tomato",
-];
-
 #[derive(QObject)]
 pub struct SettingsController {
     base: qt_base_class!(trait QObject),
@@ -463,14 +392,8 @@ impl SettingsController {
     }
 
     fn random_alias(&mut self) {
-        let seed = std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .map(|d| d.as_nanos() as usize)
-            .unwrap_or(0);
-        let adj = ADJECTIVES[seed % ADJECTIVES.len()];
-        let fruit = FRUITS[(seed / ADJECTIVES.len()) % FRUITS.len()];
-        let alias = format!("{adj} {fruit}");
-        self.set_alias(QString::from(alias));
+        // Same "Adjective Fruit" names the Flutter app generates.
+        self.set_alias(QString::from(crate::util::alias::random_alias()));
     }
 
     fn use_system_name(&mut self) {
@@ -479,7 +402,7 @@ impl SettingsController {
             .ok()
             .map(|s| s.trim().to_string())
             .filter(|s| !s.is_empty())
-            .unwrap_or_else(|| "LocalSend".to_string());
+            .unwrap_or_else(|| crate::util::alias::random_alias());
         self.set_alias(QString::from(name));
     }
 }

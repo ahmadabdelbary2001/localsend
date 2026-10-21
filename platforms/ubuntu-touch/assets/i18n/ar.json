@@ -2,8 +2,10 @@
   "@info": "نصوص خاصة بواجهة أبونتو تاتش فقط.",
   "appPicker": {
     "title": "التطبيقات",
-    "click": "كليك",
-    "apk": "APK"
+    "click": "CLICK",
+    "apk": "APK",
+    "all": "الكل",
+    "search": "ابحث عن حزم"
   },
   "folderPicker": {
     "title": "اختيار مجلد",

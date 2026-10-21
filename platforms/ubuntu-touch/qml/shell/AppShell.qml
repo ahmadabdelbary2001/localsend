@@ -10,11 +10,20 @@ Page {
     property var appTheme
     property var navigationStack: null
 
-    // Keep the MainView application header: it is the Ubuntu Touch title bar.
-    // Lomiri then shrinks this Page by the header height (Page.qml), so the
-    // tabs and the navigation bar are pushed down instead of being covered.
+    // The application header of the MainView is used as an *empty* bar.
+    //
+    // On Ubuntu Touch the system panel (clock, battery, camera cut-out) is
+    // drawn into that area, so the app must not put a title there - the bar
+    // belongs to the system window and stays visible on both sides of the
+    // camera. The page content is anchored below the header, so no part of
+    // the app is hidden behind it.
     header: null
-    title: translator.tr("appName")
+
+    // Height of the application header, i.e. the reserved system bar area.
+    readonly property real headerOffset: {
+        var header = shell.__propagated ? shell.__propagated.header : null
+        return header ? header.height : 0
+    }
 
     // StackLayout manages one page at a time. Each page is wrapped in
     // a plain Item with Layout.fillWidth/Height so the layout sizes
@@ -23,6 +32,7 @@ Page {
         id: view
         anchors {
             top: parent.top
+            topMargin: shell.headerOffset
             left: parent.left
             right: parent.right
             bottom: nav.top

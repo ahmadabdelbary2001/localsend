@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 #[allow(unused_imports)]
-use localsend_ubuntu_touch::{application, bridge, model, platform, resources};
+use localsend_ubuntu_touch::{application, bridge, model, platform, resources, util};
 
 use std::cell::RefCell;
 use std::process::ExitCode;

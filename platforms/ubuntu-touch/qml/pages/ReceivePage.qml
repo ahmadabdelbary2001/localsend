@@ -6,8 +6,13 @@ import "../dialogs"
 
 Page {
     id: page
-    header: Item { } // hides MainView's deprecated app header
     property var appTheme
+
+    // The tab pages live inside the shell, not in the MainView page
+    // stack. An empty header keeps Lomiri from falling back to the
+    // deprecated application header handling for them (the visible top
+    // bar is the PageHeader of the shell).
+    header: Item { }
     property var navigationStack: null
 
     property bool _showAdvanced: false
