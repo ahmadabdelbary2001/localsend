@@ -154,7 +154,7 @@ Window {
 
             onLoaded: {
                 item.model = typeof incomingFilesModel !== "undefined" ? incomingFilesModel : null
-                item.targetDir = settingsController.export_directory()
+                item.targetDir = settingsController.preferred_receive_directory()
                 // The content hub needs to know which apps can store the file.
                 if (item.available)
                     item.peerModel.findPeers()

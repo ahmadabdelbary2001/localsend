@@ -8,14 +8,15 @@
 // are stored on the device. They can live anywhere: the download folder, the
 // home directory, an SD card, ... so the whole storage is searched.
 
+use std::collections::HashSet;
 use std::path::{Path, PathBuf};
 
 /// Maximum directory depth that is walked below a search root.
-const MAX_DEPTH: usize = 8;
+const MAX_DEPTH: usize = 20;
 /// Maximum number of directory entries that are visited in one scan.
-const MAX_VISITED: usize = 40_000;
+const MAX_VISITED: usize = 250_000;
 /// Maximum number of packages that are reported.
-const MAX_RESULTS: usize = 500;
+const MAX_RESULTS: usize = 10_000;
 
 /// Package file extensions that can be shared.
 pub const PACKAGE_EXTENSIONS: &[&str] = &["click", "apk"];
@@ -49,35 +50,81 @@ fn extension(path: &str) -> Option<&str> {
 
 /// Directories that are searched for packages.
 ///
-/// The home directory covers the download folder, documents, ... and the
-/// external storage is mounted below /media on Ubuntu Touch.
+/// User folders, removable storage and common Click package locations are
+/// prioritized before the full home directory.
 pub fn search_roots() -> Vec<PathBuf> {
     let mut roots: Vec<PathBuf> = Vec::new();
+
+    // Prioritize common user folders and removable storage. Roots are ordered
+    // deliberately because a large home/cache tree must not hide SD-card files
+    // when the scan budget is reached.
     if let Some(home) = std::env::var_os("HOME").map(PathBuf::from) {
-        roots.push(home);
+        for child in ["Downloads", "Documents", "Desktop", "Pictures", "Videos", "Music"] {
+            let path = home.join(child);
+            if path.is_dir() {
+                roots.push(path);
+            }
+        }
     }
-    for dir in ["/media", "/run/media", "/var/cache/click"] {
+
+    for dir in [
+        "/media",
+        "/mnt",
+        "/run/media",
+        "/storage",
+        "/sdcard",
+        "/var/cache/click",
+        "/var/lib/click",
+        "/opt/click.ubuntu.com",
+        "/usr/share/click",
+    ] {
         let path = PathBuf::from(dir);
         if path.is_dir() {
             roots.push(path);
         }
     }
-    roots
+
+    if let Some(data_home) = std::env::var_os("XDG_DATA_HOME").map(PathBuf::from) {
+        if data_home.is_dir() {
+            roots.push(data_home);
+        }
+    }
+    if let Some(cache_home) = std::env::var_os("XDG_CACHE_HOME").map(PathBuf::from) {
+        if cache_home.is_dir() {
+            roots.push(cache_home);
+        }
+    }
+    if let Some(home) = std::env::var_os("HOME").map(PathBuf::from) {
+        if home.is_dir() {
+            roots.push(home);
+        }
+    }
+
+    let mut unique = Vec::new();
+    for root in roots {
+        if !unique.contains(&root) {
+            unique.push(root);
+        }
+    }
+    unique
 }
 
 /// Recursively collects package files below `roots`.
 ///
-/// Hidden directories are skipped (they hold caches and app data, not user
-/// files) and symlinked directories are not followed, so the scan cannot
-/// loop or leave the user's storage.
+/// Hidden directories are included because users may store package archives
+/// there. Symlinks are not followed, preventing loops and unexpected traversal.
 pub fn scan(roots: &[PathBuf]) -> Vec<PackageFile> {
     let mut found: Vec<PackageFile> = Vec::new();
     let mut visited = 0usize;
+    let mut seen_dirs: HashSet<PathBuf> = HashSet::new();
 
     for root in roots {
         let mut stack: Vec<(PathBuf, usize)> = vec![(root.clone(), 0)];
         while let Some((dir, depth)) = stack.pop() {
             if depth > MAX_DEPTH || visited >= MAX_VISITED {
+                continue;
+            }
+            if !seen_dirs.insert(dir.clone()) {
                 continue;
             }
             let Ok(entries) = std::fs::read_dir(&dir) else {
@@ -101,9 +148,6 @@ pub fn scan(roots: &[PathBuf]) -> Vec<PackageFile> {
                 }
 
                 if meta.is_dir() {
-                    if name.starts_with('.') {
-                        continue;
-                    }
                     stack.push((path, depth + 1));
                     continue;
                 }
@@ -126,20 +170,13 @@ pub fn scan(roots: &[PathBuf]) -> Vec<PackageFile> {
                     .and_then(|time| time.duration_since(std::time::UNIX_EPOCH).ok())
                     .map(|d| d.as_secs())
                     .unwrap_or(0);
-                found.push(PackageFile {
-                    name: name.to_string(),
-                    path: path.to_string_lossy().to_string(),
-                    size: meta.len(),
-                    modified,
-                });
-                if found.len() >= MAX_RESULTS {
-                    found.sort_by(|a, b| {
-                        a.name
-                            .to_lowercase()
-                            .cmp(&b.name.to_lowercase())
-                            .then_with(|| a.path.cmp(&b.path))
+                if found.len() < MAX_RESULTS {
+                    found.push(PackageFile {
+                        name: name.to_string(),
+                        path: path.to_string_lossy().to_string(),
+                        size: meta.len(),
+                        modified,
                     });
-                    return found;
                 }
             }
         }
@@ -152,6 +189,7 @@ pub fn scan(roots: &[PathBuf]) -> Vec<PackageFile> {
             .then_with(|| a.path.cmp(&b.path))
     });
     found.dedup_by(|a, b| a.path == b.path);
+    found.truncate(MAX_RESULTS);
     found
 }
 
@@ -216,14 +254,15 @@ mod tests {
     }
 
     #[test]
-    fn skips_hidden_folders() {
+    fn includes_hidden_folders() {
         let root = temp_dir("hidden");
         write(&root.join(".hidden/app.click"), "x");
         write(&root.join("visible/app.click"), "x");
 
         let found = scan(std::slice::from_ref(&root));
-        assert_eq!(found.len(), 1, "{found:?}");
-        assert!(found[0].path.contains("visible"));
+        assert_eq!(found.len(), 2, "{found:?}");
+        assert!(found.iter().any(|p| p.path.contains(".hidden")));
+        assert!(found.iter().any(|p| p.path.contains("visible")));
         let _ = std::fs::remove_dir_all(&root);
     }
 

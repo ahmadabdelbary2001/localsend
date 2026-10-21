@@ -106,10 +106,16 @@ jobs:
           docker pull "$SDK_IMAGE"
           docker run -d --name ut-sdk "$SDK_IMAGE" sleep infinity
 
-          docker exec ut-sdk bash -lc '
+          docker exec -e ARCH="$ARCH" ut-sdk bash -lc '
             set -eux
             export DEBIAN_FRONTEND=noninteractive
-            apt-get update
+
+            # Retry transient repository errors, including HTTP 503 responses.
+            apt-get update \
+              -o Acquire::Retries=5 \
+              -o Acquire::http::Timeout=30 \
+              -o Acquire::https::Timeout=30
+
             apt-get install -y --no-install-recommends \
               build-essential pkg-config \
               gcc-aarch64-linux-gnu gcc-arm-linux-gnueabihf \

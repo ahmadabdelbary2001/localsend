@@ -10,18 +10,10 @@ Page {
     property var appTheme
     property var navigationStack: null
 
-    // Empty header bar for the system panel.
-    //
-    // On Ubuntu Touch the system panel (clock, battery, camera cut-out) is
-    // drawn over the top of the app window, so the app must not put anything
-    // there: the bar belongs to the system and stays visible on both sides of
-    // the camera. The header only reserves the space, the page content is
-    // anchored below it, so no part of the app is hidden behind the panel.
-    header: Rectangle {
-        height: units.gu(6)
-        color: shell.appTheme && shell.appTheme.colors
-               ? shell.appTheme.colors.background : "#FFFFFF"
-    }
+    // Keep the Ubuntu Touch system panel visible without reserving a second,
+    // empty title/header bar inside the app.
+    header: null
+    title: translator.tr("appName")
 
     // StackLayout manages one page at a time. Each page is wrapped in
     // a plain Item with Layout.fillWidth/Height so the layout sizes
@@ -29,8 +21,7 @@ Page {
     StackLayout {
         id: view
         anchors {
-            // Below the header: the system panel area must stay free.
-            top: shell.header.bottom
+            top: parent.top
             left: parent.left
             right: parent.right
             bottom: nav.top

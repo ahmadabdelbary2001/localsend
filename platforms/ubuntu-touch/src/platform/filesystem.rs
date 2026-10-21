@@ -93,18 +93,21 @@ pub fn ensure_writable_dir(dir: &Path) -> bool {
 
 /// Resolves where received files are stored, in order of preference:
 ///
-/// 1. the folder configured in the settings ("Save to folder"),
-/// 2. `~/Downloads/LocalSend`,
-/// 3. the app-private `received` folder (always writable).
+/// 1. `~/Downloads/LocalSend` (the Ubuntu Touch default),
+/// 2. an explicitly configured folder, if the default cannot be used,
+/// 3. the app-private `received` folder (last-resort fallback).
 ///
 /// A candidate is only used when a real write probe succeeds, so receiving can
 /// never fail because of an unreadable/unwritable destination.
 pub fn resolve_receive_dir(configured: Option<&str>) -> PathBuf {
     let mut candidates: Vec<PathBuf> = Vec::new();
-    if let Some(dir) = configured.map(str::trim).filter(|d| !d.is_empty()) {
-        candidates.push(PathBuf::from(dir));
-    }
     candidates.extend(preferred_receive_dir());
+    if let Some(dir) = configured.map(str::trim).filter(|d| !d.is_empty()) {
+        let configured = PathBuf::from(dir);
+        if !candidates.contains(&configured) {
+            candidates.push(configured);
+        }
+    }
     let private = private_receive_dir();
     candidates.push(private.clone());
 
