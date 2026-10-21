@@ -9,7 +9,13 @@
         "/home/phablet/",
         "/home/phablet/**",
         "/media/",
-        "/media/**"
+        "/media/**",
+        "/mnt/",
+        "/mnt/**",
+        "/run/media/",
+        "/run/media/**",
+        "/var/cache/click/",
+        "/var/cache/click/**"
     ],
     "write_path": [
         "/home/phablet/Downloads/",
