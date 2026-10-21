@@ -22,6 +22,9 @@ Page {
 
     property var languages: []
 
+    /// Effective receive folder, shown as the value of the destination row.
+    property string receiveDirectory: ""
+
     function refreshLanguages() {
         try {
             languages = JSON.parse(translator.available_locales())
@@ -102,11 +105,26 @@ Page {
         serverController.apply_auto_accept_from_settings()
     }
 
-    Component.onCompleted: refreshLanguages()
+    // The effective receive folder is resolved by the backend (configured
+    // folder -> ~/Downloads/LocalSend -> app data folder), so it can only be
+    // read through a method call and has to be refreshed explicitly.
+    function refreshReceiveDirectory() {
+        page.receiveDirectory = settingsController.receive_directory()
+    }
+
+    Component.onCompleted: {
+        refreshLanguages()
+        refreshReceiveDirectory()
+    }
 
     Connections {
         target: translator
         function onLocale_changed() { page.refreshLanguages() }
+    }
+
+    Connections {
+        target: settingsController
+        function onChanged() { page.refreshReceiveDirectory() }
     }
 
     Flickable {
@@ -255,13 +273,13 @@ Page {
                 SettingsButton {
                     appTheme: page.appTheme
                     label: translator.tr("settingsTab.receive.destination")
-                    buttonLabel: settingsController.destination.length > 0
-                                 ? settingsController.destination
-                                 : translator.tr("settingsTab.receive.downloads")
+                    // Show where files actually land, not just what was
+                    // configured: the backend probes the folder and falls back
+                    // to an app-private one when it is not writable (e.g. an
+                    // older AppArmor profile without the Downloads grant).
+                    buttonLabel: page.receiveDirectory
                     onTapped: {
-                        destinationDialog.currentPath = settingsController.destination.length > 0
-                                                    ? settingsController.destination
-                                                    : sendController.home_directory()
+                        destinationDialog.currentPath = page.receiveDirectory
                         destinationDialog.open()
                     }
                 }
@@ -273,7 +291,10 @@ Page {
                     Item { Layout.fillWidth: true }
 
                     AbstractButton {
-                        width: units.gu(5); height: units.gu(5)
+                        // Inside a RowLayout: width/height are ignored there,
+                        // which used to leave a zero-sized (unclickable) button.
+                        Layout.preferredWidth: units.gu(5)
+                        Layout.preferredHeight: units.gu(5)
                         Icon {
                             anchors.centerIn: parent
                             name: "edit-clear"
@@ -421,7 +442,8 @@ Page {
                     Item { Layout.fillWidth: true }
 
                     AbstractButton {
-                        width: units.gu(5); height: units.gu(5)
+                        Layout.preferredWidth: units.gu(5)
+                        Layout.preferredHeight: units.gu(5)
                         Icon {
                             anchors.centerIn: parent
                             name: "view-refresh"
@@ -432,7 +454,8 @@ Page {
                     }
 
                     AbstractButton {
-                        width: units.gu(5); height: units.gu(5)
+                        Layout.preferredWidth: units.gu(5)
+                        Layout.preferredHeight: units.gu(5)
                         Icon {
                             anchors.centerIn: parent
                             name: "computer-symbolic"
@@ -646,6 +669,7 @@ Page {
     FolderPickerDialog {
         id: destinationDialog
         appTheme: page.appTheme
+        mode: "receive"
         onFolderSelected: {
             settingsController.set_destination(path)
             page.restartServerIfRunning()

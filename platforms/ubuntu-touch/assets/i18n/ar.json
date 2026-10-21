@@ -1,0 +1,16 @@
+{
+  "@info": "نصوص خاصة بواجهة أبونتو تاتش فقط.",
+  "appPicker": {
+    "title": "التطبيقات",
+    "click": "كليك",
+    "apk": "APK"
+  },
+  "folderPicker": {
+    "title": "اختيار مجلد",
+    "useThisFolder": "استخدام هذا المجلد",
+    "newFolder": "مجلد جديد",
+    "folderName": "اسم المجلد",
+    "create": "إنشاء",
+    "notWritable": "لا يمكن حفظ الملفات في هذا المجلد"
+  }
+}

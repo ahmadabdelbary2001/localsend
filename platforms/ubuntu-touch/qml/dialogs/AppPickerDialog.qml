@@ -5,6 +5,11 @@ import Lomiri.Components 1.3
 
 import "../components"
 
+// Package picker for the send tab.
+//
+// Ubuntu Touch ships Click packages, Android ships APKs: Click is listed by
+// default, the switch on top toggles to APK. Only package files found in the
+// usual user folders are listed; "Open" still allows picking any file.
 Dialog {
     id: root
     property var appTheme
@@ -19,6 +24,10 @@ Dialog {
     palette.buttonText: appTheme && appTheme.colors ? appTheme.colors.surfaceText : "#1B1D21"
 
     background: DialogFrame { appTheme: root.appTheme }
+
+    /// Package format: "click" (Ubuntu Touch, default) or "apk".
+    property string kind: "click"
+
     property var allApps: []
     property var filteredApps: []
 
@@ -28,14 +37,12 @@ Dialog {
 
     function refreshApps() {
         try {
-            var json = sendController.list_installed_apps()
-            root.allApps = JSON.parse(json)
-            root.filterApps(searchField.text)
+            root.allApps = JSON.parse(sendController.list_installed_apps(root.kind))
         } catch (e) {
-            console.warn("[AppPicker] failed to list installed apps:", e)
+            console.warn("[AppPicker] failed to list app packages:", e)
             root.allApps = []
-            root.filteredApps = []
         }
+        root.filterApps(searchField.text)
     }
 
     function filterApps(query) {
@@ -50,11 +57,17 @@ Dialog {
         })
     }
 
-    Component.onCompleted: {
+    function setKind(value) {
+        if (root.kind === value)
+            return
+        root.kind = value
         root.refreshApps()
+        appListView.positionViewAtBeginning()
     }
 
-    title: translator.tr("apkPickerPage.title")
+    onOpened: root.refreshApps()
+
+    title: translator.tr("appPicker.title")
     modal: true
     // Instantiated through a Loader, so the declared parent (the
     // zero-sized Loader item) cannot be used for centering.
@@ -63,12 +76,57 @@ Dialog {
     y: Math.round((parent.height - height) / 2)
     width: Math.min(parent.width - units.gu(4), units.gu(65))
     height: Math.min(parent.height - units.gu(6), units.gu(75))
+    padding: units.gu(1.2)
 
     contentItem: ColumnLayout {
-        anchors.margins: units.gu(1.5)
-        spacing: units.gu(1.2)
 
-        // Search Bar
+        // Popups live in the window overlay, outside the mirrored MainView
+        // tree, so right-to-left layout has to be re-enabled on the content.
+        LayoutMirroring.enabled: translator.rtl
+        LayoutMirroring.childrenInherit: true
+        spacing: units.gu(1)
+
+        // Click / APK switch
+        RowLayout {
+            Layout.fillWidth: true
+            spacing: units.gu(0.6)
+
+            Repeater {
+                model: [
+                    { value: "click", label: translator.tr("appPicker.click") },
+                    { value: "apk", label: translator.tr("appPicker.apk") }
+                ]
+
+                delegate: AbstractButton {
+                    Layout.fillWidth: true
+                    Layout.preferredHeight: units.gu(4.6)
+                    onClicked: root.setKind(modelData.value)
+
+                    Rectangle {
+                        anchors.fill: parent
+                        radius: units.gu(0.5)
+                        color: root.kind === modelData.value
+                               ? (root.appTheme && root.appTheme.colors
+                                  ? root.appTheme.colors.primary : "#00695C")
+                               : (root.appTheme && root.appTheme.colors
+                                  ? root.appTheme.colors.surfaceTint : "#ECEFF1")
+
+                        Label {
+                            anchors.centerIn: parent
+                            text: modelData.label
+                            fontSize: "small"
+                            color: root.kind === modelData.value
+                                   ? (root.appTheme && root.appTheme.colors
+                                      ? root.appTheme.colors.primaryText : "#FFFFFF")
+                                   : (root.appTheme && root.appTheme.colors
+                                      ? root.appTheme.colors.surfaceText : "#1B1D21")
+                        }
+                    }
+                }
+            }
+        }
+
+        // Search bar
         TextField {
             id: searchField
             Layout.fillWidth: true
@@ -76,7 +134,16 @@ Dialog {
             onTextChanged: root.filterApps(text)
         }
 
-        // App List
+        Label {
+            Layout.fillWidth: true
+            text: translator.tr_args("apkPickerPage.apps",
+                                     JSON.stringify({ n: root.filteredApps.length }))
+            fontSize: "x-small"
+            color: root.appTheme && root.appTheme.colors
+                   ? root.appTheme.colors.surfaceTextMuted : "#5F6368"
+        }
+
+        // App list
         Rectangle {
             Layout.fillWidth: true
             Layout.fillHeight: true
@@ -151,15 +218,17 @@ Dialog {
 
                 Label {
                     anchors.centerIn: parent
+                    width: parent.width - units.gu(4)
                     visible: root.filteredApps.length === 0
-                    text: translator.tr("dialogs.noFiles.title")
+                    text: translator.tr("assetPicker.emptyList")
                     fontSize: "small"
+                    horizontalAlignment: Text.AlignHCenter
                     color: root.appTheme && root.appTheme.colors ? root.appTheme.colors.surfaceTextMuted : "#888888"
                 }
             }
         }
 
-        // Bottom Actions
+        // Bottom actions
         RowLayout {
             Layout.fillWidth: true
             spacing: units.gu(1)

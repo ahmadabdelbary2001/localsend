@@ -1,0 +1,16 @@
+{
+  "@info": "Ubuntu Touch-only strings. Merged over app/assets/i18n at build time (see src/bridge/translator.rs); every key needs an entry in every platform locale file. Translated on Weblate only when upstreamed.",
+  "appPicker": {
+    "title": "Apps",
+    "click": "Click",
+    "apk": "APK"
+  },
+  "folderPicker": {
+    "title": "Select folder",
+    "useThisFolder": "Use this folder",
+    "newFolder": "New folder",
+    "folderName": "Folder name",
+    "create": "Create",
+    "notWritable": "Files can not be saved in this folder"
+  }
+}

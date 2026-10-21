@@ -143,6 +143,15 @@ pub struct SettingsController {
     set_multicast_group: qt_method!(fn(&mut self, v: QString)),
     random_alias: qt_method!(fn(&mut self)),
     use_system_name: qt_method!(fn(&mut self)),
+
+    /// Folder received files are actually written to (the configured folder
+    /// when it is writable, otherwise `~/Downloads/LocalSend` or the
+    /// app-private fallback). Used by the settings row.
+    receive_directory: qt_method!(fn(&self) -> QString),
+    /// True when received files could be saved into `path`. A confined click
+    /// app can only write into its own XDG folders, so the destination picker
+    /// uses this to disable folders that would silently fall back.
+    is_directory_writable: qt_method!(fn(&self, path: QString) -> bool),
 }
 
 impl SettingsController {
@@ -196,6 +205,8 @@ impl SettingsController {
             set_save_to_history: Default::default(),
             set_verify_checksums: Default::default(),
             set_destination: Default::default(),
+            receive_directory: Default::default(),
+            is_directory_writable: Default::default(),
             set_create_checksums: Default::default(),
             set_share_via_link_auto_accept: Default::default(),
             set_receive_via_link_auto_accept: Default::default(),
@@ -389,6 +400,21 @@ impl SettingsController {
         self.service.update(|st| st.destination = opt);
         self.destination = QString::from(s);
         self.changed();
+    }
+
+    fn receive_directory(&self) -> QString {
+        let configured = self.destination.to_string();
+        let path = crate::platform::filesystem::resolve_receive_dir(Some(configured.as_str()));
+        QString::from(path.to_string_lossy().to_string())
+    }
+
+    fn is_directory_writable(&self, path: QString) -> bool {
+        let path = path.to_string();
+        let trimmed = path.trim();
+        if trimmed.is_empty() {
+            return false;
+        }
+        crate::platform::filesystem::ensure_writable_dir(std::path::Path::new(trimmed))
     }
 
     fn set_create_checksums(&mut self, v: bool) {

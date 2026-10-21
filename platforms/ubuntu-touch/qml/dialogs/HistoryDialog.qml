@@ -27,6 +27,11 @@ Dialog {
     height: Math.min(parent.height - units.gu(8), units.gu(75))
 
     contentItem: ColumnLayout {
+
+        // Popups live in the window overlay, outside the mirrored MainView
+        // tree, so right-to-left layout has to be re-enabled on the content.
+        LayoutMirroring.enabled: translator.rtl
+        LayoutMirroring.childrenInherit: true
         spacing: units.gu(1)
 
         RowLayout {

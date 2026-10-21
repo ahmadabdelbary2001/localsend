@@ -2,11 +2,17 @@
 //
 // Confined filesystem access for Ubuntu Touch.
 // Click confinement grants private writable XDG directories beneath the
-// click package name declared in manifest.json.
+// click package name declared in manifest.json. Everything else is read-only
+// unless the AppArmor profile asks for it explicitly: the click declares
+// `write_path` for ~/Downloads (see apparmor/localsend.apparmor), which is
+// what makes the default receive folder writable.
 
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 const APP_PKGNAME: &str = "localsend.ahmadabdelbary";
+
+/// Folder name used inside the user's Downloads directory.
+const RECEIVE_FOLDER_NAME: &str = "LocalSend";
 
 fn app_specific_dir(base: PathBuf) -> PathBuf {
     base.join(APP_PKGNAME)
@@ -48,6 +54,89 @@ pub fn ensure_dirs() -> std::io::Result<()> {
     Ok(())
 }
 
+/// The visible receive folder, `~/Downloads/LocalSend`.
+///
+/// Writable because the click's AppArmor profile grants `write_path` for
+/// `~/Downloads/` (`apparmor/localsend.apparmor`). Profiles installed before
+/// that entry do not allow it, so this stays a preference, not a guarantee:
+/// `resolve_receive_dir` probes and falls back when the path is not writable.
+pub fn preferred_receive_dir() -> Option<PathBuf> {
+    dirs_home().map(|home| home.join("Downloads").join(RECEIVE_FOLDER_NAME))
+}
+
+/// Guaranteed-writable receive folder: `<app data>/received`.
+pub fn private_receive_dir() -> PathBuf {
+    app_data_dir()
+        .unwrap_or_else(|| PathBuf::from("/tmp/localsend-received"))
+        .join("received")
+}
+
+/// Creates `dir` (and its parents) and verifies that files can actually be
+/// written into it.
+///
+/// `create_dir_all` alone is not enough: on Ubuntu Touch `~/Downloads` exists
+/// but AppArmor denies writes to it, and an existing directory makes
+/// `create_dir_all` succeed. Probing with a real file is what catches that.
+pub fn ensure_writable_dir(dir: &Path) -> bool {
+    if std::fs::create_dir_all(dir).is_err() {
+        return false;
+    }
+    let probe = dir.join(".localsend-write-test");
+    match std::fs::write(&probe, b"") {
+        Ok(()) => {
+            let _ = std::fs::remove_file(&probe);
+            true
+        }
+        Err(_) => false,
+    }
+}
+
+/// Resolves where received files are stored, in order of preference:
+///
+/// 1. the folder configured in the settings ("Save to folder"),
+/// 2. `~/Downloads/LocalSend`,
+/// 3. the app-private `received` folder (always writable).
+///
+/// A candidate is only used when a real write probe succeeds, so receiving can
+/// never fail because of an unreadable/unwritable destination.
+pub fn resolve_receive_dir(configured: Option<&str>) -> PathBuf {
+    let mut candidates: Vec<PathBuf> = Vec::new();
+    if let Some(dir) = configured.map(str::trim).filter(|d| !d.is_empty()) {
+        candidates.push(PathBuf::from(dir));
+    }
+    candidates.extend(preferred_receive_dir());
+    let private = private_receive_dir();
+    candidates.push(private.clone());
+
+    match resolve_first_writable(&candidates) {
+        Some(dir) => {
+            if dir != private {
+                log::debug!("receiving into {}", dir.display());
+            } else {
+                log::warn!(
+                    "no user-visible receive folder is writable, receiving into {}",
+                    dir.display()
+                );
+            }
+            dir
+        }
+        None => {
+            if let Err(error) = std::fs::create_dir_all(&private) {
+                log::error!("cannot create {}: {error}", private.display());
+            }
+            private
+        }
+    }
+}
+
+/// First candidate that accepts writes. Each candidate is created if needed.
+fn resolve_first_writable(candidates: &[PathBuf]) -> Option<PathBuf> {
+    candidates
+        .iter()
+        .find(|dir| ensure_writable_dir(dir))
+        .cloned()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -59,5 +148,68 @@ mod tests {
             app_specific_dir(base),
             PathBuf::from("/home/phablet/.config/localsend.ahmadabdelbary")
         );
+    }
+
+    #[test]
+    fn preferred_receive_dir_is_downloads_localsend() {
+        // The test environment always has HOME set (cargo sets it on Unix).
+        let home = dirs_home().expect("HOME");
+        assert_eq!(
+            preferred_receive_dir(),
+            Some(home.join("Downloads").join("LocalSend"))
+        );
+    }
+
+    #[test]
+    fn writable_dirs_are_created_and_probed() {
+        let dir = std::env::temp_dir().join(format!(
+            "localsend-fs-test-{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .map(|d| d.as_nanos())
+                .unwrap_or_default()
+        ));
+        let nested = dir.join("a").join("b");
+        assert!(ensure_writable_dir(&nested));
+        assert!(nested.is_dir());
+        // The probe file must not be left behind.
+        assert!(!nested.join(".localsend-write-test").exists());
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn resolve_receive_dir_falls_back_to_the_private_folder() {
+        let dir = std::env::temp_dir().join(format!(
+            "localsend-fs-resolve-{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .map(|d| d.as_nanos())
+                .unwrap_or_default()
+        ));
+        let writable = dir.join("writable");
+        let candidates = vec![
+            PathBuf::from("/proc/localsend-cannot-exist"),
+            writable.clone(),
+        ];
+        assert_eq!(resolve_first_writable(&candidates), Some(writable));
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn resolve_receive_dir_prefers_the_configured_folder() {
+        let dir = std::env::temp_dir().join(format!(
+            "localsend-fs-configured-{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .map(|d| d.as_nanos())
+                .unwrap_or_default()
+        ));
+        let configured = dir.join("chosen");
+        let resolved = resolve_receive_dir(Some(&configured.to_string_lossy()));
+        assert_eq!(resolved, configured);
+        let _ = std::fs::remove_dir_all(&dir);
     }
 }

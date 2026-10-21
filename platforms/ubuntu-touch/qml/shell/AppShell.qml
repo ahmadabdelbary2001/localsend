@@ -10,10 +10,11 @@ Page {
     property var appTheme
     property var navigationStack: null
 
-    // Lomiri's MainView shows a deprecated application header whenever the
-    // active page has no header. An empty Item hides it so the tabs get the
-    // same edge-to-edge layout as the Flutter app.
-    header: Item { }
+    // Keep the MainView application header: it is the Ubuntu Touch title bar.
+    // Lomiri then shrinks this Page by the header height (Page.qml), so the
+    // tabs and the navigation bar are pushed down instead of being covered.
+    header: null
+    title: translator.tr("appName")
 
     // StackLayout manages one page at a time. Each page is wrapped in
     // a plain Item with Layout.fillWidth/Height so the layout sizes

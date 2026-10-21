@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: Apache-2.0
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::sync::{Arc, RwLock};
 
 use qmetaobject::prelude::*;
@@ -59,9 +59,16 @@ pub struct SendController {
     create_text_file: qt_method!(fn(&mut self, text: QString) -> QString),
     collect_directory_files: qt_method!(fn(&mut self, dir_path: QString) -> QString),
     list_directory: qt_method!(fn(&mut self, dir_path: QString) -> QString),
-    list_installed_apps: qt_method!(fn(&mut self) -> QString),
+    /// `kind` is "click" (default) or "apk".
+    list_installed_apps: qt_method!(fn(&mut self, kind: QString) -> QString),
     selection_info: qt_method!(fn(&mut self, paths_json: QString) -> QString),
+    /// Per-file details for the selection list (name / size / image / ext).
+    selection_items: qt_method!(fn(&mut self, paths_json: QString) -> QString),
     home_directory: qt_method!(fn(&self) -> QString),
+    /// True when `path` exists and is a directory.
+    directory_exists: qt_method!(fn(&self, path: QString) -> bool),
+    /// Creates a single folder (no parents). Returns the path or "" on error.
+    create_directory: qt_method!(fn(&mut self, path: QString) -> QString),
     submit_pin: qt_method!(fn(&mut self, pin: QString)),
     cancel: qt_method!(fn(&mut self)),
     dismiss: qt_method!(fn(&mut self)),
@@ -106,7 +113,10 @@ impl SendController {
             list_directory: Default::default(),
             list_installed_apps: Default::default(),
             selection_info: Default::default(),
+            selection_items: Default::default(),
             home_directory: Default::default(),
+            directory_exists: Default::default(),
+            create_directory: Default::default(),
             submit_pin: Default::default(),
             cancel: Default::default(),
             dismiss: Default::default(),
@@ -489,10 +499,13 @@ impl SendController {
         serde_json::to_string(&entries_list).unwrap_or_else(|_| "[]".into()).into()
     }
 
-    /// Lists sendable package files (click/deb/apk/snap/appimage) found in
-    /// the usual user folders. Unlike Flutter's Android APK picker, Ubuntu
-    /// Touch has no installed-app archive to share, so only files are listed.
-    pub fn list_installed_apps(&mut self) -> QString {
+    /// Lists sendable application packages found in the usual user folders.
+    /// Unlike Flutter's Android APK picker, Ubuntu Touch has no installed-app
+    /// archive to share, so only package files are listed.
+    ///
+    /// `kind` selects the package format: `"click"` (Ubuntu Touch, default) or
+    /// `"apk"` (Android). Anything else falls back to `"click"`.
+    pub fn list_installed_apps(&mut self, kind: QString) -> QString {
         #[derive(serde::Serialize)]
         struct AppItem {
             name: String,
@@ -500,9 +513,15 @@ impl SendController {
             icon: String,
         }
 
-        const EXTENSIONS: &[&str] = &[
-            "click", "deb", "apk", "snap", "appimage", "flatpakref", "flatpak", "run",
-        ];
+        let kind = kind.to_string().to_ascii_lowercase();
+        let extensions: &[&str] = match kind.as_str() {
+            "apk" => &["apk"],
+            _ => &["click"],
+        };
+        // Both formats render with the package icon: "stock_application" is
+        // not part of the Ubuntu Touch icon theme and falls back to a random
+        // glyph there.
+        let icon = "package-x-generic-symbolic";
 
         let home = std::env::var_os("HOME").map(PathBuf::from);
         let mut roots: Vec<PathBuf> = Vec::new();
@@ -512,9 +531,8 @@ impl SendController {
             }
             roots.push(home.clone());
         }
-        for system in ["/opt/click.ubuntu.com", "/var/cache/click"] {
-            roots.push(PathBuf::from(system));
-        }
+        roots.push(PathBuf::from("/var/cache/click"));
+        roots.push(PathBuf::from("/opt/click.ubuntu.com"));
 
         let mut apps: Vec<AppItem> = Vec::new();
         for root in &roots {
@@ -529,7 +547,7 @@ impl SendController {
                 let Some(ext) = path.extension().and_then(|e| e.to_str()) else {
                     continue;
                 };
-                if !EXTENSIONS.iter().any(|known| known.eq_ignore_ascii_case(ext)) {
+                if !extensions.iter().any(|known| known.eq_ignore_ascii_case(ext)) {
                     continue;
                 }
                 let name = path
@@ -537,13 +555,6 @@ impl SendController {
                     .and_then(|n| n.to_str())
                     .unwrap_or("package")
                     .to_string();
-                let icon = match ext.to_ascii_lowercase().as_str() {
-                    "apk" => "package-x-generic-symbolic",
-                    "deb" | "click" | "snap" | "appimage" | "flatpakref" | "flatpak" | "run" => {
-                        "stock_application"
-                    }
-                    _ => "stock_application",
-                };
                 apps.push(AppItem {
                     name,
                     path: path.to_string_lossy().to_string(),
@@ -552,10 +563,96 @@ impl SendController {
             }
         }
 
-        apps.sort_by(|a, b| a.name.to_lowercase().cmp(&b.name.to_lowercase()));
+        apps.sort_by_key(|app| app.name.to_lowercase());
         apps.dedup_by(|a, b| a.path == b.path);
 
         serde_json::to_string(&apps).unwrap_or_else(|_| "[]".into()).into()
+    }
+
+    pub fn directory_exists(&self, path: QString) -> bool {
+        let p = path.to_string();
+        !p.trim().is_empty() && Path::new(&p).is_dir()
+    }
+
+    pub fn create_directory(&mut self, path: QString) -> QString {
+        let p = path.to_string();
+        if p.trim().is_empty() {
+            return QString::default();
+        }
+        match std::fs::create_dir(&p) {
+            Ok(()) => QString::from(p),
+            // An existing folder is fine: the caller just navigates into it.
+            Err(_) if Path::new(&p).is_dir() => QString::from(p),
+            Err(error) => {
+                log::warn!("cannot create {p}: {error}");
+                QString::default()
+            }
+        }
+    }
+
+    /// Per-file details used by the send list: one row per selected path.
+    pub fn selection_items(&mut self, paths_json: QString) -> QString {
+        #[derive(serde::Serialize)]
+        struct Item {
+            path: String,
+            name: String,
+            size: u64,
+            is_image: bool,
+            ext: String,
+        }
+
+        const IMAGE_EXTENSIONS: &[&str] = &[
+            "png", "jpg", "jpeg", "gif", "webp", "bmp", "svg", "heic", "heif", "tif", "tiff",
+            "avif",
+        ];
+
+        let json = paths_json.to_string();
+        let items: Vec<(PathBuf, Option<String>)> = match serde_json::from_str::<Value>(&json) {
+            Ok(Value::Array(a)) => a
+                .into_iter()
+                .filter_map(|v| match v {
+                    Value::String(path) => Some((PathBuf::from(path), None)),
+                    Value::Object(map) => {
+                        let path = map.get("path")?.as_str()?.to_string();
+                        let name = map
+                            .get("name")
+                            .and_then(|n| n.as_str())
+                            .map(str::to_string);
+                        Some((PathBuf::from(path), name))
+                    }
+                    _ => None,
+                })
+                .collect(),
+            _ => Vec::new(),
+        };
+
+        let list: Vec<Item> = items
+            .into_iter()
+            .map(|(path, custom_name)| {
+                let size = std::fs::metadata(&path).map(|m| m.len()).unwrap_or(0);
+                let name = custom_name.unwrap_or_else(|| {
+                    path.file_name()
+                        .and_then(|s| s.to_str())
+                        .unwrap_or("file")
+                        .to_string()
+                });
+                let ext = path
+                    .extension()
+                    .and_then(|e| e.to_str())
+                    .unwrap_or("")
+                    .to_ascii_lowercase();
+                let is_image = IMAGE_EXTENSIONS.contains(&ext.as_str());
+                Item {
+                    path: path.to_string_lossy().to_string(),
+                    name,
+                    size,
+                    is_image,
+                    ext: ext.to_ascii_uppercase(),
+                }
+            })
+            .collect();
+
+        serde_json::to_string(&list).unwrap_or_else(|_| "[]".into()).into()
     }
 
     fn cancel(&mut self) {

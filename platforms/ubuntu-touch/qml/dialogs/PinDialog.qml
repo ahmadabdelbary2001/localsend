@@ -30,6 +30,11 @@ Dialog {
     width: Math.min(parent.width - units.gu(4), units.gu(60))
 
     contentItem: ColumnLayout {
+
+        // Popups live in the window overlay, outside the mirrored MainView
+        // tree, so right-to-left layout has to be re-enabled on the content.
+        LayoutMirroring.enabled: translator.rtl
+        LayoutMirroring.childrenInherit: true
         spacing: units.gu(1)
 
         TextField {

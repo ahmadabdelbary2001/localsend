@@ -5,9 +5,15 @@ import Lomiri.Components 1.3
 
 import "../components"
 
+// Folder browser shared by the "save to folder" setting and the send tab.
+//
+// mode = "receive": pick the folder incoming files are saved in. Folders the
+//                   confined app cannot write to are rejected up front.
+// mode = "send":    pick a folder whose files are sent.
 Dialog {
     id: root
     property var appTheme
+    property string mode: "receive"
 
     // QQuickControls popups are drawn with the application palette; mirror the
     // app palette so dialogs stay readable in dark / OLED modes.
@@ -19,10 +25,23 @@ Dialog {
     palette.buttonText: appTheme && appTheme.colors ? appTheme.colors.surfaceText : "#1B1D21"
 
     background: DialogFrame { appTheme: root.appTheme }
+
     property string currentPath: ""
     property var entries: []
+    property var shortcuts: []
+    property bool creatingFolder: false
 
     readonly property string homePath: sendController.home_directory()
+    readonly property bool receiveMode: root.mode === "receive"
+    readonly property string effectivePath: root.currentPath.length > 0 ? root.currentPath : root.homePath
+    readonly property bool atRoot: root.effectivePath === "/"
+
+    // In receive mode the folder must accept writes: the server silently falls
+    // back to the app data folder otherwise, and the user would look for the
+    // received files in the wrong place.
+    readonly property bool canUseFolder: root.effectivePath.length > 1
+                                        && (!root.receiveMode
+                                            || settingsController.is_directory_writable(root.effectivePath))
 
     signal folderSelected(string path)
     signal canceled()
@@ -33,29 +52,60 @@ Dialog {
             path = path.substring(0, path.length - 1)
         root.currentPath = path
         try {
-            var json = sendController.list_directory(path)
-            root.entries = JSON.parse(json)
+            var parsed = JSON.parse(sendController.list_directory(path))
+            // A folder picker only offers folders.
+            root.entries = parsed.filter(function(entry) { return entry.is_dir })
         } catch (e) {
             console.warn("[FolderPicker] error reading directory:", e)
             root.entries = []
         }
+        dirList.positionViewAtBeginning()
+    }
+
+    function refreshShortcuts() {
+        var names = ["Downloads", "Documents", "Pictures", "Music", "Videos"]
+        var found = []
+        for (var i = 0; i < names.length; i++) {
+            if (sendController.directory_exists(root.homePath + "/" + names[i]))
+                found.push(names[i])
+        }
+        root.shortcuts = found
     }
 
     function goUp() {
-        if (!root.currentPath || root.currentPath === "/")
+        if (root.atRoot)
             return
-        var parts = root.currentPath.split("/")
+        var parts = root.effectivePath.split("/")
         parts.pop()
         var parentPath = parts.join("/")
         if (parentPath.length === 0) parentPath = "/"
         root.loadPath(parentPath)
     }
 
+    function createFolder() {
+        var name = newFolderField.text.trim()
+        if (name.length === 0) return
+        var created = sendController.create_directory(root.effectivePath + "/" + name)
+        if (created.length === 0) {
+            createError.text = translator.tr("folderPicker.notWritable")
+            return
+        }
+        newFolderField.text = ""
+        root.creatingFolder = false
+        root.loadPath(created)
+    }
+
     // Reload every time the dialog opens: callers may set `currentPath`
     // before calling open() (e.g. the receive destination setting).
-    onOpened: root.loadPath(root.currentPath)
+    onOpened: {
+        root.creatingFolder = false
+        root.refreshShortcuts()
+        root.loadPath(root.currentPath)
+    }
 
-    title: translator.tr("settingsTab.receive.destination")
+    title: root.receiveMode
+           ? translator.tr("settingsTab.receive.destination")
+           : translator.tr("folderPicker.title")
     modal: true
     // Instantiated through a Loader, so the declared parent (the
     // zero-sized Loader item) cannot be used for centering.
@@ -64,31 +114,55 @@ Dialog {
     y: Math.round((parent.height - height) / 2)
     width: Math.min(parent.width - units.gu(4), units.gu(65))
     height: Math.min(parent.height - units.gu(6), units.gu(75))
+    padding: units.gu(1.2)
 
     contentItem: ColumnLayout {
-        anchors.margins: units.gu(1.5)
+
+        // Popups live in the window overlay, outside the mirrored MainView
+        // tree, so right-to-left layout has to be re-enabled on the content.
+        LayoutMirroring.enabled: translator.rtl
+        LayoutMirroring.childrenInherit: true
         spacing: units.gu(1)
 
-        // Path header + Up button
+        // Current path + up navigation
         RowLayout {
             Layout.fillWidth: true
             spacing: units.gu(1)
 
-            Button {
-                text: "↑ .."
+            AbstractButton {
+                Layout.preferredWidth: units.gu(5)
+                Layout.preferredHeight: units.gu(5)
+                enabled: !root.atRoot
+                opacity: enabled ? 1.0 : 0.4
                 onClicked: root.goUp()
+
+                Rectangle {
+                    anchors.fill: parent
+                    radius: units.gu(0.5)
+                    color: root.appTheme && root.appTheme.colors
+                           ? root.appTheme.colors.surfaceTint : "#ECEFF1"
+                }
+
+                Icon {
+                    anchors.centerIn: parent
+                    width: units.gu(2.6)
+                    height: width
+                    name: "go-up"
+                    color: root.appTheme && root.appTheme.colors
+                           ? root.appTheme.colors.surfaceText : "#1B1D21"
+                }
             }
 
             Rectangle {
                 Layout.fillWidth: true
-                Layout.preferredHeight: units.gu(4.5)
+                Layout.preferredHeight: units.gu(5)
                 radius: units.gu(0.5)
                 color: root.appTheme && root.appTheme.colors ? root.appTheme.colors.surfaceTint : "#ECEFF1"
 
                 Label {
                     anchors { fill: parent; leftMargin: units.gu(1); rightMargin: units.gu(1) }
                     verticalAlignment: Text.AlignVCenter
-                    text: root.currentPath.length > 0 ? root.currentPath : root.homePath
+                    text: root.effectivePath
                     elide: Text.ElideMiddle
                     font.family: "monospace"
                     fontSize: "x-small"
@@ -97,10 +171,11 @@ Dialog {
             }
         }
 
-        // Quick Shortcuts Row
+        // Quick shortcuts (only folders that exist on this device)
         Flickable {
             Layout.fillWidth: true
-            Layout.preferredHeight: units.gu(4)
+            Layout.preferredHeight: visible ? units.gu(4.5) : 0
+            visible: root.shortcuts.length > 0
             contentWidth: shortcutsRow.width
             flickableDirection: Flickable.HorizontalFlick
             clip: true
@@ -110,7 +185,7 @@ Dialog {
                 spacing: units.gu(0.8)
 
                 Repeater {
-                    model: ["Documents", "Downloads", "Music", "Pictures", "Videos"]
+                    model: root.shortcuts
                     delegate: Button {
                         text: modelData
                         onClicked: root.loadPath(root.homePath + "/" + modelData)
@@ -119,7 +194,7 @@ Dialog {
             }
         }
 
-        // Directory list
+        // Folder list
         Rectangle {
             Layout.fillWidth: true
             Layout.fillHeight: true
@@ -136,77 +211,127 @@ Dialog {
 
                 delegate: Rectangle {
                     width: dirList.width
-                    height: units.gu(6)
+                    height: units.gu(5.5)
                     color: itemArea.pressed ? (root.appTheme ? root.appTheme.colors.surfaceTint : "#ECEFF1") : "transparent"
 
                     RowLayout {
-                        anchors { fill: parent; leftMargin: units.gu(1.5); rightMargin: units.gu(1.5) }
+                        anchors { fill: parent; leftMargin: units.gu(1.5); rightMargin: units.gu(1) }
                         spacing: units.gu(1.5)
 
                         Icon {
                             width: units.gu(2.8)
                             height: units.gu(2.8)
-                            name: modelData.is_dir
-                                      ? "folder-symbolic"
-                                      : (/\.(click|deb|apk|snap|appimage|flatpak|flatpakref|run)$/i.test(modelData.name)
-                                         ? "package-x-generic-symbolic"
-                                         : "text-x-generic-symbolic")
-                            color: modelData.is_dir
-                                ? (root.appTheme && root.appTheme.colors ? root.appTheme.colors.primary : "#00695C")
-                                : "#888888"
+                            name: "folder-symbolic"
+                            color: root.appTheme && root.appTheme.colors ? root.appTheme.colors.primary : "#00695C"
                         }
 
                         Label {
                             Layout.fillWidth: true
                             text: modelData.name
                             fontSize: "small"
-                            font.bold: modelData.is_dir
-                            elide: Text.ElideRight
+                            elide: Text.ElideMiddle
                             color: root.appTheme && root.appTheme.colors ? root.appTheme.colors.surfaceText : "#1B1D21"
                         }
 
-                        Label {
-                            visible: !modelData.is_dir
-                            text: {
-                                var sz = modelData.size || 0
-                                if (sz < 1024) return sz + " B"
-                                if (sz < 1024 * 1024) return (sz / 1024).toFixed(1) + " KB"
-                                return (sz / (1024 * 1024)).toFixed(1) + " MB"
-                            }
-                            fontSize: "x-small"
-                            color: "#888888"
+                        Icon {
+                            width: units.gu(2)
+                            height: width
+                            // Drill-in chevron: icons are not mirrored
+                            // automatically, so pick the direction here.
+                            name: translator.rtl ? "go-previous" : "go-next"
+                            color: root.appTheme && root.appTheme.colors ? root.appTheme.colors.surfaceTextMuted : "#888888"
                         }
                     }
 
                     MouseArea {
                         id: itemArea
                         anchors.fill: parent
-                        onClicked: {
-                            if (modelData.is_dir) {
-                                root.loadPath(modelData.path)
-                            }
-                        }
+                        onClicked: root.loadPath(modelData.path)
                     }
                 }
 
                 Label {
                     anchors.centerIn: parent
+                    width: parent.width - units.gu(4)
                     visible: root.entries.length === 0
                     text: translator.tr("assetPicker.emptyList")
                     fontSize: "small"
+                    horizontalAlignment: Text.AlignHCenter
                     color: root.appTheme && root.appTheme.colors ? root.appTheme.colors.surfaceTextMuted : "#888888"
                 }
             }
         }
 
-        // Bottom Action Buttons
+        // New folder
+        ColumnLayout {
+            Layout.fillWidth: true
+            spacing: units.gu(0.6)
+            visible: root.creatingFolder
+
+            RowLayout {
+                Layout.fillWidth: true
+                spacing: units.gu(1)
+
+                TextField {
+                    id: newFolderField
+                    Layout.fillWidth: true
+                    placeholderText: translator.tr("folderPicker.folderName")
+                    onAccepted: root.createFolder()
+                }
+
+                Button {
+                    text: translator.tr("folderPicker.create")
+                    enabled: newFolderField.text.trim().length > 0
+                    onClicked: root.createFolder()
+                }
+            }
+
+            Label {
+                id: createError
+                Layout.fillWidth: true
+                text: ""
+                visible: text.length > 0
+                fontSize: "x-small"
+                color: root.appTheme && root.appTheme.colors ? root.appTheme.colors.danger : "#C0392B"
+            }
+        }
+
+        // Receive mode: explain why a folder can not be used.
+        Label {
+            Layout.fillWidth: true
+            visible: root.receiveMode && !root.canUseFolder
+            text: translator.tr("folderPicker.notWritable")
+            fontSize: "x-small"
+            wrapMode: Text.Wrap
+            color: root.appTheme && root.appTheme.colors ? root.appTheme.colors.danger : "#C0392B"
+        }
+
+        // Actions
         RowLayout {
             Layout.fillWidth: true
             spacing: units.gu(1)
 
             Button {
                 Layout.fillWidth: true
+                text: root.creatingFolder
+                      ? translator.tr("general.cancel")
+                      : translator.tr("folderPicker.newFolder")
+                onClicked: {
+                    if (root.creatingFolder) {
+                        root.creatingFolder = false
+                        createError.text = ""
+                    } else {
+                        root.creatingFolder = true
+                        newFolderField.text = ""
+                        newFolderField.forceActiveFocus()
+                    }
+                }
+            }
+
+            Button {
+                Layout.fillWidth: true
                 text: translator.tr("general.cancel")
+                visible: !root.creatingFolder
                 onClicked: {
                     root.canceled()
                     root.close()
@@ -215,11 +340,12 @@ Dialog {
 
             Button {
                 Layout.fillWidth: true
-                text: translator.tr("assetPicker.select")
-                enabled: root.currentPath.length > 0
+                visible: !root.creatingFolder
+                text: translator.tr("folderPicker.useThisFolder")
+                enabled: root.canUseFolder
                 color: root.appTheme && root.appTheme.colors ? root.appTheme.colors.primary : "#00695C"
                 onClicked: {
-                    root.folderSelected(root.currentPath)
+                    root.folderSelected(root.effectivePath)
                     root.close()
                 }
             }

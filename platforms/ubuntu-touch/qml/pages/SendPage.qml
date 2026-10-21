@@ -27,19 +27,38 @@ Page {
         }
     }
 
+    // One row per selected file: name, size, image thumbnail or extension
+    // badge. Same re-evaluation trigger as `selection`.
+    readonly property var selectionItems: {
+        if (page.selectedPaths.length === 0)
+            return []
+        try {
+            return JSON.parse(sendController.selection_items(JSON.stringify(page.selectedPaths)))
+        } catch (e) {
+            return []
+        }
+    }
+
+    // selectedPaths holds plain paths and, for folder sends, { path, name }
+    // objects (see collect_directory_files), so removal has to normalize.
+    function pathOf(entry) {
+        if (typeof entry === "string")
+            return entry
+        return entry && entry.path ? entry.path : ""
+    }
+
+    function removeSelection(path) {
+        page.selectedPaths = page.selectedPaths.filter(function(entry) {
+            return page.pathOf(entry) !== path
+        })
+    }
+
     function _formatSize(bytes) {
         var b = bytes || 0
         if (b < 1024) return b + " B"
         if (b < 1024 * 1024) return (b / 1024).toFixed(1) + " KB"
         if (b < 1024 * 1024 * 1024) return (b / 1024 / 1024).toFixed(1) + " MB"
         return (b / 1024 / 1024 / 1024).toFixed(2) + " GB"
-    }
-
-    function _namesLabel() {
-        var names = page.selection.names || []
-        if (names.length === 0) return ""
-        var shown = names.slice(0, 3).join(", ")
-        return names.length > 3 ? shown + " …" : shown
     }
 
     function sendToDevice(fingerprint) {
@@ -398,13 +417,127 @@ Page {
                         color: page.appTheme && page.appTheme.colors ? page.appTheme.colors.primary : "#00695C"
                     }
 
-                    Label {
+                    // One row per file: thumbnail (images) or extension badge,
+                    // full name, size, and a button that removes just that file.
+                    ListView {
+                        id: selectionList
                         Layout.fillWidth: true
-                        visible: text.length > 0
-                        text: page._namesLabel()
-                        fontSize: "x-small"
-                        elide: Text.ElideRight
-                        color: page.appTheme && page.appTheme.colors ? page.appTheme.colors.surfaceTextMuted : "#5F6368"
+                        // Row height is fixed (gu(6) + spacing), so the height
+                        // is derived from the model instead of contentHeight:
+                        // binding to the view's own contentHeight loops through
+                        // the page Flickable.
+                        Layout.preferredHeight: visible
+                                                ? Math.min((page.selectionItems.length * units.gu(6.5)) - units.gu(0.5),
+                                                           units.gu(20))
+                                                : 0
+                        visible: page.selectionItems.length > 0
+                        clip: true
+                        boundsBehavior: Flickable.StopAtBounds
+                        spacing: units.gu(0.5)
+                        model: page.selectionItems
+
+                        delegate: Rectangle {
+                            width: selectionList.width
+                            height: units.gu(6)
+                            radius: units.gu(0.5)
+                            color: page.appTheme && page.appTheme.colors
+                                   ? page.appTheme.colors.surfaceTint : "#ECEFF1"
+
+                            RowLayout {
+                                anchors {
+                                    fill: parent
+                                    leftMargin: units.gu(0.8)
+                                    rightMargin: units.gu(0.4)
+                                    topMargin: units.gu(0.6)
+                                    bottomMargin: units.gu(0.6)
+                                }
+                                spacing: units.gu(1)
+
+                                // Thumbnail for media, file shape with the
+                                // extension for everything else.
+                                Item {
+                                    Layout.preferredWidth: units.gu(4.4)
+                                    Layout.preferredHeight: units.gu(4.4)
+
+                                    Image {
+                                        anchors.fill: parent
+                                        visible: modelData.is_image === true
+                                        source: visible ? "file://" + modelData.path : ""
+                                        fillMode: Image.PreserveAspectCrop
+                                        asynchronous: true
+                                        cache: true
+                                        sourceSize.width: units.gu(4.4)
+                                        sourceSize.height: units.gu(4.4)
+                                    }
+
+                                    Rectangle {
+                                        anchors.fill: parent
+                                        visible: modelData.is_image !== true
+                                        radius: units.gu(0.4)
+                                        color: page.appTheme && page.appTheme.colors
+                                               ? page.appTheme.colors.surface : "#ffffff"
+                                        border.width: units.dp(1)
+                                        border.color: page.appTheme && page.appTheme.colors
+                                                      ? page.appTheme.colors.divider : "#e0e0e0"
+
+                                        Label {
+                                            anchors {
+                                                fill: parent
+                                                margins: units.gu(0.3)
+                                            }
+                                            text: modelData.ext && modelData.ext.length > 0
+                                                  ? modelData.ext : "?"
+                                            fontSize: "xx-small"
+                                            font.bold: true
+                                            elide: Text.ElideRight
+                                            horizontalAlignment: Text.AlignHCenter
+                                            verticalAlignment: Text.AlignVCenter
+                                            color: page.appTheme && page.appTheme.colors
+                                                   ? page.appTheme.colors.primary : "#00695C"
+                                        }
+                                    }
+                                }
+
+                                ColumnLayout {
+                                    Layout.fillWidth: true
+                                    spacing: 0
+
+                                    Label {
+                                        Layout.fillWidth: true
+                                        text: modelData.name
+                                        fontSize: "x-small"
+                                        wrapMode: Text.Wrap
+                                        maximumLineCount: 2
+                                        elide: Text.ElideMiddle
+                                        color: page.appTheme && page.appTheme.colors
+                                               ? page.appTheme.colors.surfaceText : "#1B1D21"
+                                    }
+
+                                    Label {
+                                        Layout.fillWidth: true
+                                        text: page._formatSize(modelData.size)
+                                        fontSize: "xx-small"
+                                        color: page.appTheme && page.appTheme.colors
+                                               ? page.appTheme.colors.surfaceTextMuted : "#5F6368"
+                                    }
+                                }
+
+                                AbstractButton {
+                                    Layout.preferredWidth: units.gu(4.5)
+                                    Layout.preferredHeight: units.gu(4.5)
+                                    onClicked: page.removeSelection(modelData.path)
+
+                                    Icon {
+                                        anchors.centerIn: parent
+                                        width: units.gu(2.2)
+                                        height: width
+                                        name: "close"
+                                        color: page.appTheme && page.appTheme.colors
+                                               ? page.appTheme.colors.danger : "#C0392B"
+                                    }
+                                }
+                            }
+                        }
                     }
 
                     RowLayout {
@@ -808,6 +941,10 @@ Page {
 
         onLoaded: {
             item.appTheme = page.appTheme
+            // "send" mode: pick a folder whose files are sent (no writability
+            // requirement, "Use this folder" label instead of the setting one).
+            item.mode = "send"
+            item.currentPath = sendController.home_directory()
             item.folderSelected.connect(function(folderPath) {
                 page.addFolder(folderPath)
                 folderDialogLoader.active = false

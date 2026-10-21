@@ -31,6 +31,11 @@ Dialog {
     header: null
 
     contentItem: Item {
+
+        // Popups live in the window overlay, outside the mirrored MainView
+        // tree, so right-to-left layout has to be re-enabled on the content.
+        LayoutMirroring.enabled: translator.rtl
+        LayoutMirroring.childrenInherit: true
         implicitWidth: qrContent.implicitWidth + units.gu(4)
         implicitHeight: qrContent.implicitHeight + units.gu(4)
 

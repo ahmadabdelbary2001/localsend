@@ -53,6 +53,11 @@ Dialog {
     height: Math.min(col.implicitHeight + topPadding + bottomPadding, units.gu(55))
 
     contentItem: Flickable {
+
+        // Popups live in the window overlay, outside the mirrored MainView
+        // tree, so right-to-left layout has to be re-enabled on the content.
+        LayoutMirroring.enabled: translator.rtl
+        LayoutMirroring.childrenInherit: true
         id: flickable
         contentHeight: col.implicitHeight
         contentWidth: width

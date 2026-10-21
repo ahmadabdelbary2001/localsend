@@ -34,6 +34,11 @@ Dialog {
     width: Math.min(parent.width - units.gu(4), units.gu(60))
 
     contentItem: ListView {
+
+        // Popups live in the window overlay, outside the mirrored MainView
+        // tree, so right-to-left layout has to be re-enabled on the content.
+        LayoutMirroring.enabled: translator.rtl
+        LayoutMirroring.childrenInherit: true
         id: list
         // Fixed delegate height; the dialog sizes itself from this. Cap the
         // list so long lists (all languages) scroll instead of overflowing.

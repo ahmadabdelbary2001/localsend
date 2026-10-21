@@ -22,6 +22,18 @@ mod generated {
     include!(concat!(env!("OUT_DIR"), "/locales.rs"));
 }
 
+/// Ubuntu Touch-only strings (folder/app pickers) that are not part of the
+/// shared Flutter catalog in `app/assets/i18n`. They are merged over the
+/// shared catalog for the same locale, so Weblate stays the single source for
+/// the keys both frontends share.
+fn platform_overlay(tag: &str) -> Option<&'static str> {
+    match tag {
+        "en" => Some(include_str!("../../assets/i18n/en.json")),
+        "ar" => Some(include_str!("../../assets/i18n/ar.json")),
+        _ => None,
+    }
+}
+
 pub const DEFAULT_LOCALE: &str = "en";
 
 const RTL_LANGUAGES: &[&str] = &["ar", "fa", "he", "ur"];
@@ -109,7 +121,11 @@ fn catalog() -> &'static LocaleCatalog {
     CATALOG.get_or_init(|| {
         let mut by_tag: HashMap<&'static str, HashMap<String, String>> = HashMap::new();
         for (tag, json) in generated::LOCALE_FILES {
-            by_tag.insert(tag, load_and_resolve(json));
+            let mut map = load_and_resolve(json);
+            if let Some(overlay) = platform_overlay(tag) {
+                map.extend(load_and_resolve(overlay));
+            }
+            by_tag.insert(tag, map);
         }
 
         // Present the picker in the same order as Flutter, then append any
@@ -629,6 +645,19 @@ mod tests {
     }
 
     #[test]
+    fn platform_overlay_locales_are_in_sync() {
+        let en = load_and_resolve(platform_overlay("en").expect("en overlay"));
+        let ar = load_and_resolve(platform_overlay("ar").expect("ar overlay"));
+        assert_eq!(en["folderPicker.useThisFolder"], "Use this folder");
+        let mut missing: Vec<&String> = en.keys().filter(|key| !ar.contains_key(*key)).collect();
+        missing.sort();
+        assert!(
+            missing.is_empty(),
+            "assets/i18n/ar.json is missing platform keys: {missing:?}"
+        );
+    }
+
+    #[test]
     fn catalog_contains_all_embedded_locales() {
         let catalog = catalog();
         assert!(catalog.tags.len() >= 59, "found only {}", catalog.tags.len());
@@ -738,7 +767,11 @@ mod tests {
         collect_qml(&qml_dir, &mut files);
         assert!(!files.is_empty(), "no QML files under {}", qml_dir.display());
 
-        let en = load_and_resolve(en_json());
+        let en = {
+            let mut map = load_and_resolve(en_json());
+            map.extend(load_and_resolve(platform_overlay("en").expect("en overlay")));
+            map
+        };
         let mut missing = Vec::new();
         for file in &files {
             let Ok(source) = std::fs::read_to_string(file) else {

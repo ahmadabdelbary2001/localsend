@@ -10,10 +10,12 @@
 //   3. UI (QML) calls ServerCommand::AcceptUpload / DeclineUpload.
 //   4. We answer via decision_tx; core then emits FileUpload events with a
 //      oneshot target_tx per file.
-//   5. For each FileUpload, we compute a unique save path in
-//      ~/.local/share/localsend.ahmadabdelbary/received/ and send FileUploadTarget::Path
-//      via target_tx. Progress events arrive on progress_rx, the final
-//      result on result_rx; both are forwarded to the Qt side.
+//   5. For each FileUpload, we compute a unique save path with
+//      `filesystem::resolve_receive_dir` (the configured destination, then
+//      `~/Downloads/LocalSend`, then the app-private received folder) and send
+//      FileUploadTarget::Path via target_tx. Progress events arrive on
+//      progress_rx, the final result on result_rx; both are forwarded to the
+//      Qt side.
 
 use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
@@ -461,7 +463,7 @@ fn handle_core_event(
             file,
             target_tx,
         } => {
-            let dest = destination_dir(destination);
+            let dest = filesystem::resolve_receive_dir(destination.and_then(|p| p.to_str()));
             let relative_name = sanitize_relative_path(&file.file_name);
             let save_path = unique_path(&dest, &relative_name);
             if let Some(parent) = save_path.parent() {
@@ -676,35 +678,6 @@ async fn start_one(
 }
 
 // -------------------- filesystem helpers --------------------
-
-/// Resolves the receive directory:
-/// 1. the configured destination (settings -> "Save to folder"),
-/// 2. `~/Downloads` when it exists,
-/// 3. the app-private received dir.
-fn destination_dir(configured: Option<&Path>) -> PathBuf {
-    if let Some(dir) = configured {
-        if std::fs::create_dir_all(dir).is_ok() {
-            return dir.to_path_buf();
-        }
-        log::warn!(
-            "configured destination {} is not writable, falling back",
-            dir.display()
-        );
-    }
-
-    if let Some(home) = std::env::var_os("HOME") {
-        let downloads = PathBuf::from(home).join("Downloads");
-        if downloads.is_dir() && std::fs::create_dir_all(&downloads).is_ok() {
-            return downloads;
-        }
-    }
-
-    let base =
-        filesystem::app_data_dir().unwrap_or_else(|| PathBuf::from("/tmp/localsend-received"));
-    let dir = base.join("received");
-    let _ = std::fs::create_dir_all(&dir);
-    dir
-}
 
 /// Keeps the relative directory structure of folder sends
 /// (`<folder>/<relative path>`) while rejecting traversal and absolute paths.

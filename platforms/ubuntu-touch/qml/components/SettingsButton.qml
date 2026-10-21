@@ -42,14 +42,15 @@ Item {
             text: root.buttonLabel
             color: root.appTheme && root.appTheme.colors ? root.appTheme.colors.primary : "#00695C"
             fontSize: "small"
-            elide: Text.ElideRight
-            Layout.maximumWidth: units.gu(18)
+            elide: Text.ElideMiddle
+            Layout.maximumWidth: units.gu(22)
         }
 
         Icon {
             width: units.gu(2)
             height: width
-            name: "go-next"
+            // Icons are not mirrored by LayoutMirroring.
+            name: translator.rtl ? "go-previous" : "go-next"
             color: root.appTheme && root.appTheme.colors ? root.appTheme.colors.surfaceTextMuted : "#5F6368"
         }
     }

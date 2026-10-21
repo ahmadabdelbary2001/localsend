@@ -4,5 +4,8 @@
         "content_exchange",
         "content_exchange_source"
     ],
-    "policy_version": 2404.1
+    "policy_version": 2404.1,
+    "write_path": [
+        "/home/phablet/Downloads/"
+    ]
 }
