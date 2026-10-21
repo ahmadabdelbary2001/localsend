@@ -1,12 +1,13 @@
 // SPDX-License-Identifier: Apache-2.0
 //
-// Hands received files over to the content hub, so that they end up in a
-// folder the user can see (~/Downloads/LocalSend).
+// Fallback export for received files via the content hub.
 //
-// A confined click app can not write into the user's folders itself: only the
-// app-private XDG folders are writable (see the Ubuntu Touch "Writable
-// directories" guide). The content hub runs unconfined, so it can put the
-// file where the user wants it.
+// The click declares `write_path` for ~/Downloads, so received files are
+// written directly into `~/Downloads/LocalSend` and normally never reach this
+// component. It only handles files that ended up in the app-private folder
+// (e.g. after an AppArmor profile update or when the user picked a folder the
+// profile does not grant): the content hub runs unconfined and can move them
+// where the user can see them.
 //
 // The module is not available everywhere (e.g. on a desktop), so every call is
 // guarded: when the content hub is missing, the file simply stays in the
@@ -20,6 +21,12 @@ Item {
 
     /// The received files model (see IncomingFilesModel).
     property var model: null
+
+    /// Folder the app writes received files into when AppArmor does not allow
+    /// the user folder. Only files below this path are handed to the content
+    /// hub; files that already landed in ~/Downloads/LocalSend are not copied
+    /// a second time.
+    property string privateDir: ""
 
     /// Folder the files are copied to for the user. Files that are already
     /// there (the app can write there when the profile allows it) are not
@@ -78,6 +85,11 @@ Item {
             if (!path || path.length === 0 || status !== "finished")
                 continue
             if (root.exported.indexOf(path) !== -1)
+                continue
+
+            // Files that were written straight into the user folder need no
+            // export. Only the app-private receive folder is exported.
+            if (root.privateDir.length > 0 && path.indexOf(root.privateDir) !== 0)
                 continue
 
             // Already in the target folder: nothing to copy.

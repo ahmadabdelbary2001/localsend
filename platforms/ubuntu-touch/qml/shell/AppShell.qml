@@ -10,10 +10,11 @@ Page {
     property var appTheme
     property var navigationStack: null
 
-    // Keep the Ubuntu Touch system panel visible without reserving a second,
-    // empty title/header bar inside the app.
+    // The system panel (clock, battery, camera cut-out) belongs to the shell
+    // and is drawn outside the app window, so the app must not reserve a
+    // second, empty title bar of its own. `header: null` removes it entirely
+    // and lets the tab pages start at the top of the window.
     header: null
-    title: translator.tr("appName")
 
     // StackLayout manages one page at a time. Each page is wrapped in
     // a plain Item with Layout.fillWidth/Height so the layout sizes

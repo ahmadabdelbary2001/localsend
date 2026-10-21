@@ -59,6 +59,19 @@ Dialog {
         appListView.positionViewAtBeginning()
     }
 
+    function refreshScan() {
+        sendController.refresh_app_packages()
+        root.refreshApps()
+    }
+
+    function formatSize(bytes) {
+        var b = bytes || 0
+        if (b < 1024) return b + " B"
+        if (b < 1024 * 1024) return (b / 1024).toFixed(1) + " KB"
+        if (b < 1024 * 1024 * 1024) return (b / 1024 / 1024).toFixed(1) + " MB"
+        return (b / 1024 / 1024 / 1024).toFixed(2) + " GB"
+    }
+
     onOpened: {
         root.allApps = []
         root.filteredApps = []
@@ -136,17 +149,43 @@ Dialog {
         }
 
         // Search bar: matches the file name and the folder it is stored in.
-        TextField {
-            id: searchField
+        RowLayout {
             Layout.fillWidth: true
-            placeholderText: translator.tr("appPicker.search")
-            onTextChanged: root.refreshApps()
+            spacing: units.gu(0.8)
+
+            TextField {
+                id: searchField
+                Layout.fillWidth: true
+                placeholderText: translator.tr("appPicker.search")
+                onTextChanged: root.refreshApps()
+            }
+
+            // The scan only runs once; a new download would otherwise not show
+            // up until the cache expires.
+            AbstractButton {
+                Layout.preferredWidth: units.gu(4.6)
+                Layout.preferredHeight: units.gu(4.6)
+                enabled: !sendController.app_scan_running
+                opacity: enabled ? 1.0 : 0.4
+                onClicked: root.refreshScan()
+
+                Icon {
+                    anchors.centerIn: parent
+                    width: units.gu(2.4)
+                    height: width
+                    name: "view-refresh"
+                    color: root.appTheme && root.appTheme.colors
+                           ? root.appTheme.colors.surfaceText : "#1B1D21"
+                }
+            }
         }
 
         Label {
             Layout.fillWidth: true
-            text: translator.tr_args("apkPickerPage.apps",
-                                     JSON.stringify({ n: root.filteredApps.length }))
+            text: sendController.app_scan_running
+                  ? translator.tr("appPicker.scanning")
+                  : translator.tr_args("apkPickerPage.apps",
+                                       JSON.stringify({ n: root.filteredApps.length }))
             fontSize: "x-small"
             color: root.appTheme && root.appTheme.colors
                    ? root.appTheme.colors.surfaceTextMuted : "#5F6368"
@@ -169,7 +208,7 @@ Dialog {
 
                 delegate: Rectangle {
                     width: appListView.width
-                    height: units.gu(7)
+                    height: units.gu(8)
                     color: itemArea.pressed ? (root.appTheme ? root.appTheme.colors.surfaceTint : "#ECEFF1") : "transparent"
 
                     RowLayout {
@@ -193,7 +232,7 @@ Dialog {
 
                         ColumnLayout {
                             Layout.fillWidth: true
-                            spacing: units.gu(0.2)
+                            spacing: 0
 
                             Label {
                                 Layout.fillWidth: true
@@ -204,13 +243,29 @@ Dialog {
                                 color: root.appTheme && root.appTheme.colors ? root.appTheme.colors.surfaceText : "#1B1D21"
                             }
 
+                            // Where the package lives, so two builds with the
+                            // same file name can be told apart.
                             Label {
                                 Layout.fillWidth: true
-                                text: modelData.path
+                                visible: text.length > 0
+                                text: modelData.folder && modelData.folder.length > 0
+                                      ? modelData.folder : ""
                                 fontSize: "x-small"
                                 elide: Text.ElideMiddle
                                 opacity: 0.7
                                 color: root.appTheme && root.appTheme.colors ? root.appTheme.colors.surfaceTextMuted : "#5F6368"
+                            }
+
+                            Label {
+                                Layout.fillWidth: true
+                                text: {
+                                    var kind = modelData.kind ? modelData.kind.toUpperCase() : ""
+                                    var size = root.formatSize(modelData.size)
+                                    return kind.length > 0 ? kind + " · " + size : size
+                                }
+                                fontSize: "x-small"
+                                color: root.appTheme && root.appTheme.colors
+                                       ? root.appTheme.colors.primary : "#00695C"
                             }
                         }
                     }
@@ -228,11 +283,48 @@ Dialog {
                 Label {
                     anchors.centerIn: parent
                     width: parent.width - units.gu(4)
-                    visible: root.filteredApps.length === 0
-                    text: translator.tr("assetPicker.emptyList")
+                    visible: root.filteredApps.length === 0 && !sendController.app_scan_running
+                    text: translator.tr("appPicker.empty")
                     fontSize: "small"
                     horizontalAlignment: Text.AlignHCenter
                     color: root.appTheme && root.appTheme.colors ? root.appTheme.colors.surfaceTextMuted : "#888888"
+                }
+
+                // Progress indicator while the background scan runs.
+                Item {
+                    anchors.centerIn: parent
+                    width: parent.width - units.gu(4)
+                    height: units.gu(6)
+                    visible: root.filteredApps.length === 0 && sendController.app_scan_running
+
+                    Column {
+                        anchors.centerIn: parent
+                        spacing: units.gu(1)
+
+                        Icon {
+                            anchors.horizontalCenter: parent.horizontalCenter
+                            width: units.gu(3)
+                            height: width
+                            name: "view-refresh"
+                            color: root.appTheme && root.appTheme.colors
+                                   ? root.appTheme.colors.primary : "#00695C"
+
+                            RotationAnimator on rotation {
+                                running: root.filteredApps.length === 0 && sendController.app_scan_running
+                                loops: Animation.Infinite
+                                from: 0; to: 360
+                                duration: 1200
+                            }
+                        }
+
+                        Label {
+                            anchors.horizontalCenter: parent.horizontalCenter
+                            text: translator.tr("appPicker.scanning")
+                            fontSize: "small"
+                            color: root.appTheme && root.appTheme.colors
+                                   ? root.appTheme.colors.surfaceTextMuted : "#888888"
+                        }
+                    }
                 }
             }
         }

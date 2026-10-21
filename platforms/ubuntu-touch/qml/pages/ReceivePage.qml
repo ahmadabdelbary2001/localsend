@@ -8,11 +8,10 @@ Page {
     id: page
     property var appTheme
 
-    // The tab pages live inside the shell, not in the MainView page
-    // stack. An empty header keeps Lomiri from falling back to the
-    // deprecated application header handling for them (the visible top
-    // bar is the PageHeader of the shell).
-    header: Item { }
+    // The tab pages live inside the shell, not in the MainView page stack.
+    // No header at all: the system panel is drawn outside the window and the
+    // shell has no title bar, so the page content starts at the very top.
+    header: null
     property var navigationStack: null
 
     property bool _showAdvanced: false
@@ -141,18 +140,30 @@ Page {
             }
 
             // Alias
-            Label {
+            Text {
                 Layout.alignment: Qt.AlignHCenter
                 Layout.fillWidth: true
-                text: serverController.alias.length > 0
-                      ? serverController.alias
+                // The server snapshot keeps the alias it was started with.
+                // While the server is stopped, the settings value is the
+                // current name, so a rename shows up immediately.
+                text: serverController.running
+                      ? (serverController.alias.length > 0
+                         ? serverController.alias
+                         : settingsController.alias)
                       : settingsController.alias
                 // Lomiri's Label has no "xx-large"; Flutter renders the alias
                 // at 48px, so an explicit pixel size keeps the same hierarchy.
+                // Flutter also wraps the name in FittedBox(scaleDown): a long
+                // device name shrinks instead of being cut off. A fixed height
+                // gives Text.Fit the box it needs to scale down.
+                Layout.preferredHeight: units.gu(5.5)
                 font.pixelSize: units.dp(36)
+                fontSizeMode: Text.Fit
+                minimumPixelSize: units.dp(14)
+                wrapMode: Text.NoWrap
                 color: page.appTheme && page.appTheme.colors ? page.appTheme.colors.surfaceText : "#1B1D21"
-                elide: Text.ElideRight
                 horizontalAlignment: Text.AlignHCenter
+                verticalAlignment: Text.AlignVCenter
             }
 
             // Offline, or the visual IP ids (#42 #7) exactly like Flutter.
@@ -167,7 +178,8 @@ Page {
                 fontSize: "large"
                 color: page.appTheme && page.appTheme.colors ? page.appTheme.colors.surfaceTextMuted : "#5F6368"
                 horizontalAlignment: Text.AlignHCenter
-                elide: Text.ElideRight
+                wrapMode: Text.Wrap
+                maximumLineCount: 2
             }
 
             // Receive via link (server controls live in the settings tab).
@@ -272,7 +284,9 @@ Page {
 
             Label { text: translator.tr("receiveTab.infoBox.alias"); fontSize: "x-small"; opacity: 0.6 }
             Label {
-                text: serverController.alias.length > 0 ? serverController.alias : "-"
+                text: serverController.running
+                      ? (serverController.alias.length > 0 ? serverController.alias : "-")
+                      : (settingsController.alias.length > 0 ? settingsController.alias : "-")
                 fontSize: "small"
                 wrapMode: Text.WrapAnywhere
             }

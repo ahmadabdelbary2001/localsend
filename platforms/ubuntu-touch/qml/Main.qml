@@ -142,8 +142,9 @@ Window {
             }
         }
 
-        // Copies received files into the user's download folder. The app
-        // itself is not allowed to write there, the content hub does it.
+        // Copies files that the app could not write into the user's folder
+        // itself (older AppArmor profiles). With the current profile the app
+        // writes straight into ~/Downloads/LocalSend and this stays idle.
         //
         // The component is loaded dynamically: the content hub module is not
         // available everywhere (e.g. on a desktop), and a missing module must
@@ -154,10 +155,21 @@ Window {
 
             onLoaded: {
                 item.model = typeof incomingFilesModel !== "undefined" ? incomingFilesModel : null
-                item.targetDir = settingsController.preferred_receive_directory()
+                item.privateDir = settingsController.private_receive_directory()
+                item.targetDir = settingsController.export_directory()
                 // The content hub needs to know which apps can store the file.
                 if (item.available)
                     item.peerModel.findPeers()
+            }
+        }
+
+        Connections {
+            target: settingsController
+            function onChanged() {
+                if (receiveExporterLoader.item) {
+                    receiveExporterLoader.item.privateDir = settingsController.private_receive_directory()
+                    receiveExporterLoader.item.targetDir = settingsController.export_directory()
+                }
             }
         }
 

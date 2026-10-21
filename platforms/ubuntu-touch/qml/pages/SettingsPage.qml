@@ -11,11 +11,10 @@ Page {
 
     property var appTheme
 
-    // The tab pages live inside the shell, not in the MainView page
-    // stack. An empty header keeps Lomiri from falling back to the
-    // deprecated application header handling for them (the visible top
-    // bar is the PageHeader of the shell).
-    header: Item { }
+    // The tab pages live inside the shell, not in the MainView page stack.
+    // No header at all: the system panel is drawn outside the window and the
+    // shell has no title bar, so the page content starts at the very top.
+    header: null
     property var navigationStack: null
 
     readonly property int defaultPort: 53317
@@ -111,10 +110,11 @@ Page {
     }
 
     // The effective receive folder is resolved by the backend (configured
-    // folder -> ~/Downloads/LocalSend -> app data folder), so it can only be
-    // read through a method call and has to be refreshed explicitly.
+    // folder first, then ~/Downloads/LocalSend, then the app data fallback),
+    // so it can only be read through a method call and has to be refreshed
+    // explicitly.
     function refreshReceiveDirectory() {
-        page.receiveDirectory = settingsController.export_directory()
+        page.receiveDirectory = settingsController.receive_directory()
     }
 
     Component.onCompleted: {
@@ -437,7 +437,12 @@ Page {
                     appTheme: page.appTheme
                     label: translator.tr("settingsTab.network.alias")
                     value: settingsController.alias
-                    onEdited: settingsController.set_alias(editedValue)
+                    onEdited: {
+                        settingsController.set_alias(editedValue)
+                        // The alias is part of the register payload, so peers
+                        // only see the new name after a restart.
+                        page.restartServerIfRunning()
+                    }
                 }
 
                 RowLayout {
@@ -455,7 +460,10 @@ Page {
                             width: units.gu(2.8); height: units.gu(2.8)
                             color: page.appTheme && page.appTheme.colors ? page.appTheme.colors.surfaceText : "#1B1D21"
                         }
-                        onClicked: settingsController.random_alias()
+                        onClicked: {
+                            settingsController.random_alias()
+                            page.restartServerIfRunning()
+                        }
                     }
 
                     AbstractButton {
@@ -467,7 +475,10 @@ Page {
                             width: units.gu(2.8); height: units.gu(2.8)
                             color: page.appTheme && page.appTheme.colors ? page.appTheme.colors.surfaceText : "#1B1D21"
                         }
-                        onClicked: settingsController.use_system_name()
+                        onClicked: {
+                            settingsController.use_system_name()
+                            page.restartServerIfRunning()
+                        }
                     }
                 }
 

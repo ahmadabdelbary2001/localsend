@@ -4,8 +4,9 @@
 // Click confinement grants private writable XDG directories beneath the
 // click package name declared in manifest.json. Everything else is read-only
 // unless the AppArmor profile asks for it explicitly: the click declares
-// `write_path` for ~/Downloads (see apparmor/localsend.apparmor), which is
-// what makes the default receive folder writable.
+// `write_path` for ~/Downloads and `read_path` for the home folder
+// (see apparmor/localsend.apparmor). Receiving therefore writes straight into
+// the user visible `~/Downloads/LocalSend` folder.
 
 use std::path::{Path, PathBuf};
 
@@ -93,23 +94,15 @@ pub fn ensure_writable_dir(dir: &Path) -> bool {
 
 /// Resolves where received files are stored, in order of preference:
 ///
-/// 1. `~/Downloads/LocalSend` (the Ubuntu Touch default),
-/// 2. an explicitly configured folder, if the default cannot be used,
+/// 1. the folder the user configured (explicit choice wins),
+/// 2. `~/Downloads/LocalSend` (the Ubuntu Touch default),
 /// 3. the app-private `received` folder (last-resort fallback).
 ///
 /// A candidate is only used when a real write probe succeeds, so receiving can
 /// never fail because of an unreadable/unwritable destination.
 pub fn resolve_receive_dir(configured: Option<&str>) -> PathBuf {
-    let mut candidates: Vec<PathBuf> = Vec::new();
-    candidates.extend(preferred_receive_dir());
-    if let Some(dir) = configured.map(str::trim).filter(|d| !d.is_empty()) {
-        let configured = PathBuf::from(dir);
-        if !candidates.contains(&configured) {
-            candidates.push(configured);
-        }
-    }
+    let candidates = receive_candidates(configured);
     let private = private_receive_dir();
-    candidates.push(private.clone());
 
     match resolve_first_writable(&candidates) {
         Some(dir) => {
@@ -130,6 +123,27 @@ pub fn resolve_receive_dir(configured: Option<&str>) -> PathBuf {
             private
         }
     }
+}
+
+/// Candidate folders for received files, in the order they are probed.
+pub fn receive_candidates(configured: Option<&str>) -> Vec<PathBuf> {
+    let mut candidates: Vec<PathBuf> = Vec::new();
+
+    // An explicitly configured folder is what the user asked for, so it wins
+    // over the default. It is still probed: AppArmor may deny it.
+    if let Some(dir) = configured.map(str::trim).filter(|d| !d.is_empty()) {
+        candidates.push(PathBuf::from(dir));
+    }
+    if let Some(preferred) = preferred_receive_dir() {
+        if !candidates.contains(&preferred) {
+            candidates.push(preferred);
+        }
+    }
+    let private = private_receive_dir();
+    if !candidates.contains(&private) {
+        candidates.push(private);
+    }
+    candidates
 }
 
 /// First candidate that accepts writes. Each candidate is created if needed.
@@ -214,5 +228,21 @@ mod tests {
         let resolved = resolve_receive_dir(Some(&configured.to_string_lossy()));
         assert_eq!(resolved, configured);
         let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn configured_folder_is_probed_before_the_download_folder() {
+        let configured = PathBuf::from("/tmp/localsend-configured-order");
+        let candidates = receive_candidates(Some(&configured.to_string_lossy()));
+        assert_eq!(candidates.first(), Some(&configured));
+        assert!(candidates.contains(&preferred_receive_dir().expect("HOME")));
+        assert_eq!(candidates.last(), Some(&private_receive_dir()));
+    }
+
+    #[test]
+    fn empty_configuration_starts_with_the_download_folder() {
+        let candidates = receive_candidates(None);
+        assert_eq!(candidates.first(), preferred_receive_dir().as_ref());
+        assert_eq!(candidates.last(), Some(&private_receive_dir()));
     }
 }

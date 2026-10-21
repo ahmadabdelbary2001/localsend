@@ -303,12 +303,13 @@ jobs:
           click build "$ROOT"
           CLICK_FILE="$(find /tmp -maxdepth 1 -type f -name "localsend.ahmadabdelbary_*.click" -print -quit)"
           test -n "$CLICK_FILE"
-          # The click declares write_path for ~/Downloads so received files land
-          # in a user-visible folder (see platforms/ubuntu-touch/apparmor). That
-          # field is a click-review "redflag": it needs manual review, not a
+          # The click declares read_path for the home folder (package scanner)
+          # and write_path for ~/Downloads (received files land in
+          # ~/Downloads/LocalSend, see platforms/ubuntu-touch/apparmor). Those
+          # fields are click-review "redflags": they need manual review, not a
           # failed build. Only hard review errors stop packaging here; the
-          # redflag is surfaced as an annotation and reviewed with the OpenStore
-          # submission.
+          # redflags are surfaced as annotations and reviewed with the
+          # OpenStore submission.
           review_status=0
           click-review "$CLICK_FILE" 2>&1 | tee /tmp/click-review.log || review_status=$?
           if grep -Eiq "ERROR:|Could not load|Traceback|FATAL" /tmp/click-review.log; then
@@ -347,11 +348,13 @@ jobs:
           test -f /tmp/pk/assets/logo.png
           test -f /tmp/pk/logo.png
 
-          # The AppArmor hook must stay free of redflagged fields (read_path /
-          # write_path / template): the OpenStore refuses those uploads. The
-          # received files are handed to the content hub instead, which only
-          # needs the content_exchange policy groups.
-          python3 -c "import json; p=json.load(open('/tmp/pk/apparmor/localsend.apparmor')); bad=[k for k in ('read_path','write_path','template','policy_vendor') if k in p]; assert not bad, p; groups=p.get('policy_groups', []); assert 'content_exchange' in groups and 'content_exchange_source' in groups, p; print('apparmor policy OK')"
+          # The app has to see the user's files (package scanner) and write the
+          # received files into ~/Downloads/LocalSend directly. read_path /
+          # write_path are redflagged by click-review (manual review, see
+          # above), but they must stay in the hook: without them the file
+          # picker is empty and receives silently fall back to the app data
+          # folder.
+          python3 -c "import json; p=json.load(open('/tmp/pk/apparmor/localsend.apparmor')); reads=p.get('read_path', []); writes=p.get('write_path', []); assert '/home/phablet/' in reads, p; assert '/var/cache/click/' in reads, p; assert '/home/phablet/Downloads/' in writes, p; assert 'template' not in p and 'policy_vendor' not in p, p; groups=p.get('policy_groups', []); assert 'content_exchange' in groups and 'content_exchange_source' in groups, p; print('apparmor policy OK')"
 
           python3 -c "import json; m=json.load(open('/tmp/info.json')); assert m['architecture']=='$ARCH', m; assert m['version']=='$EXPECTED_VERSION', m; print('click validation OK')"
 

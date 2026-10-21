@@ -5,7 +5,9 @@
     "click": "Click",
     "apk": "APK",
     "all": "All",
-    "search": "Search packages"
+    "search": "Search packages",
+    "scanning": "Searching the device…",
+    "empty": "No package files found"
   },
   "folderPicker": {
     "title": "Select folder",

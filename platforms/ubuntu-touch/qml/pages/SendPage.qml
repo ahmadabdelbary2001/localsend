@@ -9,11 +9,10 @@ Page {
     id: page
     property var appTheme
 
-    // The tab pages live inside the shell, not in the MainView page
-    // stack. An empty header keeps Lomiri from falling back to the
-    // deprecated application header handling for them (the visible top
-    // bar is the PageHeader of the shell).
-    header: Item { }
+    // The tab pages live inside the shell, not in the MainView page stack.
+    // No header at all: the system panel is drawn outside the window and the
+    // shell has no title bar, so the page content starts at the very top.
+    header: null
     property string pendingFingerprint: ""
     property var pendingAddress: null // { ip: "", port: 53317, https: true }
     property var selectedPaths: []
@@ -408,7 +407,7 @@ Page {
                     // 6. App (تطبيق) — Flutter: Icons.apps
                     BigButton {
                         appTheme: page.appTheme
-                        iconName: "stock_application"
+                        iconName: "package-x-generic-symbolic"
                         label: translator.tr("sendTab.picker.app")
                         onClicked: {
                             appDialogLoader.active = true
@@ -658,7 +657,7 @@ Page {
                     }
                     BigButton {
                         appTheme: page.appTheme
-                        iconName: "stock_application"
+                        iconName: "package-x-generic-symbolic"
                         label: translator.tr("sendTab.picker.app")
                         onClicked: { addMenuPopup.visible = false; appDialogLoader.active = true; }
                     }

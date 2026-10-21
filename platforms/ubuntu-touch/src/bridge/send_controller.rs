@@ -28,16 +28,28 @@ pub struct OutgoingEntry {
     pub error: Option<String>,
 }
 
-/// How long a package scan result is reused before the storage is searched
-/// again.
-const APP_SCAN_MAX_AGE_SECS: u64 = 60;
+/// How long a full package scan result is reused before the storage is
+/// searched again.
+const APP_SCAN_MAX_AGE_SECS: u64 = 300;
+/// How long to wait before retrying a scan that found nothing. Without this a
+/// device without packages would restart the scan on every QML poll.
+const APP_SCAN_RETRY_SECS: u64 = 20;
 
 /// State of the background package scan.
 #[derive(Default)]
 struct AppScanState {
     running: bool,
-    /// Time of the last finished scan (seconds since the epoch).
+    /// Time of the last finished (full) scan, seconds since the epoch.
     last_scan: u64,
+    /// Time the last scan was started, seconds since the epoch.
+    last_attempt: u64,
+}
+
+fn now_secs() -> u64 {
+    std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_secs())
+        .unwrap_or(0)
 }
 
 #[derive(QObject)]
@@ -53,13 +65,18 @@ pub struct SendController {
     error_message: qt_property!(QString; NOTIFY state_changed),
     status: qt_property!(QString; NOTIFY state_changed),
     pin_invalid: qt_property!(bool; NOTIFY state_changed),
+    /// True while the background package scan is running, so the app picker
+    /// can show a progress indicator instead of "no apps found".
+    app_scan_running: qt_property!(bool; NOTIFY app_scan_changed),
 
     state_changed: qt_signal!(),
     log_message: qt_signal!(message: QString),
     files_changed: qt_signal!(),
-    /// Emitted when the background package scan finished, so the app picker
-    /// can show the results.
+    /// Emitted when the cached package list changed (after the priority phase
+    /// and after the full scan), so the app picker can show the results.
     app_packages_changed: qt_signal!(),
+    /// Emitted when the running state of the package scan changes.
+    app_scan_changed: qt_signal!(),
 
     /// paths_json = JSON array of absolute file paths.
     send_files: qt_method!(fn(&mut self, fingerprint: QString, paths_json: QString)),
@@ -82,6 +99,8 @@ pub struct SendController {
     /// `kind` selects the package format: `"click"` (Ubuntu Touch), `"apk"`
     /// (Android) or `"all"`. `query` filters by name or path.
     list_app_packages: qt_method!(fn(&mut self, kind: QString, query: QString) -> QString),
+    /// Forces a fresh package scan (the picker's refresh button).
+    refresh_app_packages: qt_method!(fn(&mut self)),
     selection_info: qt_method!(fn(&mut self, paths_json: QString) -> QString),
     /// Per-file details for the selection list (name / size / image / ext).
     selection_items: qt_method!(fn(&mut self, paths_json: QString) -> QString),
@@ -107,8 +126,9 @@ pub struct SendController {
     app_packages: Arc<RwLock<Vec<PackageFile>>>,
     /// State of the background scan: running flag and time of the last scan.
     app_scan: Arc<Mutex<AppScanState>>,
-    /// Set by the scan thread, read by poll() to emit the change signal.
-    app_scan_finished: Arc<AtomicBool>,
+    /// Set by the scan thread when the cached packages changed; poll() turns
+    /// it into the `app_packages_changed` signal.
+    app_scan_dirty: Arc<AtomicBool>,
 }
 
 impl SendController {
@@ -131,16 +151,19 @@ impl SendController {
             error_message: QString::default(),
             status: QString::default(),
             pin_invalid: false,
+            app_scan_running: false,
             state_changed: Default::default(),
             log_message: Default::default(),
             files_changed: Default::default(),
             app_packages_changed: Default::default(),
+            app_scan_changed: Default::default(),
             send_files: Default::default(),
             send_to_address: Default::default(),
             create_text_file: Default::default(),
             collect_directory_files: Default::default(),
             list_directory: Default::default(),
             list_app_packages: Default::default(),
+            refresh_app_packages: Default::default(),
             selection_info: Default::default(),
             selection_items: Default::default(),
             home_directory: Default::default(),
@@ -159,7 +182,7 @@ impl SendController {
             settings,
             app_packages: Arc::new(RwLock::new(Vec::new())),
             app_scan: Arc::new(Mutex::new(AppScanState::default())),
-            app_scan_finished: Arc::new(AtomicBool::new(false)),
+            app_scan_dirty: Arc::new(AtomicBool::new(false)),
         }
     }
 
@@ -540,12 +563,13 @@ impl SendController {
     ///
     /// The search runs in a background thread: the first call starts it and
     /// returns the current (possibly empty) result, every later call returns
-    /// the cached packages. QML polls while the picker is open.
+    /// the cached packages. QML polls while the picker is open and reads
+    /// `app_scan_running` to show a progress indicator.
     ///
     /// `kind` selects the package format: `"click"` (Ubuntu Touch), `"apk"`
     /// (Android) or `"all"`. `query` filters by name or path.
     pub fn list_app_packages(&mut self, kind: QString, query: QString) -> QString {
-        self.ensure_app_scan();
+        self.ensure_app_scan(false);
 
         let kind = kind.to_string();
         let query = query.to_string();
@@ -563,6 +587,11 @@ impl SendController {
                 serde_json::json!({
                     "name": p.name,
                     "path": p.path,
+                    // Folder the package is stored in, shown below the name.
+                    "folder": Path::new(&p.path)
+                        .parent()
+                        .map(|d| d.to_string_lossy().to_string())
+                        .unwrap_or_default(),
                     "size": p.size,
                     "modified": p.modified,
                     "kind": p.kind(),
@@ -577,12 +606,17 @@ impl SendController {
         serde_json::to_string(&apps).unwrap_or_else(|_| "[]".into()).into()
     }
 
+    /// Forces a new package scan (the refresh button of the app picker).
+    pub fn refresh_app_packages(&mut self) {
+        self.ensure_app_scan(true);
+    }
+
     /// Starts the package scan when it is not running and the cache is stale.
-    fn ensure_app_scan(&mut self) {
-        let now = std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .map(|d| d.as_secs())
-            .unwrap_or(0);
+    ///
+    /// `force` ignores the cache age, but still never starts a second scan
+    /// while one is running.
+    fn ensure_app_scan(&mut self, force: bool) {
+        let now = now_secs();
 
         let should_start = {
             let mut state = match self.app_scan.lock() {
@@ -592,18 +626,27 @@ impl SendController {
             if state.running {
                 false
             } else {
-                let stale = now.saturating_sub(state.last_scan) > APP_SCAN_MAX_AGE_SECS;
                 let empty = self
                     .app_packages
                     .read()
                     .map(|p| p.is_empty())
                     .unwrap_or(true);
-                if stale || empty {
+                let stale = now.saturating_sub(state.last_scan) > APP_SCAN_MAX_AGE_SECS;
+                // Before the first scan completes, a failed attempt may be
+                // retried after a delay. A completed empty result waits for
+                // the normal cache age instead of rescanning on every poll.
+                let retry_due = now.saturating_sub(state.last_attempt) >= APP_SCAN_RETRY_SECS;
+                let start = force
+                    || if empty && state.last_scan == 0 {
+                        retry_due
+                    } else {
+                        stale
+                    };
+                if start {
                     state.running = true;
-                    true
-                } else {
-                    false
+                    state.last_attempt = now;
                 }
+                start
             }
         };
 
@@ -611,27 +654,47 @@ impl SendController {
             return;
         }
 
+        if !self.app_scan_running {
+            self.app_scan_running = true;
+            self.app_scan_changed();
+        }
+
         let packages = self.app_packages.clone();
         let scan_state = self.app_scan.clone();
-        let scan_finished = self.app_scan_finished.clone();
+        let scan_dirty = self.app_scan_dirty.clone();
         std::thread::spawn(move || {
+            // Two phases: the folders the user actually downloads into are
+            // published first, so the picker fills immediately. The broad
+            // roots (the whole home folder, click caches) are walked
+            // afterwards and only replace the list once they are done.
             let roots = packages::search_roots();
-            let found = packages::scan(&roots);
-            log::info!("package scan found {} file(s)", found.len());
-            if let Ok(mut cache) = packages.write() {
-                *cache = found;
-            }
+            let priority: Vec<packages::SearchRoot> =
+                roots.iter().filter(|root| root.priority).cloned().collect();
+            let broad: Vec<packages::SearchRoot> = roots
+                .iter()
+                .filter(|root| !root.priority)
+                .cloned()
+                .collect();
+
+            let mut session = packages::ScanSession::new();
+            session.scan(&priority, packages::PRIORITY_BUDGET);
+            let partial = session.packages();
+            log::info!("package scan (priority) found {} package(s)", partial.len());
+            publish_packages(&packages, partial, &scan_dirty);
+
+            session.scan(&broad, packages::BROAD_BUDGET);
+            let found = session.into_packages();
+            log::info!("package scan found {} package(s)", found.len());
+            publish_packages(&packages, found, &scan_dirty);
+
             let mut state = match scan_state.lock() {
                 Ok(g) => g,
                 Err(p) => p.into_inner(),
             };
             state.running = false;
-            state.last_scan = std::time::SystemTime::now()
-                .duration_since(std::time::UNIX_EPOCH)
-                .map(|d| d.as_secs())
-                .unwrap_or(0);
+            state.last_scan = now_secs();
             drop(state);
-            scan_finished.store(true, Ordering::Relaxed);
+            scan_dirty.store(true, Ordering::Relaxed);
         });
     }
 
@@ -755,10 +818,19 @@ impl SendController {
     }
 
     pub fn poll(&mut self) {
-        // The package scan runs in a background thread; tell QML when it is
-        // done so the app picker can show the results.
-        if self.app_scan_finished.swap(false, Ordering::Relaxed) {
+        // The package scan runs in a background thread; tell QML when the
+        // cached results changed and when the scan finished, so the app picker
+        // can show them (and stop its progress indicator).
+        if self.app_scan_dirty.swap(false, Ordering::Relaxed) {
             self.app_packages_changed();
+        }
+        let running = match self.app_scan.lock() {
+            Ok(state) => state.running,
+            Err(poisoned) => poisoned.into_inner().running,
+        };
+        if running != self.app_scan_running {
+            self.app_scan_running = running;
+            self.app_scan_changed();
         }
 
         let events: Vec<SendEvent> = {
@@ -856,4 +928,16 @@ impl SendController {
             }
         }
     }
+}
+
+/// Replaces the cached package list and marks it as changed for `poll()`.
+fn publish_packages(
+    cache: &Arc<RwLock<Vec<PackageFile>>>,
+    found: Vec<PackageFile>,
+    dirty: &AtomicBool,
+) {
+    if let Ok(mut guard) = cache.write() {
+        *guard = found;
+    }
+    dirty.store(true, Ordering::Relaxed);
 }

@@ -5,7 +5,9 @@
     "click": "CLICK",
     "apk": "APK",
     "all": "الكل",
-    "search": "ابحث عن حزم"
+    "search": "ابحث عن حزم",
+    "scanning": "جارٍ البحث في الجهاز…",
+    "empty": "لم يتم العثور على ملفات حزم"
   },
   "folderPicker": {
     "title": "اختيار مجلد",
