@@ -593,12 +593,10 @@ impl SendController {
                 false
             } else {
                 let stale = now.saturating_sub(state.last_scan) > APP_SCAN_MAX_AGE_SECS;
-                let empty = self
-                    .app_packages
-                    .read()
-                    .map(|p| p.is_empty())
-                    .unwrap_or(true);
-                if stale || empty {
+                // Empty is a valid completed result. Rescanning on every
+                // filter/search request can repeatedly walk the whole device.
+                let never_scanned = state.last_scan == 0;
+                if stale || never_scanned {
                     state.running = true;
                     true
                 } else {

@@ -1,8 +1,33 @@
 {
-    "policy_groups": [
-        "networking",
-        "content_exchange",
-        "content_exchange_source"
-    ],
-    "policy_version": 2404.1
+
+    "policy_groups":  [
+
+                          "networking",
+
+                          "content_exchange",
+
+                          "content_exchange_source"
+
+                      ],
+
+    "policy_version":  2404.1,
+
+    "read_path":  [
+
+                      "/home/phablet/",
+
+                      "/home/phablet/**",
+
+                      "/media/",
+
+                      "/media/**",
+
+                  ],
+
+    "write_path":  [
+
+                       "/home/phablet/Downloads/"
+
+                   ]
+
 }

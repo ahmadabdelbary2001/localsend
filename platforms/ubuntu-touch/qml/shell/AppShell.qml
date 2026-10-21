@@ -13,7 +13,7 @@ Page {
     // Keep the Ubuntu Touch system panel visible without reserving a second,
     // empty title/header bar inside the app.
     header: null
-    title: translator.tr("appName")
+
 
     // StackLayout manages one page at a time. Each page is wrapped in
     // a plain Item with Layout.fillWidth/Height so the layout sizes
