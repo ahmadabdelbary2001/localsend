@@ -31,6 +31,7 @@ pub fn register() {
             "qml/components/SettingsTextField.qml" as "components/SettingsTextField.qml",
             "qml/components/DialogFrame.qml"       as "components/DialogFrame.qml",
             "qml/components/IconButton.qml"        as "components/IconButton.qml",
+            "qml/components/ReceiveExporter.qml"    as "components/ReceiveExporter.qml",
             "qml/dialogs/IncomingTransferDialog.qml" as "dialogs/IncomingTransferDialog.qml",
             "qml/dialogs/SendProgressDialog.qml" as "dialogs/SendProgressDialog.qml",
             "qml/dialogs/HistoryDialog.qml" as "dialogs/HistoryDialog.qml",

@@ -10,19 +10,17 @@ Page {
     property var appTheme
     property var navigationStack: null
 
-    // The application header of the MainView is used as an *empty* bar.
+    // Empty header bar for the system panel.
     //
     // On Ubuntu Touch the system panel (clock, battery, camera cut-out) is
-    // drawn into that area, so the app must not put a title there - the bar
-    // belongs to the system window and stays visible on both sides of the
-    // camera. The page content is anchored below the header, so no part of
-    // the app is hidden behind it.
-    header: null
-
-    // Height of the application header, i.e. the reserved system bar area.
-    readonly property real headerOffset: {
-        var header = shell.__propagated ? shell.__propagated.header : null
-        return header ? header.height : 0
+    // drawn over the top of the app window, so the app must not put anything
+    // there: the bar belongs to the system and stays visible on both sides of
+    // the camera. The header only reserves the space, the page content is
+    // anchored below it, so no part of the app is hidden behind the panel.
+    header: Rectangle {
+        height: units.gu(6)
+        color: shell.appTheme && shell.appTheme.colors
+               ? shell.appTheme.colors.background : "#FFFFFF"
     }
 
     // StackLayout manages one page at a time. Each page is wrapped in
@@ -31,8 +29,8 @@ Page {
     StackLayout {
         id: view
         anchors {
-            top: parent.top
-            topMargin: shell.headerOffset
+            // Below the header: the system panel area must stay free.
+            top: shell.header.bottom
             left: parent.left
             right: parent.right
             bottom: nav.top
@@ -87,6 +85,10 @@ Page {
             left: parent.left
             right: parent.right
             bottom: parent.bottom
+            // The shell draws its own bar over the bottom of the app window
+            // (the gesture area). The navigation has to stay above it,
+            // otherwise it is cut off.
+            bottomMargin: units.gu(4)
         }
         onTabSelected: function(index) {
             if (index >= 0 && index < 3) {

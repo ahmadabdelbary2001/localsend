@@ -81,6 +81,14 @@ pub struct SettingsController {
     /// app can only write into its own XDG folders, so the destination picker
     /// uses this to disable folders that would silently fall back.
     is_directory_writable: qt_method!(fn(&self, path: QString) -> bool),
+    /// The user visible folder (`~/Downloads/LocalSend`) received files are
+    /// copied to. The app itself can not write there, the content hub does it.
+    preferred_receive_directory: qt_method!(fn(&self) -> QString),
+    /// The app private folder that always accepts the received files.
+    private_receive_directory: qt_method!(fn(&self) -> QString),
+    /// Folder the received files are copied to for the user: the configured
+    /// destination when it is set, otherwise the preferred download folder.
+    export_directory: qt_method!(fn(&self) -> QString),
 }
 
 impl SettingsController {
@@ -136,6 +144,9 @@ impl SettingsController {
             set_destination: Default::default(),
             receive_directory: Default::default(),
             is_directory_writable: Default::default(),
+            preferred_receive_directory: Default::default(),
+            private_receive_directory: Default::default(),
+            export_directory: Default::default(),
             set_create_checksums: Default::default(),
             set_share_via_link_auto_accept: Default::default(),
             set_receive_via_link_auto_accept: Default::default(),
@@ -331,19 +342,60 @@ impl SettingsController {
         self.changed();
     }
 
+    fn preferred_receive_directory(&self) -> QString {
+        match crate::platform::filesystem::preferred_receive_dir() {
+            Some(path) => QString::from(path.to_string_lossy().to_string()),
+            None => QString::default(),
+        }
+    }
+
+    fn private_receive_directory(&self) -> QString {
+        let path = crate::platform::filesystem::private_receive_dir();
+        QString::from(path.to_string_lossy().to_string())
+    }
+
+    /// Folder the received files are copied to for the user.
+    ///
+    /// The app can not write into the user's folders itself, the content hub
+    /// does that. A configured destination wins, otherwise the preferred
+    /// download folder is used.
+    fn export_directory(&self) -> QString {
+        let configured = self.destination.to_string();
+        let configured = configured.trim();
+        if !configured.is_empty() {
+            return QString::from(configured.to_string());
+        }
+        self.preferred_receive_directory()
+    }
+
     fn receive_directory(&self) -> QString {
         let configured = self.destination.to_string();
         let path = crate::platform::filesystem::resolve_receive_dir(Some(configured.as_str()));
         QString::from(path.to_string_lossy().to_string())
     }
 
+    /// True when received files can end up in `path`.
+    ///
+    /// The app writes into its own folders, the content hub copies the files
+    /// into the download folder, so that folder counts as writable as well.
     fn is_directory_writable(&self, path: QString) -> bool {
         let path = path.to_string();
         let trimmed = path.trim();
         if trimmed.is_empty() {
             return false;
         }
-        crate::platform::filesystem::ensure_writable_dir(std::path::Path::new(trimmed))
+        if crate::platform::filesystem::ensure_writable_dir(std::path::Path::new(trimmed)) {
+            return true;
+        }
+        // The download folder is filled by the content hub, so it is usable
+        // even though the app itself can not write there.
+        match crate::platform::filesystem::preferred_receive_dir() {
+            Some(preferred) => {
+                let preferred = preferred.to_string_lossy().to_string();
+                trimmed == preferred || trimmed.starts_with(&(preferred + "/"))
+            }
+            None => false,
+        }
     }
 
     fn set_create_checksums(&mut self, v: bool) {

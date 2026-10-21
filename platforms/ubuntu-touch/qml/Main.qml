@@ -142,6 +142,25 @@ Window {
             }
         }
 
+        // Copies received files into the user's download folder. The app
+        // itself is not allowed to write there, the content hub does it.
+        //
+        // The component is loaded dynamically: the content hub module is not
+        // available everywhere (e.g. on a desktop), and a missing module must
+        // not take the whole app down.
+        Loader {
+            id: receiveExporterLoader
+            source: "components/ReceiveExporter.qml"
+
+            onLoaded: {
+                item.model = typeof incomingFilesModel !== "undefined" ? incomingFilesModel : null
+                item.targetDir = settingsController.export_directory()
+                // The content hub needs to know which apps can store the file.
+                if (item.available)
+                    item.peerModel.findPeers()
+            }
+        }
+
         // Single timer polls all controllers and models.
         Timer {
             interval: 250
@@ -167,6 +186,9 @@ Window {
 
                 if (typeof incomingFilesModel !== "undefined")
                     incomingFilesModel.refresh()
+
+                if (receiveExporterLoader.item)
+                    receiveExporterLoader.item.check()
 
                 if (typeof outgoingFilesModel !== "undefined")
                     outgoingFilesModel.refresh()

@@ -114,7 +114,7 @@ Page {
     // folder -> ~/Downloads/LocalSend -> app data folder), so it can only be
     // read through a method call and has to be refreshed explicitly.
     function refreshReceiveDirectory() {
-        page.receiveDirectory = settingsController.receive_directory()
+        page.receiveDirectory = settingsController.export_directory()
     }
 
     Component.onCompleted: {

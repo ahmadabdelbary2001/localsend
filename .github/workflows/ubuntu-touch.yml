@@ -341,10 +341,11 @@ jobs:
           test -f /tmp/pk/assets/logo.png
           test -f /tmp/pk/logo.png
 
-          # Received files must land in ~/Downloads/LocalSend on device: the
-          # AppArmor hook has to keep granting write access there (redflagged by
-          # click-review, but required, see the review step above).
-          python3 -c "import json; p=json.load(open('/tmp/pk/apparmor/localsend.apparmor')); assert '/home/phablet/Downloads/' in p.get('write_path', []), p; print('apparmor write_path OK')"
+          # The AppArmor hook must stay free of redflagged fields (read_path /
+          # write_path / template): the OpenStore refuses those uploads. The
+          # received files are handed to the content hub instead, which only
+          # needs the content_exchange policy groups.
+          python3 -c "import json; p=json.load(open('/tmp/pk/apparmor/localsend.apparmor')); bad=[k for k in ('read_path','write_path','template','policy_vendor') if k in p]; assert not bad, p; groups=p.get('policy_groups', []); assert 'content_exchange' in groups and 'content_exchange_source' in groups, p; print('apparmor policy OK')"
 
           python3 -c "import json; m=json.load(open('/tmp/info.json')); assert m['architecture']=='$ARCH', m; assert m['version']=='$EXPECTED_VERSION', m; print('click validation OK')"
 
