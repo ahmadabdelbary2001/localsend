@@ -1,4 +1,4 @@
-import QtQuick 2.15
+﻿import QtQuick 2.15
 import QtQuick.Layouts 1.15
 import QtQuick.Controls 2.15
 import Lomiri.Components 1.3
@@ -88,7 +88,7 @@ Page {
             // The shell draws its own bar over the bottom of the app window
             // (the gesture area). The navigation has to stay above it,
             // otherwise it is cut off.
-            bottomMargin: units.gu(4)
+            bottomMargin: 0
         }
         onTabSelected: function(index) {
             if (index >= 0 && index < 3) {

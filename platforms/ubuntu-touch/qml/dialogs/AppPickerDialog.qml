@@ -1,4 +1,4 @@
-import QtQuick 2.15
+﻿import QtQuick 2.15
 import QtQuick.Layouts 1.15
 import QtQuick.Controls 2.15
 import Lomiri.Components 1.3
@@ -41,13 +41,11 @@ Dialog {
     function refreshApps() {
         try {
             var apps = JSON.parse(sendController.list_app_packages(root.kind, searchField.text))
-            if (apps.length !== root.allApps.length) {
-                root.allApps = apps
-                root.filteredApps = apps
+            var previous = JSON.stringify(root.filteredApps)
+            root.allApps = apps
+            root.filteredApps = apps
+            if (previous !== JSON.stringify(apps))
                 appListView.positionViewAtBeginning()
-            } else {
-                root.allApps = apps
-            }
         } catch (e) {
             console.warn("[AppPicker] failed to list app packages:", e)
         }

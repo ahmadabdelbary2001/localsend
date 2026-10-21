@@ -1,4 +1,4 @@
-import QtQuick 2.15
+﻿import QtQuick 2.15
 import QtQuick.Window 2.15
 import QtQuick.Controls 2.15
 import Lomiri.Components 1.3
@@ -13,7 +13,7 @@ Window {
     objectName: "localsendWindow"
 
     visible: true
-    visibility: Window.FullScreen
+    visibility: Window.AutomaticVisibility
     title: "LocalSend"
     color: localSendTheme.colors.background
 
