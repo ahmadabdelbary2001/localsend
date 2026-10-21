@@ -110,7 +110,29 @@ jobs:
             set -eux
             export DEBIAN_FRONTEND=noninteractive
 
-            # Retry transient repository errors, including HTTP 503 responses.
+            # The SDK image may include an optional Clickable Launchpad PPA whose
+            # index intermittently returns HTTP 503. This workflow uses the click
+            # packaging tools from Ubuntu/UBports rather than the clickable CLI.
+            # Disable only that PPA; preserve the official Ubuntu and UBports sources.
+            PPA_HOST="ppa.launchpadcontent.net/bhdouglass/clickable"
+            for source in /etc/apt/sources.list /etc/apt/sources.list.d/*.list; do
+              [ -f "$source" ] || continue
+              if grep -q "$PPA_HOST" "$source"; then
+                sed -i "\\|$PPA_HOST|s|^[[:space:]]*deb|# disabled optional Clickable PPA: deb|" "$source"
+              fi
+            done
+            for source in /etc/apt/sources.list.d/*.sources; do
+              [ -f "$source" ] || continue
+              if grep -q "$PPA_HOST" "$source"; then
+                # Do not disable a file that mixes the optional PPA with other URIs.
+                if grep -E '^[[:space:]]*URIs:' "$source" | grep -vq "$PPA_HOST"; then
+                  echo "Unexpected mixed APT source file containing Clickable PPA: $source" >&2
+                  exit 1
+                fi
+                mv "$source" "${source}.disabled"
+              fi
+            done
+
             apt-get update \
               -o Acquire::Retries=5 \
               -o Acquire::http::Timeout=30 \

@@ -100,15 +100,27 @@ pub fn ensure_writable_dir(dir: &Path) -> bool {
 /// A candidate is only used when a real write probe succeeds, so receiving can
 /// never fail because of an unreadable/unwritable destination.
 pub fn resolve_receive_dir(configured: Option<&str>) -> PathBuf {
+    resolve_receive_dir_with(preferred_receive_dir(), configured, private_receive_dir())
+}
+
+/// Resolves receive storage from an explicit priority list. Keeping this
+/// policy separate makes the order testable without changing the process HOME
+/// or relying on the host machine's AppArmor permissions.
+fn resolve_receive_dir_with(
+    preferred: Option<PathBuf>,
+    configured: Option<&str>,
+    private: PathBuf,
+) -> PathBuf {
     let mut candidates: Vec<PathBuf> = Vec::new();
-    candidates.extend(preferred_receive_dir());
+    if let Some(dir) = preferred {
+        candidates.push(dir);
+    }
     if let Some(dir) = configured.map(str::trim).filter(|d| !d.is_empty()) {
         let configured = PathBuf::from(dir);
         if !candidates.contains(&configured) {
             candidates.push(configured);
         }
     }
-    let private = private_receive_dir();
     candidates.push(private.clone());
 
     match resolve_first_writable(&candidates) {
@@ -181,38 +193,64 @@ mod tests {
         let _ = std::fs::remove_dir_all(&dir);
     }
 
-    #[test]
-    fn resolve_receive_dir_falls_back_to_the_private_folder() {
-        let dir = std::env::temp_dir().join(format!(
-            "localsend-fs-resolve-{}-{}",
+    fn unique_test_dir(label: &str) -> PathBuf {
+        std::env::temp_dir().join(format!(
+            "localsend-{label}-{}-{}",
             std::process::id(),
             std::time::SystemTime::now()
                 .duration_since(std::time::UNIX_EPOCH)
                 .map(|d| d.as_nanos())
                 .unwrap_or_default()
-        ));
-        let writable = dir.join("writable");
-        let candidates = vec![
-            PathBuf::from("/proc/localsend-cannot-exist"),
-            writable.clone(),
-        ];
-        assert_eq!(resolve_first_writable(&candidates), Some(writable));
-        let _ = std::fs::remove_dir_all(&dir);
+        ))
     }
 
     #[test]
-    fn resolve_receive_dir_prefers_the_configured_folder() {
-        let dir = std::env::temp_dir().join(format!(
-            "localsend-fs-configured-{}-{}",
-            std::process::id(),
-            std::time::SystemTime::now()
-                .duration_since(std::time::UNIX_EPOCH)
-                .map(|d| d.as_nanos())
-                .unwrap_or_default()
-        ));
-        let configured = dir.join("chosen");
-        let resolved = resolve_receive_dir(Some(&configured.to_string_lossy()));
+    fn resolve_receive_dir_prefers_default_folder_when_writable() {
+        let root = unique_test_dir("preferred");
+        let preferred = root.join("Downloads").join("LocalSend");
+        let configured = root.join("chosen");
+        let private = root.join("private");
+        let configured_str = configured.to_string_lossy().into_owned();
+
+        let resolved = resolve_receive_dir_with(
+            Some(preferred.clone()),
+            Some(&configured_str),
+            private,
+        );
+
+        assert_eq!(resolved, preferred);
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn resolve_receive_dir_uses_configured_folder_when_default_is_unwritable() {
+        let root = unique_test_dir("configured-fallback");
+        let configured = root.join("chosen");
+        let configured_str = configured.to_string_lossy().into_owned();
+        let private = PathBuf::from("/proc/localsend-private-must-not-exist");
+
+        let resolved = resolve_receive_dir_with(
+            Some(PathBuf::from("/proc/localsend-preferred-must-not-exist")),
+            Some(&configured_str),
+            private,
+        );
+
         assert_eq!(resolved, configured);
-        let _ = std::fs::remove_dir_all(&dir);
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn resolve_receive_dir_uses_private_folder_when_other_candidates_are_unwritable() {
+        let root = unique_test_dir("private-fallback");
+        let private = root.join("private");
+        let resolved = resolve_receive_dir_with(
+            Some(PathBuf::from("/proc/localsend-preferred-must-not-exist")),
+            Some("/proc/localsend-configured-must-not-exist"),
+            private.clone(),
+        );
+
+        assert_eq!(resolved, private);
+        assert!(private.is_dir());
+        let _ = std::fs::remove_dir_all(&root);
     }
 }
