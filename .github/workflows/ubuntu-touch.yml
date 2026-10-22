@@ -1,7 +1,7 @@
 name: ubuntu-touch
 
 run-name: >-
-  ${{ startsWith(github.ref, 'refs/tags/v') && format('Release · {0}', github.ref_name) || format('CI · {0}', github.ref_name) }}
+  ${{ startsWith(github.ref, 'refs/tags/v') && format('Release Â· {0}', github.ref_name) || format('CI Â· {0}', github.ref_name) }}
 
 on:
   push:
@@ -53,7 +53,7 @@ jobs:
         run: cargo test -p localsend-ubuntu-touch --lib
 
   ubuntu_touch:
-    name: Click · ${{ matrix.arch }}
+    name: Click Â· ${{ matrix.arch }}
     runs-on: ubuntu-24.04
     timeout-minutes: 90
     strategy:
@@ -290,6 +290,7 @@ jobs:
 
           sed "s/\"architecture\": \"[^\"]*\"/\"architecture\": \"$ARCH\"/" /src/platforms/ubuntu-touch/manifest.json > "$ROOT/manifest.json"
           cp /src/platforms/ubuntu-touch/localsend.desktop "$ROOT/"
+          cp /src/platforms/ubuntu-touch/localsend-contenthub.json "$ROOT/"
           cp /src/platforms/ubuntu-touch/apparmor/localsend.apparmor "$ROOT/apparmor/"
           cp "$BIN" "$ROOT/usr/bin/localsend"
           cp -r /src/platforms/ubuntu-touch/qml/. "$ROOT/qml/"
@@ -346,6 +347,8 @@ jobs:
 
           test -f /tmp/pk/usr/bin/localsend
           test -f /tmp/pk/localsend.desktop
+          test -f /tmp/pk/localsend-contenthub.json
+          python3 -m json.tool /tmp/pk/localsend-contenthub.json > /dev/null
           test -f /tmp/pk/apparmor/localsend.apparmor
           test -f /tmp/pk/assets/logo.png
           test -f /tmp/pk/logo.png
@@ -425,7 +428,7 @@ jobs:
           fi
 
   publish_openstore:
-    name: Publish to OpenStore · ${{ matrix.arch }}
+    name: Publish to OpenStore Â· ${{ matrix.arch }}
     needs: [ubuntu_touch]
     if: startsWith(github.ref, 'refs/tags/v')
     runs-on: ubuntu-24.04

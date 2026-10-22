@@ -4,7 +4,7 @@
 #
 # CI does not use Clickable: it stages the same directory layout with plain
 # Docker and runs "click build" itself (see .github/workflows/ubuntu-touch.yml).
-# Keep both in sync — in particular the binary name/path (usr/bin/localsend),
+# Keep both in sync â€” in particular the binary name/path (usr/bin/localsend),
 # which localsend.desktop ("Exec=usr/bin/localsend") depends on.
 
 clickable_minimum_required: 8.0.0
@@ -31,6 +31,7 @@ postbuild:
 install_root_data:
   - "manifest.json"
   - "localsend.desktop"
+  - "localsend-contenthub.json"
   - "apparmor"
   - "assets"
   - "assets/logo.png"
