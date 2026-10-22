@@ -7,10 +7,9 @@ import "../components"
 
 // Package picker for the send tab.
 //
-// Ubuntu Touch ships Click packages, Android ships APKs: the switch on top
-// selects the format (Click, APK or both). The whole storage is searched for
-// package files, so a .click that sits in a subfolder or on the SD card is
-// listed as well; "Open" still allows picking any file.
+// The automatic list covers packages in LocalSend's app-private
+// storage. Use "Open" to select a package from shared storage through Content
+// Hub; a confined app must not crawl Downloads, Documents or removable media itself.
 Dialog {
     id: root
     property var appTheme

@@ -1,34 +1,9 @@
-// SPDX-License-Identifier: Apache-2.0
+// Finds application packages (.click / .apk) in LocalSend's private storage.
 //
-// Finds application packages (.click / .apk) on the device.
-//
-// The send tab lets the user share an app with a peer. Ubuntu Touch has no
-// installed-app archive to share (unlike Android, where the APK of an
-// installed app can be extracted), so the picker lists package *files* that
-// are stored on the device. They can live anywhere: the download folder, the
-// home directory, an SD card, ... so the whole storage is searched.
-//
-// The search is split into two phases so the picker is usable immediately:
-// the priority roots (the LocalSend receive folder, ~/Downloads, documents,
-// removable storage) are scanned first and published, then the rest (the home
-// folder, click caches) is walked in the background. Both phases use
-// breadth-first traversal with a per-root entry budget and a shared "seen"
-// set, so a second phase never walks a directory twice and a huge cache can
-// not starve the folders the user actually uses.
-//
-// The AppArmor hook grants read access to the folders packages are stored in
-// (`write_path` on `~/Downloads` also allows reading it, `read_path` adds
-// `~/Documents`), which is why the roots below are ordered that way. Anything
-// outside those grants is unreadable and simply yields no entries, so the
-// remaining roots are best-effort.
-//
-// The search is split into two phases so the picker is usable immediately:
-// the priority roots (`~/Downloads/LocalSend`, `~/Downloads`, `~/Documents`,
-// removable storage) are scanned first and published one by one, then the
-// rest (the home folder, click caches) is walked in the background. Both
-// phases use breadth-first traversal with a per-root entry budget and a shared
-// "seen" set, so a later phase never walks a directory twice and a huge cache
-// can not starve the folders the user actually uses.
+// The app is confined to its own XDG data directory. It can list package files
+// already received by LocalSend, but cannot crawl Downloads, Documents,
+// removable storage or the rest of the home directory. The "Open" action in
+// AppPickerDialog uses Content Hub to import a user-selected shared file.
 
 use std::collections::{HashSet, VecDeque};
 use std::path::{Path, PathBuf};
@@ -119,61 +94,19 @@ fn dir_name_is_skipped(name: &std::ffi::OsStr) -> bool {
     }
 }
 
-fn home_dir() -> Option<PathBuf> {
-    std::env::var_os("HOME").map(PathBuf::from)
-}
-
-/// Directories that are searched for packages.
-///
-/// The order is deliberate: `~/Downloads/LocalSend` (where received packages
-/// land), `~/Downloads` and `~/Documents` are the folders the hook grants read
-/// access to, so they are read first and published while the remaining roots
-/// (removable storage, click caches, the rest of the home folder) are still
-/// being walked.
+/// Search only app-private storage; shared folders must be opened through
+/// Content Hub, not traversed directly by this confined process.
 pub fn search_roots() -> Vec<SearchRoot> {
-    let mut roots: Vec<SearchRoot> = Vec::new();
-    let mut push = |path: PathBuf, priority: bool| {
-        if path.is_dir() && !roots.iter().any(|root| root.path == path) {
-            roots.push(SearchRoot { path, priority });
-        }
+    let Some(data_dir) = crate::platform::filesystem::app_data_dir() else {
+        return Vec::new();
     };
-
-    if let Some(home) = home_dir() {
-        // Where LocalSend stores received files, so a package that was just
-        // received shows up first.
-        push(home.join("Downloads").join("LocalSend"), true);
-        push(home.join("Downloads"), true);
-        for child in ["Documents", "Desktop"] {
-            push(home.join(child), true);
-        }
+    if !data_dir.is_dir() {
+        return Vec::new();
     }
-
-    // Removable storage: packages are often copied there from a computer.
-    for dir in ["/media", "/run/media", "/mnt"] {
-        push(PathBuf::from(dir), true);
-    }
-
-    // Click keeps downloaded packages in its cache.
-    push(PathBuf::from("/var/cache/click"), true);
-
-    // Installed click packages. They are unpacked, but some come with a
-    // bundled .click next to them.
-    for dir in [
-        "/opt/click.ubuntu.com",
-        "/var/lib/click",
-        "/usr/share/click",
-    ] {
-        push(PathBuf::from(dir), false);
-    }
-
-    // Last resort: everything else in the home directory (Pictures, Music,
-    // a custom folder, ...). Already scanned priority folders are skipped by
-    // the shared seen set, not by the budget.
-    if let Some(home) = home_dir() {
-        push(home, false);
-    }
-
-    roots
+    vec![SearchRoot {
+        path: data_dir,
+        priority: true,
+    }]
 }
 
 /// State shared by the priority and the broad scan phase.

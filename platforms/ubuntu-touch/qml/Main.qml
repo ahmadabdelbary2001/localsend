@@ -142,13 +142,9 @@ Window {
             }
         }
 
-        // Hands received files to the content hub so that they end up in a
-        // folder the user can see (~/Downloads by default). Normally the app
-        // writes straight into ~/Downloads/LocalSend (the AppArmor hook grants
-        // `write_path` there) and nothing is exported; the exporter only kicks
-        // in when the app had to fall back to its own data folder or the
-        // configured destination differs from the folder it can write into.
-        //
+        // Received files are first staged in app-private storage. Content Hub
+        // then hands completed files to the file manager so the user can save
+        // them in shared storage without broad filesystem grants.
         // The component is loaded dynamically: the content hub module is not
         // available everywhere (e.g. on a desktop), and a missing module must
         // not take the whole app down.

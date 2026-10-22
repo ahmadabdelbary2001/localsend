@@ -303,19 +303,23 @@ jobs:
           click build "$ROOT"
           CLICK_FILE="$(find /tmp -maxdepth 1 -type f -name "localsend.ahmadabdelbary_*.click" -print -quit)"
           test -n "$CLICK_FILE"
-          # The hook grants exactly two paths: write access to ~/Downloads
-          # (received files land in ~/Downloads/LocalSend, the app picker reads
-          # it too) and read access to ~/Documents (app picker). click-review
-          # flags both fields, so the OpenStore asks for a manual review; a
-          # manual `click install` accepts them.
+          # Common policy groups only: redflagged path permissions block release.
           review_status=0
           click-review "$CLICK_FILE" 2>&1 | tee /tmp/click-review.log || review_status=$?
           if grep -Eiq "ERROR:|Could not load|Traceback|FATAL" /tmp/click-review.log; then
-            echo "Click review reported errors" >&2
+            echo "::error::click-review reported a package error" >&2
+            cat /tmp/click-review.log
+            exit 1
+          fi
+          if grep -Eiq "found redflagged fields|redflagged fields" /tmp/click-review.log; then
+            echo "::error::click-review found redflagged AppArmor fields; refusing to publish this package" >&2
+            cat /tmp/click-review.log
             exit 1
           fi
           if [ "$review_status" -ne 0 ]; then
-            echo "::warning::click-review exited $review_status - redflagged fields need manual review"
+            echo "::error::click-review exited $review_status" >&2
+            cat /tmp/click-review.log
+            exit "$review_status"
           fi
           mv "$CLICK_FILE" /src/dist/
           ls -la /src/dist/'
@@ -346,13 +350,8 @@ jobs:
           test -f /tmp/pk/assets/logo.png
           test -f /tmp/pk/logo.png
 
-          # The hook may only grant the two folders the app really needs:
-          #   write_path ~/Downloads  -> received files go to ~/Downloads/LocalSend
-          #   read_path  ~/Documents  -> the app picker can list packages there
-          # `template` and `policy_vendor` must never appear, and the paths may
-          # not be widened again (the whole home folder was a redflag that also
-          # broke the manual install of 1.5.3).
-          python3 -c "import json; p=json.load(open('/tmp/pk/apparmor/localsend.apparmor')); assert 'template' not in p and 'policy_vendor' not in p, p; assert p.get('write_path')==['/home/phablet/Downloads/'], p; assert p.get('read_path')==['/home/phablet/Documents/'], p; groups=p.get('policy_groups', []); assert 'content_exchange' in groups and 'content_exchange_source' in groups, p; print('apparmor policy OK')"
+          # Disallow AppArmor fields that trigger manual review.
+          python3 -c "import json; p=json.load(open('/tmp/pk/apparmor/localsend.apparmor')); bad=[k for k in ('abstractions','read_path','write_path','template','policy_vendor') if k in p]; assert not bad, {'redflagged_fields': bad, 'policy': p}; groups=p.get('policy_groups', []); assert 'networking' in groups and 'content_exchange' in groups and 'content_exchange_source' in groups, p; print('apparmor policy OK: no redflagged fields')"
 
           python3 -c "import json; m=json.load(open('/tmp/info.json')); assert m['architecture']=='$ARCH', m; assert m['version']=='$EXPECTED_VERSION', m; print('click validation OK')"
 
@@ -414,7 +413,7 @@ jobs:
 
           ### What's included
 
-          - **Receive**: automatic and manual accept, files are stored in `~/Downloads/LocalSend`
+          - **Receive**: automatic and manual accept; export received files through Content Hub to shared storage
           - **Send**: pick files and send to nearby devices, app picker for `.click` / `.apk`
           - **Discovery**: multicast + HTTP register
           - **Content Hub**: received files are handed to the file manager, one save request per transfer
@@ -479,18 +478,6 @@ jobs:
           echo "CLICK=$CLICK" >> "$GITHUB_ENV"
           ls -lh "$CLICK"
 
-      - name: Diagnose API key
-        env:
-          OPENSTORE_API_KEY: ${{ secrets.OPENSTORE_API_KEY }}
-        run: |
-          set -euo pipefail
-          echo "Length: ${#OPENSTORE_API_KEY}"
-          echo "First 8 chars: ${OPENSTORE_API_KEY:0:8}"
-          echo "Last 8 chars: ${OPENSTORE_API_KEY: -8}"
-          echo "Has trailing newline? $(printf '%s' "$OPENSTORE_API_KEY" | tail -c 1 | xxd)"
-          echo "First 8 bytes hex: $(printf '%s' "$OPENSTORE_API_KEY" | head -c 8 | xxd)"
-
-
       - name: Publish to OpenStore
         env:
           OPENSTORE_API_KEY: ${{ secrets.OPENSTORE_API_KEY }}
@@ -518,15 +505,6 @@ jobs:
             "https://open-store.io/api/v3/manage/${APP_ID}/revision?${API_QUERY}")"
 
           if [[ ! "$HTTP_CODE" =~ ^2[0-9][0-9]$ ]]; then
-            # read_path / write_path are click-review redflags: the OpenStore
-            # only takes such uploads after a manual review. The clicks are
-            # still attached to the GitHub release, so this is a warning rather
-            # than a failed release.
-            if [[ "$HTTP_CODE" == "400" ]] && grep -qiE "redflag|reviewed manually" "$RESPONSE_FILE"; then
-              echo "::warning::OpenStore needs a manual review for read_path/write_path; skipped the automatic upload"
-              cat "$RESPONSE_FILE"
-              exit 0
-            fi
             echo "::error::OpenStore upload failed with HTTP ${HTTP_CODE}"
             cat "$RESPONSE_FILE"
             exit 1

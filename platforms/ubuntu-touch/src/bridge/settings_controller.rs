@@ -73,23 +73,23 @@ pub struct SettingsController {
     random_alias: qt_method!(fn(&mut self)),
     use_system_name: qt_method!(fn(&mut self)),
 
-    /// Folder received files are actually written to: the configured folder
-    /// when it is set and the app may write into it, otherwise
-    /// `~/Downloads/LocalSend`. Used by the settings row.
-    receive_directory: qt_method!(fn(&self) -> QString),
-    /// True when received files could be saved into `path`. The AppArmor hook
-    /// grants write access to `~/Downloads`, so its subfolders are writable;
-    /// everything else falls back. The destination picker uses this to disable
-    /// folders that would silently fall back.
-    is_directory_writable: qt_method!(fn(&self, path: QString) -> bool),
-    /// The user visible default folder (`~/Downloads/LocalSend`) received files
-    /// are written into.
-    preferred_receive_directory: qt_method!(fn(&self) -> QString),
+    /// Actual incoming-file staging directory: a writable configured location
+    /// or the app-private received directory before Content Hub export.
+    receive_directory: qt_method!
+(fn(&self) -> QString),
+    /// True when the confined app can write directly to `path`. Shared-storage
+    /// destinations are handled through Content Hub instead of direct writes.
+    is_directory_writable: qt_method!
+(fn(&self, path: QString) -> bool),
+    /// Default user-visible target suggested for the Content Hub export.
+    preferred_receive_directory: qt_method!
+(fn(&self) -> QString),
     /// The app private folder used when `~/Downloads` cannot be written.
     private_receive_directory: qt_method!(fn(&self) -> QString),
-    /// Folder the received files are exported to for the user: the configured
-    /// destination when it is set, otherwise the preferred download folder.
-    export_directory: qt_method!(fn(&self) -> QString),
+    /// Desired visible destination, used to avoid re-exporting files that
+    /// already reside there. Content Hub/file manager mediates shared storage.
+    export_directory: qt_method!
+(fn(&self) -> QString),
 }
 
 impl SettingsController {
@@ -355,13 +355,11 @@ impl SettingsController {
         QString::from(path.to_string_lossy().to_string())
     }
 
-    /// Folder the received files are meant to end up in.
-    ///
-    /// Normally this is the same folder the app writes into
-    /// (`receive_directory`). It only differs when the configured folder is
-    /// not writable: the files are then written to the default folder and
-    /// handed to the content hub, which copies them to the chosen folder.
-    fn export_directory(&self) -> QString {
+    /// Preferred shared-storage target. When it is not directly writable, the
+    /// actual data stays in app-private storage and ReceiveExporter passes the
+    /// completed files to Content Hub for the user to save.
+    fn export_directory(
+&self) -> QString {
         let configured = self.destination.to_string();
         let configured = configured.trim();
         if !configured.is_empty() {

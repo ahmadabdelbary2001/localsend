@@ -2,12 +2,9 @@
 //
 // Exports received files through the content hub.
 //
-// Received files are written straight into `~/Downloads/LocalSend` (the
-// AppArmor hook declares `write_path` for `~/Downloads`), so normally there is
-// nothing to export. This component is the fallback for the cases where the
-// app could not write into the folder it was asked to use: the file stays in
-// the app data folder and is handed to the content hub afterwards, so the file
-// manager (unconfined) writes it where the user wants it.
+// Received data is staged in app-private storage and this component offers the
+// completed files to the file manager through Content Hub so the user can save
+// them in shared storage without broad path permissions.
 //
 // The files of one receive session are collected and exported as a single
 // transfer, so the save dialog shows up once per session instead of once per

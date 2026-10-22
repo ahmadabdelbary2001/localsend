@@ -1,23 +1,10 @@
-// SPDX-License-Identifier: Apache-2.0
-//
 // Confined filesystem access for Ubuntu Touch.
 //
-// A click package may only write into its own XDG folders (`~/.config`,
-// `~/.cache`, `~/.local/share` beneath the click package name) unless the
-// AppArmor hook grants more. The hook therefore declares
-//
-//     write_path: /home/phablet/Downloads/
-//     read_path:  /home/phablet/Documents/
-//
-// which is what lets received files land in the user visible
-// `~/Downloads/LocalSend` folder and lets the app picker list packages stored
-// in `~/Documents` (`write_path` already grants read access to Downloads).
-//
-// Both fields are click-review redflags, so the OpenStore does not accept the
-// upload automatically and asks for a manual review; a manual `click install`
-// does accept them. Every folder is therefore probed before it is used and the
-// app falls back to its own data folder when a grant is missing, so a build
-// without the hook still works.
+// Production packages use common AppArmor policy groups only. File access is
+// limited to the click application's XDG directories. Received files are
+// staged in app-private storage and offered to the user via Content Hub so the
+// file manager can save them into shared storage. Other files are imported via
+// Content Hub rather than by scanning the shared filesystem.
 
 use std::path::{Path, PathBuf};
 
@@ -66,11 +53,12 @@ pub fn ensure_dirs() -> std::io::Result<()> {
     Ok(())
 }
 
-/// The user visible receive folder, `~/Downloads/LocalSend`.
+/// The preferred user-visible destination, `~/Downloads/LocalSend`.
 ///
-/// The AppArmor hook grants write access to `~/Downloads`, so this is the
-/// folder received files are written into (see `resolve_receive_dir`).
+/// This is a Content Hub destination hint; the confined app does not write to
+/// this shared path directly.
 pub fn preferred_receive_dir() -> Option<PathBuf> {
+
     dirs_home().map(|home| home.join("Downloads").join(RECEIVE_FOLDER_NAME))
 }
 
@@ -81,13 +69,11 @@ pub fn private_receive_dir() -> PathBuf {
         .join("received")
 }
 
-/// Creates `dir` (and its parents) and verifies that files can actually be
-/// written into it.
-///
-/// `create_dir_all` alone is not enough: on Ubuntu Touch `~/Documents` exists
-/// but AppArmor denies writes to it, and an existing directory makes
-/// `create_dir_all` succeed. Probing with a real file is what catches that.
+/// Creates `dir` and verifies that it is writable under the active confinement.
+/// Shared-storage destinations typically fail this probe and must be handled
+/// through Content Hub.
 pub fn ensure_writable_dir(dir: &Path) -> bool {
+
     if std::fs::create_dir_all(dir).is_err() {
         return false;
     }
@@ -101,13 +87,14 @@ pub fn ensure_writable_dir(dir: &Path) -> bool {
     }
 }
 
-/// Resolves where received files are stored.
+/// Resolves where received files are written before Content Hub export.
 ///
-/// Order: the folder configured in the settings (when it is really writable),
-/// then the default `~/Downloads/LocalSend` (writable thanks to the AppArmor
-/// `write_path` grant) and finally the app-private `received` folder.
+/// Use a configured directory only when the app can actually write to it.
+/// Otherwise stage the file in the app-private `received` directory; the QML
+/// Content Hub exporter then hands it to the file manager for shared storage.
 pub fn resolve_receive_dir(configured: Option<&str>) -> PathBuf {
-    resolve_receive_dir_with(configured, preferred_receive_dir())
+
+    resolve_receive_dir_with(configured, Some(private_receive_dir()))
 }
 
 fn resolve_receive_dir_with(configured: Option<&str>, default: Option<PathBuf>) -> PathBuf {
