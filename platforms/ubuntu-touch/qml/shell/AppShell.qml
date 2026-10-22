@@ -12,9 +12,15 @@ Page {
 
     // The system panel (clock, battery, camera cut-out) belongs to the shell
     // and is drawn outside the app window, so the app must not reserve a
-    // second, empty title bar of its own. `header: null` removes it entirely
-    // and lets the tab pages start at the top of the window.
-    header: null
+    // second, empty title bar of its own.
+    //
+    // `header: null` is not enough: Lomiri's MainView then shows its own
+    // AppHeader for the active page (MainView.qml:
+    // `visible: !(activePage.header)`), which is drawn as an empty bar because
+    // the tab page has no title. Giving the page a zero-height header item
+    // disables the AppHeader and lets the tabs start at the top of the window
+    // (the same trick WebReceivePage uses).
+    header: Item { height: 0 }
 
     // StackLayout manages one page at a time. Each page is wrapped in
     // a plain Item with Layout.fillWidth/Height so the layout sizes

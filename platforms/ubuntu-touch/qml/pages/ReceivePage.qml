@@ -9,9 +9,10 @@ Page {
     property var appTheme
 
     // The tab pages live inside the shell, not in the MainView page stack.
-    // No header at all: the system panel is drawn outside the window and the
-    // shell has no title bar, so the page content starts at the very top.
-    header: null
+    // No header at all: `header: null` would make Lomiri draw its default
+    // (empty) page header, so a zero-height item removes it completely and
+    // the content starts at the very top of the window.
+    header: Item { height: 0 }
     property var navigationStack: null
 
     property bool _showAdvanced: false
@@ -68,7 +69,7 @@ Page {
         ColumnLayout {
             anchors.centerIn: parent
             width: Math.min(parent.width - units.gu(4), units.gu(55))
-            spacing: units.gu(2)
+            spacing: units.gu(0.5)
 
             // Logo / receive icon — mirrors Flutter's RotatingWidget(LocalSendLogo)
             Item {
@@ -139,31 +140,38 @@ Page {
                 }
             }
 
-            // Alias
-            Text {
-                Layout.alignment: Qt.AlignHCenter
+            // Alias / device name.
+            //
+            // The Android app draws it in a FittedBox(scaleDown) at 48px: a
+            // long name shrinks instead of being cut off, and it stays one
+            // line, horizontally centred. A Text placed directly in the layout
+            // lets the fitted font size and the layout sizing feed each other,
+            // so the text goes into a fixed box instead.
+            Item {
                 Layout.fillWidth: true
-                // The server snapshot keeps the alias it was started with.
-                // While the server is stopped, the settings value is the
-                // current name, so a rename shows up immediately.
-                text: serverController.running
-                      ? (serverController.alias.length > 0
-                         ? serverController.alias
-                         : settingsController.alias)
-                      : settingsController.alias
-                // Lomiri's Label has no "xx-large"; Flutter renders the alias
-                // at 48px, so an explicit pixel size keeps the same hierarchy.
-                // Flutter also wraps the name in FittedBox(scaleDown): a long
-                // device name shrinks instead of being cut off. A fixed height
-                // gives Text.Fit the box it needs to scale down.
-                Layout.preferredHeight: units.gu(5.5)
-                font.pixelSize: units.dp(36)
-                fontSizeMode: Text.Fit
-                minimumPixelSize: units.dp(14)
-                wrapMode: Text.NoWrap
-                color: page.appTheme && page.appTheme.colors ? page.appTheme.colors.surfaceText : "#1B1D21"
-                horizontalAlignment: Text.AlignHCenter
-                verticalAlignment: Text.AlignVCenter
+                Layout.preferredHeight: units.dp(60)
+
+                Text {
+                    anchors.fill: parent
+                    // The server snapshot keeps the alias it was started with.
+                    // While the server is stopped, the settings value is the
+                    // current name, so a rename shows up immediately.
+                    text: serverController.running
+                          ? (serverController.alias.length > 0
+                             ? serverController.alias
+                             : settingsController.alias)
+                          : settingsController.alias
+                    font.pixelSize: units.dp(48)
+                    fontSizeMode: Text.Fit
+                    // Flutter's FittedBox has no lower bound; a small floor
+                    // keeps absurdly long names inside the width instead of
+                    // letting them overflow.
+                    minimumPixelSize: units.dp(12)
+                    wrapMode: Text.NoWrap
+                    color: page.appTheme && page.appTheme.colors ? page.appTheme.colors.surfaceText : "#1B1D21"
+                    horizontalAlignment: Text.AlignHCenter
+                    verticalAlignment: Text.AlignVCenter
+                }
             }
 
             // Offline, or the visual IP ids (#42 #7) exactly like Flutter.
@@ -175,64 +183,70 @@ Page {
                          ? page._visualIds()
                          : translator.tr("general.unknown"))
                       : translator.tr("general.offline")
-                fontSize: "large"
+                // Flutter renders this line at 24px.
+                font.pixelSize: units.dp(24)
                 color: page.appTheme && page.appTheme.colors ? page.appTheme.colors.surfaceTextMuted : "#5F6368"
                 horizontalAlignment: Text.AlignHCenter
                 wrapMode: Text.Wrap
                 maximumLineCount: 2
             }
+        }
+    }
 
-            // Receive via link (server controls live in the settings tab).
-            // Flutter uses an OutlinedButton with a globe icon; Lomiri's
-            // default Button is a dark pill, which clashes with the light
-            // palette, so the outline is drawn directly.
-            Rectangle {
-                id: linkButton
-                Layout.alignment: Qt.AlignHCenter
-                Layout.topMargin: units.gu(2)
-                implicitWidth: linkRow.implicitWidth + units.gu(5)
-                implicitHeight: units.gu(5)
-                radius: height / 2
-                color: "transparent"
-                border.width: units.dp(1)
-                border.color: page.appTheme && page.appTheme.colors ? page.appTheme.colors.primary : "#00695C"
+    // Receive via link.
+    //
+    // Flutter pins this outlined button to the bottom of the page, below the
+    // centred logo / name / address block; the server controls live in the
+    // settings tab. Lomiri's default Button is a dark pill that clashes with
+    // the light palette, so the outline is drawn directly.
+    Rectangle {
+        id: linkButton
+        anchors {
+            horizontalCenter: parent.horizontalCenter
+            bottom: parent.bottom
+            bottomMargin: units.gu(2.5)
+        }
+        implicitWidth: linkRow.implicitWidth + units.gu(5)
+        implicitHeight: units.gu(5)
+        radius: height / 2
+        color: "transparent"
+        border.width: units.dp(1)
+        border.color: page.appTheme && page.appTheme.colors ? page.appTheme.colors.primary : "#00695C"
 
-                Row {
-                    id: linkRow
-                    anchors.centerIn: parent
-                    spacing: units.gu(1)
+        Row {
+            id: linkRow
+            anchors.centerIn: parent
+            spacing: units.gu(1)
 
-                    Icon {
-                        anchors.verticalCenter: parent.verticalCenter
-                        width: units.gu(2.4)
-                        height: width
-                        name: "stock_website"
-                        color: page.appTheme && page.appTheme.colors ? page.appTheme.colors.primary : "#00695C"
-                    }
+            Icon {
+                anchors.verticalCenter: parent.verticalCenter
+                width: units.gu(2.4)
+                height: width
+                name: "stock_website"
+                color: page.appTheme && page.appTheme.colors ? page.appTheme.colors.primary : "#00695C"
+            }
 
-                    Label {
-                        anchors.verticalCenter: parent.verticalCenter
-                        text: translator.tr("receiveTab.link")
-                        fontSize: "small"
-                        color: page.appTheme && page.appTheme.colors ? page.appTheme.colors.primary : "#00695C"
-                    }
-                }
+            Label {
+                anchors.verticalCenter: parent.verticalCenter
+                text: translator.tr("receiveTab.link")
+                fontSize: "small"
+                color: page.appTheme && page.appTheme.colors ? page.appTheme.colors.primary : "#00695C"
+            }
+        }
 
-                MouseArea {
-                    anchors.fill: parent
-                    onClicked: {
-                        if (page.navigationStack) {
-                            page.navigationStack.push(
-                                Qt.resolvedUrl("WebReceivePage.qml"),
-                                {
-                                    appTheme: page.appTheme,
-                                    navigationStack: page.navigationStack
-                                }
-                            )
-                        } else {
-                            console.warn("[NAV] navigation stack unavailable for WebReceivePage")
+        MouseArea {
+            anchors.fill: parent
+            onClicked: {
+                if (page.navigationStack) {
+                    page.navigationStack.push(
+                        Qt.resolvedUrl("WebReceivePage.qml"),
+                        {
+                            appTheme: page.appTheme,
+                            navigationStack: page.navigationStack
                         }
-                    }
+                    )
+                } else {
+                    console.warn("[NAV] navigation stack unavailable for WebReceivePage")
                 }
             }
         }

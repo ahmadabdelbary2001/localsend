@@ -10,9 +10,10 @@ Page {
     property var appTheme
 
     // The tab pages live inside the shell, not in the MainView page stack.
-    // No header at all: the system panel is drawn outside the window and the
-    // shell has no title bar, so the page content starts at the very top.
-    header: null
+    // No header at all: `header: null` would make Lomiri draw its default
+    // (empty) page header, so a zero-height item removes it completely and
+    // the content starts at the very top of the window.
+    header: Item { height: 0 }
     property string pendingFingerprint: ""
     property var pendingAddress: null // { ip: "", port: 53317, https: true }
     property var selectedPaths: []

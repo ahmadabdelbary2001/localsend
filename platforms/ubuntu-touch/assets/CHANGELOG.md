@@ -1,3 +1,13 @@
+## 1.5.5
+- The empty bar above the tab content is gone for real: Lomiri draws its
+  default (empty) page header when a page sets `header: null`, so the shell
+  and the tabs now use a zero-height header.
+- Receive: the device name is drawn like the Android app (one line, 48px,
+  shrunk to fit instead of being cut off) and the "receive via link" button
+  sits at the bottom of the page.
+- Settings: the title is centred and no longer bold, matching the Android tab.
+- Fix the device card trailing buttons using an unchecked theme lookup.
+
 ## 1.5.4
 - The AppArmor hook no longer declares read_path / write_path. Those fields are
   click-review redflags, the OpenStore rejects them (HTTP 400) and the manual

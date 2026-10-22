@@ -178,14 +178,14 @@ Rectangle {
             Layout.preferredWidth: units.gu(4)
             Layout.preferredHeight: units.gu(4)
             radius: units.gu(2)
-            color: msgArea.pressed ? (appTheme ? appTheme.colors.surfaceTint : "#ECEFF1") : "transparent"
+            color: msgArea.pressed ? (appTheme && appTheme.colors ? appTheme.colors.surfaceTint : "#ECEFF1") : "transparent"
 
             Icon {
                 anchors.centerIn: parent
                 width: units.gu(2.4)
                 height: units.gu(2.4)
                 name: "message"
-                color: appTheme ? appTheme.colors.surfaceTextMuted : "#888"
+                color: appTheme && appTheme.colors ? appTheme.colors.surfaceTextMuted : "#888"
             }
 
             MouseArea {
@@ -200,14 +200,14 @@ Rectangle {
             Layout.preferredWidth: units.gu(4)
             Layout.preferredHeight: units.gu(4)
             radius: units.gu(2)
-            color: detailsArea.pressed ? (appTheme ? appTheme.colors.surfaceTint : "#ECEFF1") : "transparent"
+            color: detailsArea.pressed ? (appTheme && appTheme.colors ? appTheme.colors.surfaceTint : "#ECEFF1") : "transparent"
 
             Icon {
                 anchors.centerIn: parent
                 width: units.gu(2.4)
                 height: units.gu(2.4)
                 name: "info"
-                color: appTheme ? appTheme.colors.surfaceTextMuted : "#888"
+                color: appTheme && appTheme.colors ? appTheme.colors.surfaceTextMuted : "#888"
             }
 
             MouseArea {
@@ -222,7 +222,7 @@ Rectangle {
             Layout.preferredWidth: units.gu(4)
             Layout.preferredHeight: units.gu(4)
             radius: units.gu(2)
-            color: starArea.pressed ? (appTheme ? appTheme.colors.surfaceTint : "#ECEFF1") : "transparent"
+            color: starArea.pressed ? (appTheme && appTheme.colors ? appTheme.colors.surfaceTint : "#ECEFF1") : "transparent"
 
             Icon {
                 anchors.centerIn: parent

@@ -12,9 +12,10 @@ Page {
     property var appTheme
 
     // The tab pages live inside the shell, not in the MainView page stack.
-    // No header at all: the system panel is drawn outside the window and the
-    // shell has no title bar, so the page content starts at the very top.
-    header: null
+    // No header at all: `header: null` would make Lomiri draw its default
+    // (empty) page header, so a zero-height item removes it completely and
+    // the content starts at the very top of the window.
+    header: Item { height: 0 }
     property var navigationStack: null
 
     readonly property int defaultPort: 53317
@@ -148,11 +149,13 @@ Page {
             width: Math.max(0, settingsFlickable.width - units.gu(4))
             spacing: units.gu(1.5)
 
+            // Flutter renders the tab title with textTheme.titleLarge,
+            // centred and not bold.
             Label {
                 Layout.fillWidth: true
                 text: translator.tr("settingsTab.title")
                 fontSize: "x-large"
-                font.bold: true
+                horizontalAlignment: Text.AlignHCenter
                 color: page.appTheme && page.appTheme.colors ? page.appTheme.colors.surfaceText : "#1B1D21"
             }
 
