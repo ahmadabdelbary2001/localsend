@@ -4,21 +4,5 @@
         "content_exchange",
         "content_exchange_source"
     ],
-    "policy_version": 2404.1,
-    "read_path": [
-        "/home/phablet/",
-        "/home/phablet/**",
-        "/media/",
-        "/media/**",
-        "/mnt/",
-        "/mnt/**",
-        "/run/media/",
-        "/run/media/**",
-        "/var/cache/click/",
-        "/var/cache/click/**"
-    ],
-    "write_path": [
-        "/home/phablet/Downloads/",
-        "/home/phablet/Downloads/**"
-    ]
+    "policy_version": 2404.1
 }

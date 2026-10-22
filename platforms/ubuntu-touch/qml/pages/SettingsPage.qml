@@ -109,8 +109,8 @@ Page {
         serverController.apply_auto_accept_from_settings()
     }
 
-    // The effective receive folder is resolved by the backend (configured
-    // folder first, then ~/Downloads/LocalSend, then the app data fallback),
+    // The effective receive folder is resolved by the backend (the configured
+    // folder when the app may write into it, otherwise the app data folder),
     // so it can only be read through a method call and has to be refreshed
     // explicitly.
     function refreshReceiveDirectory() {
@@ -280,8 +280,8 @@ Page {
                     label: translator.tr("settingsTab.receive.destination")
                     // Show where files actually land, not just what was
                     // configured: the backend probes the folder and falls back
-                    // to an app-private one when it is not writable (e.g. an
-                    // older AppArmor profile without the Downloads grant).
+                    // to the app-private one when the app may not write there
+                    // (a confined click may only write into its own folders).
                     buttonLabel: page.receiveDirectory
                     onTapped: {
                         destinationDialog.currentPath = page.receiveDirectory

@@ -1,6 +1,19 @@
+## 1.5.4
+- The AppArmor hook no longer declares read_path / write_path. Those fields are
+  click-review redflags, the OpenStore rejects them (HTTP 400) and the manual
+  install of 1.5.3 failed because of them.
+- Received files are written into the app data folder and exported to the
+  download folder through the content hub: one save request per transfer
+  instead of one per file.
+- The settings row shows the folder files really land in; folders the app may
+  not write into are rejected by the picker.
+- The content hub module is only used when it exists; a failed export keeps
+  the file in the app folder.
+
 ## 1.5.3
-- Receive straight into ~/Downloads/LocalSend: the AppArmor profile grants
-  read access to the home folder and write access to Downloads again.
+- Receive straight into ~/Downloads/LocalSend: the AppArmor profile granted
+  read access to the home folder and write access to Downloads again. Reverted
+  in 1.5.4, the OpenStore refuses those fields.
 - App picker: the device is searched in two phases (receive folder and
   downloads first), caches are skipped, results show format/size/folder and a
   manual refresh is available.

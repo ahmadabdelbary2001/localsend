@@ -2,11 +2,12 @@
 //
 // Confined filesystem access for Ubuntu Touch.
 // Click confinement grants private writable XDG directories beneath the
-// click package name declared in manifest.json. Everything else is read-only
-// unless the AppArmor profile asks for it explicitly: the click declares
-// `write_path` for ~/Downloads and `read_path` for the home folder
-// (see apparmor/localsend.apparmor). Receiving therefore writes straight into
-// the user visible `~/Downloads/LocalSend` folder.
+// click package name declared in manifest.json. Everything else is read-only:
+// granting writes elsewhere needs `read_path` / `write_path` in the AppArmor
+// hook, and those are click-review redflags that make the OpenStore reject the
+// upload (HTTP 400). Received files are therefore written into the app data
+// folder and exported to the user visible `~/Downloads/LocalSend` folder
+// through the content hub (see qml/components/ReceiveExporter.qml).
 
 use std::path::{Path, PathBuf};
 
@@ -55,12 +56,13 @@ pub fn ensure_dirs() -> std::io::Result<()> {
     Ok(())
 }
 
-/// The visible receive folder, `~/Downloads/LocalSend`.
+/// The user visible folder received files are exported to,
+/// `~/Downloads/LocalSend`.
 ///
-/// Writable because the click's AppArmor profile grants `write_path` for
-/// `~/Downloads/` (`apparmor/localsend.apparmor`). Profiles installed before
-/// that entry do not allow it, so this stays a preference, not a guarantee:
-/// `resolve_receive_dir` probes and falls back when the path is not writable.
+/// The app itself cannot write there (that would need `write_path`, an
+/// AppArmor redflag the OpenStore refuses), so this is only the target of the
+/// content hub export in `ReceiveExporter`: the file manager writes the file
+/// on the app's behalf.
 pub fn preferred_receive_dir() -> Option<PathBuf> {
     dirs_home().map(|home| home.join("Downloads").join(RECEIVE_FOLDER_NAME))
 }
@@ -92,66 +94,36 @@ pub fn ensure_writable_dir(dir: &Path) -> bool {
     }
 }
 
-/// Resolves where received files are stored, in order of preference:
+/// Resolves where received files are stored.
 ///
-/// 1. the folder the user configured (explicit choice wins),
-/// 2. `~/Downloads/LocalSend` (the Ubuntu Touch default),
-/// 3. the app-private `received` folder (last-resort fallback).
+/// A confined click package may only write into its own standard folders, so
+/// the default is the app-private `received` folder. A configured folder is
+/// used when the app can really write into it (the destination picker only
+/// offers folders that pass that probe).
 ///
-/// A candidate is only used when a real write probe succeeds, so receiving can
-/// never fail because of an unreadable/unwritable destination.
+/// Files are made visible to the user by exporting them to
+/// `~/Downloads/LocalSend` through the content hub (`ReceiveExporter`).
+/// Writing there directly would need `write_path` in the AppArmor hook, which
+/// is a click-review redflag and makes the OpenStore reject the upload.
 pub fn resolve_receive_dir(configured: Option<&str>) -> PathBuf {
-    let candidates = receive_candidates(configured);
-    let private = private_receive_dir();
-
-    match resolve_first_writable(&candidates) {
-        Some(dir) => {
-            if dir != private {
-                log::debug!("receiving into {}", dir.display());
-            } else {
-                log::warn!(
-                    "no user-visible receive folder is writable, receiving into {}",
-                    dir.display()
-                );
-            }
-            dir
-        }
-        None => {
-            if let Err(error) = std::fs::create_dir_all(&private) {
-                log::error!("cannot create {}: {error}", private.display());
-            }
-            private
-        }
-    }
-}
-
-/// Candidate folders for received files, in the order they are probed.
-pub fn receive_candidates(configured: Option<&str>) -> Vec<PathBuf> {
-    let mut candidates: Vec<PathBuf> = Vec::new();
-
-    // An explicitly configured folder is what the user asked for, so it wins
-    // over the default. It is still probed: AppArmor may deny it.
     if let Some(dir) = configured.map(str::trim).filter(|d| !d.is_empty()) {
-        candidates.push(PathBuf::from(dir));
-    }
-    if let Some(preferred) = preferred_receive_dir() {
-        if !candidates.contains(&preferred) {
-            candidates.push(preferred);
+        let configured = PathBuf::from(dir);
+        if ensure_writable_dir(&configured) {
+            log::debug!("receiving into {}", configured.display());
+            return configured;
         }
+        log::warn!(
+            "configured receive folder {} is not writable, falling back",
+            configured.display()
+        );
     }
-    let private = private_receive_dir();
-    if !candidates.contains(&private) {
-        candidates.push(private);
-    }
-    candidates
-}
 
-/// First candidate that accepts writes. Each candidate is created if needed.
-fn resolve_first_writable(candidates: &[PathBuf]) -> Option<PathBuf> {
-    candidates
-        .iter()
-        .find(|dir| ensure_writable_dir(dir))
-        .cloned()
+    let private = private_receive_dir();
+    if let Err(error) = std::fs::create_dir_all(&private) {
+        log::error!("cannot create {}: {error}", private.display());
+    }
+    log::debug!("receiving into {}", private.display());
+    private
 }
 
 #[cfg(test)]
@@ -196,22 +168,13 @@ mod tests {
     }
 
     #[test]
-    fn resolve_receive_dir_falls_back_to_the_private_folder() {
-        let dir = std::env::temp_dir().join(format!(
-            "localsend-fs-resolve-{}-{}",
-            std::process::id(),
-            std::time::SystemTime::now()
-                .duration_since(std::time::UNIX_EPOCH)
-                .map(|d| d.as_nanos())
-                .unwrap_or_default()
-        ));
-        let writable = dir.join("writable");
-        let candidates = vec![
-            PathBuf::from("/proc/localsend-cannot-exist"),
-            writable.clone(),
-        ];
-        assert_eq!(resolve_first_writable(&candidates), Some(writable));
-        let _ = std::fs::remove_dir_all(&dir);
+    fn resolve_receive_dir_uses_the_private_folder_by_default() {
+        assert_eq!(
+            resolve_receive_dir(None),
+            private_receive_dir(),
+            "received files must go to the one folder the click may write"
+        );
+        assert!(private_receive_dir().is_dir());
     }
 
     #[test]
@@ -231,18 +194,10 @@ mod tests {
     }
 
     #[test]
-    fn configured_folder_is_probed_before_the_download_folder() {
-        let configured = PathBuf::from("/tmp/localsend-configured-order");
-        let candidates = receive_candidates(Some(&configured.to_string_lossy()));
-        assert_eq!(candidates.first(), Some(&configured));
-        assert!(candidates.contains(&preferred_receive_dir().expect("HOME")));
-        assert_eq!(candidates.last(), Some(&private_receive_dir()));
-    }
-
-    #[test]
-    fn empty_configuration_starts_with_the_download_folder() {
-        let candidates = receive_candidates(None);
-        assert_eq!(candidates.first(), preferred_receive_dir().as_ref());
-        assert_eq!(candidates.last(), Some(&private_receive_dir()));
+    #[cfg(unix)]
+    fn resolve_receive_dir_ignores_an_unwritable_configured_folder() {
+        // `/proc` never accepts new files, so the probe has to reject it.
+        let resolved = resolve_receive_dir(Some("/proc/localsend-cannot-exist"));
+        assert_eq!(resolved, private_receive_dir());
     }
 }

@@ -16,9 +16,11 @@
 // set, so a second phase never walks a directory twice and a huge cache can
 // not starve the folders the user actually uses.
 //
-// AppArmor grants `read_path` for the home folder and `/media` (see
-// apparmor/localsend.apparmor), otherwise most of these folders are not even
-// listable and the picker stays empty.
+// The include-all click AppArmor profile grants read access to the user's
+// files (only writes are restricted to the app's own folders), so the folders
+// below are listable without a `read_path` entry in the hook. That entry is a
+// click-review redflag and makes the OpenStore reject the upload, so it must
+// stay out of apparmor/localsend.apparmor.
 
 use std::collections::{HashSet, VecDeque};
 use std::path::{Path, PathBuf};

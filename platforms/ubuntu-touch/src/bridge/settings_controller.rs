@@ -73,20 +73,20 @@ pub struct SettingsController {
     random_alias: qt_method!(fn(&mut self)),
     use_system_name: qt_method!(fn(&mut self)),
 
-    /// Folder received files are actually written to (the configured folder
-    /// when it is set and writable, otherwise `~/Downloads/LocalSend` or the
-    /// app-private fallback). Used by the settings row.
+    /// Folder received files are actually written to: the configured folder
+    /// when it is set and the app may write into it, otherwise the app-private
+    /// receive folder. Used by the settings row.
     receive_directory: qt_method!(fn(&self) -> QString),
-    /// True when received files could be saved into `path`. AppArmor only
-    /// allows the app's own XDG folders and `~/Downloads` (write_path), so the
-    /// destination picker uses this to disable folders that would silently
-    /// fall back.
+    /// True when received files could be saved into `path`. A confined click
+    /// app may only write into its own XDG folders, so the destination picker
+    /// uses this to disable folders that would silently fall back.
     is_directory_writable: qt_method!(fn(&self, path: QString) -> bool),
-    /// The user visible default folder (`~/Downloads/LocalSend`).
+    /// The user visible default folder (`~/Downloads/LocalSend`) the received
+    /// files are exported to through the content hub.
     preferred_receive_directory: qt_method!(fn(&self) -> QString),
     /// The app private folder that always accepts the received files.
     private_receive_directory: qt_method!(fn(&self) -> QString),
-    /// Folder the received files are shown in for the user: the configured
+    /// Folder the received files are exported to for the user: the configured
     /// destination when it is set, otherwise the preferred download folder.
     export_directory: qt_method!(fn(&self) -> QString),
 }
@@ -354,11 +354,11 @@ impl SettingsController {
         QString::from(path.to_string_lossy().to_string())
     }
 
-    /// Folder the received files are shown in for the user.
+    /// Folder the received files are exported to for the user.
     ///
-    /// The app writes into `~/Downloads/LocalSend` itself (AppArmor grants
-    /// `write_path` there), so this is the same folder that is used for
-    /// receiving unless the user picked another destination.
+    /// The export runs through the content hub (the file manager writes the
+    /// file), so this is only the target that is handed over, not a folder the
+    /// app writes into itself.
     fn export_directory(&self) -> QString {
         let configured = self.destination.to_string();
         let configured = configured.trim();
@@ -368,36 +368,26 @@ impl SettingsController {
         self.preferred_receive_directory()
     }
 
+    /// Folder received files are actually written to.
     fn receive_directory(&self) -> QString {
         let configured = self.destination.to_string();
         let path = crate::platform::filesystem::resolve_receive_dir(Some(configured.as_str()));
         QString::from(path.to_string_lossy().to_string())
     }
 
-    /// True when received files can end up in `path`.
+    /// True when the app itself may write into `path`.
     ///
-    /// The app writes into its own folders and `~/Downloads` (AppArmor
-    /// `write_path`). The content hub fallback is unconfined and can still move
-    /// files into the download folder, so that folder counts as writable even
-    /// when the app itself cannot write there (profiles without the grant).
+    /// Only the app's own XDG folders pass the probe: everything else needs
+    /// `write_path` in the AppArmor hook, which the OpenStore rejects. The
+    /// destination picker uses this so the user cannot select a folder that
+    /// would silently fall back.
     fn is_directory_writable(&self, path: QString) -> bool {
         let path = path.to_string();
         let trimmed = path.trim();
         if trimmed.is_empty() {
             return false;
         }
-        if crate::platform::filesystem::ensure_writable_dir(std::path::Path::new(trimmed)) {
-            return true;
-        }
-        // The download folder is exported through the content hub, so it is
-        // usable even though the app itself can not write there.
-        match crate::platform::filesystem::preferred_receive_dir() {
-            Some(preferred) => {
-                let preferred = preferred.to_string_lossy().to_string();
-                trimmed == preferred || trimmed.starts_with(&(preferred + "/"))
-            }
-            None => false,
-        }
+        crate::platform::filesystem::ensure_writable_dir(std::path::Path::new(trimmed))
     }
 
     fn set_create_checksums(&mut self, v: bool) {
