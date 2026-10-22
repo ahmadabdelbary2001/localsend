@@ -9,7 +9,8 @@
     "hooks": {
         "localsend": {
             "apparmor": "apparmor/localsend.apparmor",
-            "desktop": "localsend.desktop"
+            "desktop": "localsend.desktop",
+            "content-hub": "localsend-contenthub.json"
         }
     }
 }
