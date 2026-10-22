@@ -7,7 +7,7 @@
     "all": "All",
     "search": "Search packages",
     "scanning": "Searching the device…",
-    "empty": "No package files found"
+    "empty": "No package files found. Copy .click or .apk files into Downloads or Documents, then refresh."
   },
   "folderPicker": {
     "title": "Select folder",

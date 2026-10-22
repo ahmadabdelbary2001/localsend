@@ -140,7 +140,7 @@ impl SendController {
         favorites: Arc<FavoritesService>,
     ) -> Self {
         let handle = SendServiceHandle::spawn(identity.clone());
-        Self {
+        let mut controller = Self {
             base: Default::default(),
             active: false,
             done: false,
@@ -183,7 +183,11 @@ impl SendController {
             app_packages: Arc::new(RwLock::new(Vec::new())),
             app_scan: Arc::new(Mutex::new(AppScanState::default())),
             app_scan_dirty: Arc::new(AtomicBool::new(false)),
-        }
+        };
+        // Scan at startup: the picker then has results the moment it is
+        // opened instead of showing an empty list for a few seconds.
+        controller.ensure_app_scan(false);
+        controller
     }
 
     pub fn send_files(&mut self, fingerprint: QString, paths_json: QString) {
@@ -561,10 +565,11 @@ impl SendController {
     /// listed. They can live anywhere (download folder, home directory, SD
     /// card), so the whole storage is searched.
     ///
-    /// The search runs in a background thread: the first call starts it and
-    /// returns the current (possibly empty) result, every later call returns
-    /// the cached packages. QML polls while the picker is open and reads
-    /// `app_scan_running` to show a progress indicator.
+    /// The search runs in a background thread that is started when the
+    /// controller is created: the first call usually returns the cached
+    /// packages, later calls return the results of a newer scan. QML polls
+    /// while the picker is open and reads `app_scan_running` to show a
+    /// progress indicator.
     ///
     /// `kind` selects the package format: `"click"` (Ubuntu Touch), `"apk"`
     /// (Android) or `"all"`. `query` filters by name or path.
@@ -663,25 +668,30 @@ impl SendController {
         let scan_state = self.app_scan.clone();
         let scan_dirty = self.app_scan_dirty.clone();
         std::thread::spawn(move || {
-            // Two phases: the folders the user actually downloads into are
-            // published first, so the picker fills immediately. The broad
-            // roots (the whole home folder, click caches) are walked
-            // afterwards and only replace the list once they are done.
+            // Two phases: the folders the app may read (the LocalSend receive
+            // folder, Downloads, Documents) are published one by one so the
+            // picker fills up immediately. The broad roots (the whole home
+            // folder, click caches) are walked afterwards and only replace the
+            // list once they are done.
             let roots = packages::search_roots();
-            let priority: Vec<packages::SearchRoot> =
-                roots.iter().filter(|root| root.priority).cloned().collect();
+            let mut session = packages::ScanSession::new();
+
+            for root in roots.iter().filter(|root| root.priority) {
+                session.scan(std::slice::from_ref(root), packages::PRIORITY_BUDGET);
+                let partial = session.packages();
+                log::info!(
+                    "package scan: {} package(s) after {}",
+                    partial.len(),
+                    root.path.display()
+                );
+                publish_packages(&packages, partial, &scan_dirty);
+            }
+
             let broad: Vec<packages::SearchRoot> = roots
                 .iter()
                 .filter(|root| !root.priority)
                 .cloned()
                 .collect();
-
-            let mut session = packages::ScanSession::new();
-            session.scan(&priority, packages::PRIORITY_BUDGET);
-            let partial = session.packages();
-            log::info!("package scan (priority) found {} package(s)", partial.len());
-            publish_packages(&packages, partial, &scan_dirty);
-
             session.scan(&broad, packages::BROAD_BUDGET);
             let found = session.into_packages();
             log::info!("package scan found {} package(s)", found.len());

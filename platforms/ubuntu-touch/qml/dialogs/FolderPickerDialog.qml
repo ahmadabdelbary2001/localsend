@@ -37,7 +37,7 @@ Dialog {
     readonly property bool atRoot: root.effectivePath === "/"
 
     // In receive mode the folder must accept writes: the server silently falls
-    // back to the app data folder otherwise, and the user would look for the
+    // back to ~/Downloads/LocalSend otherwise, and the user would look for the
     // received files in the wrong place.
     readonly property bool canUseFolder: root.effectivePath.length > 1
                                         && (!root.receiveMode

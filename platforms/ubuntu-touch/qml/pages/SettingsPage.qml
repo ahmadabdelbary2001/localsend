@@ -111,7 +111,7 @@ Page {
     }
 
     // The effective receive folder is resolved by the backend (the configured
-    // folder when the app may write into it, otherwise the app data folder),
+    // folder when the app may write into it, otherwise ~/Downloads/LocalSend),
     // so it can only be read through a method call and has to be refreshed
     // explicitly.
     function refreshReceiveDirectory() {
@@ -283,8 +283,8 @@ Page {
                     label: translator.tr("settingsTab.receive.destination")
                     // Show where files actually land, not just what was
                     // configured: the backend probes the folder and falls back
-                    // to the app-private one when the app may not write there
-                    // (a confined click may only write into its own folders).
+                    // to ~/Downloads/LocalSend (or the app folder) when the app
+                    // may not write there.
                     buttonLabel: page.receiveDirectory
                     onTapped: {
                         destinationDialog.currentPath = page.receiveDirectory

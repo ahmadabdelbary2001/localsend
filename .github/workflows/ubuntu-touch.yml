@@ -303,11 +303,11 @@ jobs:
           click build "$ROOT"
           CLICK_FILE="$(find /tmp -maxdepth 1 -type f -name "localsend.ahmadabdelbary_*.click" -print -quit)"
           test -n "$CLICK_FILE"
-          # The hook must stay free of redflagged fields: the OpenStore rejects
-          # uploads that contain read_path / write_path with HTTP 400 ("needs
-          # to be reviewed manually"). Received files are stored in the app
-          # data folder and exported through the content hub (the only write
-          # access a confined click app has outside its own folders).
+          # The hook grants exactly two paths: write access to ~/Downloads
+          # (received files land in ~/Downloads/LocalSend, the app picker reads
+          # it too) and read access to ~/Documents (app picker). click-review
+          # flags both fields, so the OpenStore asks for a manual review; a
+          # manual `click install` accepts them.
           review_status=0
           click-review "$CLICK_FILE" 2>&1 | tee /tmp/click-review.log || review_status=$?
           if grep -Eiq "ERROR:|Could not load|Traceback|FATAL" /tmp/click-review.log; then
@@ -346,13 +346,13 @@ jobs:
           test -f /tmp/pk/assets/logo.png
           test -f /tmp/pk/logo.png
 
-          # The AppArmor hook must stay free of redflagged fields (read_path /
-          # write_path / template): the OpenStore refuses such uploads with
-          # HTTP 400, even though click install accepts them. Received files
-          # are written into the app data folder and exported to the user's
-          # folder through the content hub instead, which is why the
-          # content_exchange policy groups have to stay.
-          python3 -c "import json; p=json.load(open('/tmp/pk/apparmor/localsend.apparmor')); bad=[k for k in ('read_path','write_path','template','policy_vendor') if k in p]; assert not bad, p; groups=p.get('policy_groups', []); assert 'content_exchange' in groups and 'content_exchange_source' in groups, p; print('apparmor policy OK')"
+          # The hook may only grant the two folders the app really needs:
+          #   write_path ~/Downloads  -> received files go to ~/Downloads/LocalSend
+          #   read_path  ~/Documents  -> the app picker can list packages there
+          # `template` and `policy_vendor` must never appear, and the paths may
+          # not be widened again (the whole home folder was a redflag that also
+          # broke the manual install of 1.5.3).
+          python3 -c "import json; p=json.load(open('/tmp/pk/apparmor/localsend.apparmor')); assert 'template' not in p and 'policy_vendor' not in p, p; assert p.get('write_path')==['/home/phablet/Downloads/'], p; assert p.get('read_path')==['/home/phablet/Documents/'], p; groups=p.get('policy_groups', []); assert 'content_exchange' in groups and 'content_exchange_source' in groups, p; print('apparmor policy OK')"
 
           python3 -c "import json; m=json.load(open('/tmp/info.json')); assert m['architecture']=='$ARCH', m; assert m['version']=='$EXPECTED_VERSION', m; print('click validation OK')"
 
@@ -414,8 +414,8 @@ jobs:
 
           ### What's included
 
-          - **Receive**: automatic and manual accept, stored in the app data folder and exported to the download folder through the content hub
-          - **Send**: pick files and send to nearby devices
+          - **Receive**: automatic and manual accept, files are stored in `~/Downloads/LocalSend`
+          - **Send**: pick files and send to nearby devices, app picker for `.click` / `.apk`
           - **Discovery**: multicast + HTTP register
           - **Content Hub**: received files are handed to the file manager, one save request per transfer
 
@@ -518,6 +518,15 @@ jobs:
             "https://open-store.io/api/v3/manage/${APP_ID}/revision?${API_QUERY}")"
 
           if [[ ! "$HTTP_CODE" =~ ^2[0-9][0-9]$ ]]; then
+            # read_path / write_path are click-review redflags: the OpenStore
+            # only takes such uploads after a manual review. The clicks are
+            # still attached to the GitHub release, so this is a warning rather
+            # than a failed release.
+            if [[ "$HTTP_CODE" == "400" ]] && grep -qiE "redflag|reviewed manually" "$RESPONSE_FILE"; then
+              echo "::warning::OpenStore needs a manual review for read_path/write_path; skipped the automatic upload"
+              cat "$RESPONSE_FILE"
+              exit 0
+            fi
             echo "::error::OpenStore upload failed with HTTP ${HTTP_CODE}"
             cat "$RESPONSE_FILE"
             exit 1

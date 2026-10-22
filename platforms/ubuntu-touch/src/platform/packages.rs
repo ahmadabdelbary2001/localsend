@@ -16,11 +16,19 @@
 // set, so a second phase never walks a directory twice and a huge cache can
 // not starve the folders the user actually uses.
 //
-// The include-all click AppArmor profile grants read access to the user's
-// files (only writes are restricted to the app's own folders), so the folders
-// below are listable without a `read_path` entry in the hook. That entry is a
-// click-review redflag and makes the OpenStore reject the upload, so it must
-// stay out of apparmor/localsend.apparmor.
+// The AppArmor hook grants read access to the folders packages are stored in
+// (`write_path` on `~/Downloads` also allows reading it, `read_path` adds
+// `~/Documents`), which is why the roots below are ordered that way. Anything
+// outside those grants is unreadable and simply yields no entries, so the
+// remaining roots are best-effort.
+//
+// The search is split into two phases so the picker is usable immediately:
+// the priority roots (`~/Downloads/LocalSend`, `~/Downloads`, `~/Documents`,
+// removable storage) are scanned first and published one by one, then the
+// rest (the home folder, click caches) is walked in the background. Both
+// phases use breadth-first traversal with a per-root entry budget and a shared
+// "seen" set, so a later phase never walks a directory twice and a huge cache
+// can not starve the folders the user actually uses.
 
 use std::collections::{HashSet, VecDeque};
 use std::path::{Path, PathBuf};
@@ -46,7 +54,10 @@ const SKIP_DIRS: &[&str] = &[
     ".hg",
     ".svn",
     ".cache",
+    ".config",
+    ".mozilla",
     ".thumbnails",
+    ".thunderbird",
     ".dart_tool",
     ".pub-cache",
     ".npm",
@@ -114,10 +125,11 @@ fn home_dir() -> Option<PathBuf> {
 
 /// Directories that are searched for packages.
 ///
-/// The order is deliberate. The receive folder comes first, followed by the
-/// folders the user downloads into, then removable storage and the click
-/// caches. The whole home directory is a broad root and is walked only after
-/// the priority roots have been published.
+/// The order is deliberate: `~/Downloads/LocalSend` (where received packages
+/// land), `~/Downloads` and `~/Documents` are the folders the hook grants read
+/// access to, so they are read first and published while the remaining roots
+/// (removable storage, click caches, the rest of the home folder) are still
+/// being walked.
 pub fn search_roots() -> Vec<SearchRoot> {
     let mut roots: Vec<SearchRoot> = Vec::new();
     let mut push = |path: PathBuf, priority: bool| {
@@ -212,8 +224,16 @@ impl ScanSession {
             if !self.seen_dirs.insert(dir.clone()) {
                 continue;
             }
-            let Ok(entries) = std::fs::read_dir(&dir) else {
-                continue;
+            let entries = match std::fs::read_dir(&dir) {
+                Ok(entries) => entries,
+                Err(error) => {
+                    // AppArmor denies everything outside the granted folders;
+                    // that is expected and must not stop the scan.
+                    if error.kind() == std::io::ErrorKind::PermissionDenied {
+                        log::debug!("package scan cannot read {}: {error}", dir.display());
+                    }
+                    continue;
+                }
             };
 
             for entry in entries.flatten() {

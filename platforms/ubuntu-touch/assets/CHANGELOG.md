@@ -1,3 +1,18 @@
+## 1.5.6
+- Received files are stored in `~/Downloads/LocalSend` again, and the app
+  writes there directly: the AppArmor hook grants write access to
+  `~/Downloads`. The app's own `received` folder and the content hub export
+  stay as a fallback when a folder cannot be written.
+- App picker: `~/Downloads/LocalSend`, `~/Downloads` and `~/Documents` are read
+  first (the hook grants read access to Downloads and Documents), each folder
+  is published as soon as it is scanned so results appear immediately, the
+  scan already runs at app start, and caches are skipped so a big home folder
+  cannot slow it down.
+- The picker explains where package files are expected when it finds none.
+- OpenStore: the hook contains click-review redflags (read_path / write_path),
+  so automatic uploads are skipped with a warning and the clicks are published
+  on the GitHub release; install them manually.
+
 ## 1.5.5
 - The empty bar above the tab content is gone for real: Lomiri draws its
   default (empty) page header when a page sets `header: null`, so the shell

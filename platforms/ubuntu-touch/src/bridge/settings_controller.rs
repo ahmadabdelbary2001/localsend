@@ -74,17 +74,18 @@ pub struct SettingsController {
     use_system_name: qt_method!(fn(&mut self)),
 
     /// Folder received files are actually written to: the configured folder
-    /// when it is set and the app may write into it, otherwise the app-private
-    /// receive folder. Used by the settings row.
+    /// when it is set and the app may write into it, otherwise
+    /// `~/Downloads/LocalSend`. Used by the settings row.
     receive_directory: qt_method!(fn(&self) -> QString),
-    /// True when received files could be saved into `path`. A confined click
-    /// app may only write into its own XDG folders, so the destination picker
-    /// uses this to disable folders that would silently fall back.
+    /// True when received files could be saved into `path`. The AppArmor hook
+    /// grants write access to `~/Downloads`, so its subfolders are writable;
+    /// everything else falls back. The destination picker uses this to disable
+    /// folders that would silently fall back.
     is_directory_writable: qt_method!(fn(&self, path: QString) -> bool),
-    /// The user visible default folder (`~/Downloads/LocalSend`) the received
-    /// files are exported to through the content hub.
+    /// The user visible default folder (`~/Downloads/LocalSend`) received files
+    /// are written into.
     preferred_receive_directory: qt_method!(fn(&self) -> QString),
-    /// The app private folder that always accepts the received files.
+    /// The app private folder used when `~/Downloads` cannot be written.
     private_receive_directory: qt_method!(fn(&self) -> QString),
     /// Folder the received files are exported to for the user: the configured
     /// destination when it is set, otherwise the preferred download folder.
@@ -354,11 +355,12 @@ impl SettingsController {
         QString::from(path.to_string_lossy().to_string())
     }
 
-    /// Folder the received files are exported to for the user.
+    /// Folder the received files are meant to end up in.
     ///
-    /// The export runs through the content hub (the file manager writes the
-    /// file), so this is only the target that is handed over, not a folder the
-    /// app writes into itself.
+    /// Normally this is the same folder the app writes into
+    /// (`receive_directory`). It only differs when the configured folder is
+    /// not writable: the files are then written to the default folder and
+    /// handed to the content hub, which copies them to the chosen folder.
     fn export_directory(&self) -> QString {
         let configured = self.destination.to_string();
         let configured = configured.trim();
@@ -368,7 +370,9 @@ impl SettingsController {
         self.preferred_receive_directory()
     }
 
-    /// Folder received files are actually written to.
+    /// Folder received files are actually written to: the configured folder,
+    /// `~/Downloads/LocalSend` or the app data folder (see
+    /// `filesystem::resolve_receive_dir`).
     fn receive_directory(&self) -> QString {
         let configured = self.destination.to_string();
         let path = crate::platform::filesystem::resolve_receive_dir(Some(configured.as_str()));
@@ -377,10 +381,11 @@ impl SettingsController {
 
     /// True when the app itself may write into `path`.
     ///
-    /// Only the app's own XDG folders pass the probe: everything else needs
-    /// `write_path` in the AppArmor hook, which the OpenStore rejects. The
-    /// destination picker uses this so the user cannot select a folder that
-    /// would silently fall back.
+    /// The AppArmor hook grants write access to `~/Downloads`, so its
+    /// subfolders pass the probe. Everything else is still rejected (only the
+    /// app's own XDG folders and the granted paths are writable), which keeps
+    /// the destination picker from offering a folder that would silently fall
+    /// back.
     fn is_directory_writable(&self, path: QString) -> bool {
         let path = path.to_string();
         let trimmed = path.trim();

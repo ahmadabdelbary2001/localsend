@@ -2,12 +2,12 @@
 //
 // Exports received files through the content hub.
 //
-// A confined click app may only write into its own folders: storing a file in
-// `~/Downloads` needs `write_path` in the AppArmor hook, and that is a
-// click-review redflag which makes the OpenStore reject the upload (HTTP 400).
-// Received files are therefore written into the app data folder and handed to
-// the content hub afterwards: the file manager (unconfined) writes the file
-// where the user wants it, `~/Downloads` by default.
+// Received files are written straight into `~/Downloads/LocalSend` (the
+// AppArmor hook declares `write_path` for `~/Downloads`), so normally there is
+// nothing to export. This component is the fallback for the cases where the
+// app could not write into the folder it was asked to use: the file stays in
+// the app data folder and is handed to the content hub afterwards, so the file
+// manager (unconfined) writes it where the user wants it.
 //
 // The files of one receive session are collected and exported as a single
 // transfer, so the save dialog shows up once per session instead of once per

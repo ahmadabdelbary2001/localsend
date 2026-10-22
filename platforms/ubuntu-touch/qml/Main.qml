@@ -143,9 +143,11 @@ Window {
         }
 
         // Hands received files to the content hub so that they end up in a
-        // folder the user can see (~/Downloads by default). The app itself
-        // only writes into its own folders: `write_path` would allow a direct
-        // write, but the OpenStore rejects clicks that declare it.
+        // folder the user can see (~/Downloads by default). Normally the app
+        // writes straight into ~/Downloads/LocalSend (the AppArmor hook grants
+        // `write_path` there) and nothing is exported; the exporter only kicks
+        // in when the app had to fall back to its own data folder or the
+        // configured destination differs from the folder it can write into.
         //
         // The component is loaded dynamically: the content hub module is not
         // available everywhere (e.g. on a desktop), and a missing module must

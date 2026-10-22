@@ -286,6 +286,7 @@ Dialog {
                     visible: root.filteredApps.length === 0 && !sendController.app_scan_running
                     text: translator.tr("appPicker.empty")
                     fontSize: "small"
+                    wrapMode: Text.WordWrap
                     horizontalAlignment: Text.AlignHCenter
                     color: root.appTheme && root.appTheme.colors ? root.appTheme.colors.surfaceTextMuted : "#888888"
                 }
