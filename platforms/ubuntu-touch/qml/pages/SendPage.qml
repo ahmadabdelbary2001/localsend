@@ -101,6 +101,39 @@ Page {
         })
     }
 
+    // Called when another application shares files to LocalSend through
+    // Content Hub. Paths have already been copied into app-private storage.
+    function importFiles(paths) {
+        if (!paths || paths.length === 0)
+            return
+        var additions = []
+        for (var i = 0; i < paths.length; i++) {
+            var path = paths[i]
+            if (!path || path.charAt(0) !== "/")
+                continue
+            var alreadySelected = false
+            for (var j = 0; j < page.selectedPaths.length; j++) {
+                if (page.pathOf(page.selectedPaths[j]) === path) {
+                    alreadySelected = true
+                    break
+                }
+            }
+            for (var k = 0; k < additions.length; k++) {
+                if (additions[k] === path)
+                    alreadySelected = true
+            }
+            if (!alreadySelected)
+                additions.push(path)
+        }
+        if (additions.length === 0)
+            return
+        page.pendingFingerprint = ""
+        page.pendingAddress = null
+        page.selectedPaths = page.selectedPaths.concat(additions)
+        homeController.change_tab(1)
+        page.showToast(translator.tr_args("contentHub.importReady", JSON.stringify({ n: additions.length })))
+    }
+
     function _formatSize(bytes) {
         var b = bytes || 0
         if (b < 1024) return b + " B"
@@ -273,10 +306,10 @@ Page {
 
         onLoaded: {
             item.filesPicked.connect(function(paths) {
-                var pickedPaths = paths || []
-
-                if (pickedPaths.length > 0) {
-                    page.selectedPaths = page.selectedPaths.concat(pickedPaths)
+                // ContentHubPicker staged files before finalizing the transfer.
+                var stagedPaths = paths || []
+                if (stagedPaths.length > 0) {
+                    page.selectedPaths = page.selectedPaths.concat(stagedPaths)
                 }
 
                 if (page.pendingFingerprint.length > 0 && page.selectedPaths.length > 0) {
@@ -303,6 +336,12 @@ Page {
             item.pickCancelled.connect(function() {
                 page.pendingFingerprint = ""
                 page.pendingAddress = null
+                pickerLoader.active = false
+            })
+            item.pickFailed.connect(function() {
+                page.pendingFingerprint = ""
+                page.pendingAddress = null
+                page.showToast(translator.tr("contentHub.importFailed"))
                 pickerLoader.active = false
             })
             item.open(page.pickerType)
@@ -1030,7 +1069,8 @@ Page {
             // "send" mode: pick a folder whose files are sent (no writability
             // requirement, "Use this folder" label instead of the setting one).
             item.mode = "send"
-            item.currentPath = sendController.home_directory()
+            // Browse only LocalSend app-private folders. Shared files must be selected via Content Hub.
+            item.currentPath = settingsController.private_receive_directory()
             item.folderSelected.connect(function(folderPath) {
                 page.addFolder(folderPath)
                 folderDialogLoader.active = false

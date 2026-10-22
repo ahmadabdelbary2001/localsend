@@ -11,9 +11,9 @@
 //   4. We answer via decision_tx; core then emits FileUpload events with a
 //      oneshot target_tx per file.
 //   5. For each FileUpload, we compute a unique save path with
-//      `filesystem::resolve_receive_dir` (the configured destination when the
-//      app may write into it, otherwise ~/Downloads/LocalSend, otherwise the
-//      app's own received folder) and
+//      `filesystem::resolve_receive_dir` (an allowed app-private destination
+//      or the app's own received folder). Shared destinations are handled by
+//      Content Hub after receipt; the confined server does not write there.
 //      send FileUploadTarget::Path via target_tx. Progress events arrive on
 //      progress_rx, the final result on result_rx; both are forwarded to the
 //      Qt side.

@@ -14,6 +14,7 @@ Item {
 
     signal filesPicked(var paths)
     signal pickCancelled()
+    signal pickFailed()
 
     // Scrim background to dim underlying page
     Rectangle {
@@ -139,41 +140,50 @@ Item {
                 var paths = []
                 var items = transfer.items
 
-                // Convert ContentItem URLs to absolute local paths
-                // before handing them to the Rust controller.
+                // Convert ContentItem URLs while the Content Hub transfer still
+                // owns its temporary files.
                 for (var i = 0; items && i < items.length; i++) {
                     var path = root.localPathForItem(items[i])
-
                     if (path.length > 0) {
                         paths.push(path)
                     } else {
-                        console.warn(
-                            "[ContentHubPicker] Ignoring an item without a usable local file path"
-                        )
+                        console.warn("[ContentHubPicker] Ignoring item without a usable local file path")
                     }
                 }
 
-                // We have collected the items. Disconnect the active
-                // transfer before finalizing it to prevent re-entry.
+                // Stage before Collected/finalize: finalize() can clean temporary
+                // source files. Rust copies the complete batch into app-private storage.
+                var stagedPaths = []
+                if (paths.length > 0) {
+                    try {
+                        stagedPaths = JSON.parse(sendController.stage_imported_files(JSON.stringify(paths)))
+                    } catch (error) {
+                        console.warn("[ContentHubPicker] Private staging failed:", error)
+                    }
+                }
+
+                if (!stagedPaths || stagedPaths.length !== paths.length || paths.length === 0) {
+                    console.warn("[ContentHubPicker] Could not stage all selected files")
+                    root.close()
+                    try {
+                        transfer.state = ContentTransfer.Aborted
+                        transfer.finalize()
+                    } catch (cleanupError) {
+                        console.warn("[ContentHubPicker] Failed to clean up rejected transfer")
+                    }
+                    root.pickFailed()
+                    return
+                }
+
                 transfer.state = ContentTransfer.Collected
-
                 root.close()
-
-                // ContentStore.App provides persistent storage for the
-                // imported items; finalize can now clean up transfer data.
                 try {
                     transfer.finalize()
                 } catch (error) {
                     console.warn("[ContentHubPicker] Transfer finalization failed")
                 }
-
-                if (paths.length > 0) {
-                    console.log("[ContentHubPicker] Selected " + paths.length + " file(s)")
-                    root.filesPicked(paths)
-                } else {
-                    console.warn("[ContentHubPicker] No usable files selected")
-                    root.pickCancelled()
-                }
+                console.log("[ContentHubPicker] Staged " + stagedPaths.length + " file(s)")
+                root.filesPicked(stagedPaths)
 
             } else if (transfer.state === ContentTransfer.Aborted) {
                 root.close()

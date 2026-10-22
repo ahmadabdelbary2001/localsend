@@ -27,19 +27,26 @@ Dialog {
     background: DialogFrame { appTheme: root.appTheme }
 
     property string currentPath: ""
+    property bool currentPathReadable: false
     property var entries: []
     property var shortcuts: []
     property bool creatingFolder: false
 
     readonly property string homePath: sendController.home_directory()
+    readonly property string appDataRoot: {
+        var received = settingsController.private_receive_directory()
+        var slash = received.lastIndexOf("/")
+        return slash > 0 ? received.substring(0, slash) : received
+    }
     readonly property bool receiveMode: root.mode === "receive"
-    readonly property string effectivePath: root.currentPath.length > 0 ? root.currentPath : root.homePath
-    readonly property bool atRoot: root.effectivePath === "/"
+    readonly property string effectivePath: root.currentPath.length > 0 ? root.currentPath : settingsController.private_receive_directory()
+    readonly property bool atRoot: root.effectivePath === root.appDataRoot
 
     // In receive mode the folder must accept writes: the server silently falls
     // back to ~/Downloads/LocalSend otherwise, and the user would look for the
     // received files in the wrong place.
-    readonly property bool canUseFolder: root.effectivePath.length > 1
+    readonly property bool canUseFolder: root.currentPathReadable
+                                        && root.effectivePath.length > 1
                                         && (!root.receiveMode
                                             || settingsController.is_directory_writable(root.effectivePath))
 
@@ -47,33 +54,37 @@ Dialog {
     signal canceled()
 
     function loadPath(dirPath) {
-        var path = (dirPath && dirPath.length > 0) ? dirPath : root.homePath
+        var path = (dirPath && dirPath.length > 0) ? dirPath : settingsController.private_receive_directory()
         if (path.length > 1 && path.charAt(path.length - 1) === "/")
             path = path.substring(0, path.length - 1)
         root.currentPath = path
+        root.currentPathReadable = sendController.can_read_directory(path)
+        if (!root.currentPathReadable) {
+            root.entries = []
+            dirList.positionViewAtBeginning()
+            return
+        }
         try {
             var parsed = JSON.parse(sendController.list_directory(path))
-            // A folder picker only offers folders.
+            // A folder picker only offers folders inside app-private storage.
             root.entries = parsed.filter(function(entry) { return entry.is_dir })
         } catch (e) {
             console.warn("[FolderPicker] error reading directory:", e)
+            root.currentPathReadable = false
             root.entries = []
         }
         dirList.positionViewAtBeginning()
     }
 
     function refreshShortcuts() {
-        var names = ["Downloads", "Documents", "Pictures", "Music", "Videos"]
-        var found = []
-        for (var i = 0; i < names.length; i++) {
-            if (sendController.directory_exists(root.homePath + "/" + names[i]))
-                found.push(names[i])
-        }
-        root.shortcuts = found
+        var received = settingsController.private_receive_directory()
+        root.shortcuts = sendController.can_read_directory(received)
+                       ? [{ "name": translator.tr("folderPicker.receivedFiles"), "path": received }]
+                       : []
     }
 
     function goUp() {
-        if (root.atRoot)
+        if (root.atRoot || !root.currentPathReadable)
             return
         var parts = root.effectivePath.split("/")
         parts.pop()
@@ -85,6 +96,12 @@ Dialog {
     function createFolder() {
         var name = newFolderField.text.trim()
         if (name.length === 0) return
+        if (!root.currentPathReadable) {
+            createError.text = root.receiveMode
+                                ? translator.tr("folderPicker.destinationViaContentHub")
+                                : translator.tr("folderPicker.confinementHint")
+            return
+        }
         var created = sendController.create_directory(root.effectivePath + "/" + name)
         if (created.length === 0) {
             createError.text = translator.tr("folderPicker.notWritable")
@@ -132,7 +149,7 @@ Dialog {
             AbstractButton {
                 Layout.preferredWidth: units.gu(5)
                 Layout.preferredHeight: units.gu(5)
-                enabled: !root.atRoot
+                enabled: root.currentPathReadable && !root.atRoot
                 opacity: enabled ? 1.0 : 0.4
                 onClicked: root.goUp()
 
@@ -187,8 +204,8 @@ Dialog {
                 Repeater {
                     model: root.shortcuts
                     delegate: Button {
-                        text: modelData
-                        onClicked: root.loadPath(root.homePath + "/" + modelData)
+                        text: modelData.name
+                        onClicked: root.loadPath(modelData.path)
                     }
                 }
             }
@@ -253,9 +270,22 @@ Dialog {
                 Label {
                     anchors.centerIn: parent
                     width: parent.width - units.gu(4)
-                    visible: root.entries.length === 0
+                    visible: root.currentPathReadable && root.entries.length === 0
                     text: translator.tr("assetPicker.emptyList")
                     fontSize: "small"
+                    horizontalAlignment: Text.AlignHCenter
+                    color: root.appTheme && root.appTheme.colors ? root.appTheme.colors.surfaceTextMuted : "#888888"
+                }
+
+                Label {
+                    anchors.centerIn: parent
+                    width: parent.width - units.gu(4)
+                    visible: !root.currentPathReadable
+                    text: root.receiveMode
+                          ? translator.tr("folderPicker.destinationViaContentHub")
+                          : translator.tr("folderPicker.confinementHint")
+                    fontSize: "small"
+                    wrapMode: Text.WordWrap
                     horizontalAlignment: Text.AlignHCenter
                     color: root.appTheme && root.appTheme.colors ? root.appTheme.colors.surfaceTextMuted : "#888888"
                 }
@@ -266,7 +296,7 @@ Dialog {
         ColumnLayout {
             Layout.fillWidth: true
             spacing: units.gu(0.6)
-            visible: root.creatingFolder
+            visible: root.creatingFolder && root.currentPathReadable
 
             RowLayout {
                 Layout.fillWidth: true
@@ -316,6 +346,7 @@ Dialog {
                 text: root.creatingFolder
                       ? translator.tr("general.cancel")
                       : translator.tr("folderPicker.newFolder")
+                enabled: root.currentPathReadable
                 onClicked: {
                     if (root.creatingFolder) {
                         root.creatingFolder = false

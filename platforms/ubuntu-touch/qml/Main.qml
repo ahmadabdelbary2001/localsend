@@ -1,7 +1,8 @@
-﻿import QtQuick 2.15
+import QtQuick 2.15
 import QtQuick.Window 2.15
 import QtQuick.Controls 2.15
 import Lomiri.Components 1.3
+import Lomiri.Content 1.3
 
 import "shell"
 import "theme" as LocalSendThemeComponents
@@ -72,6 +73,43 @@ Window {
         id: root
         objectName: "localsendMain"
 
+        property var pendingContentHubImports: []
+
+        function localPathFromContentItem(item) {
+            if (!item || !item.url)
+                return ""
+            var itemUrl = item.url
+            try {
+                if (typeof itemUrl.toLocalFile === "function") {
+                    var localPath = itemUrl.toLocalFile()
+                    if (localPath && localPath.length > 0 && localPath.charAt(0) === "/")
+                        return localPath
+                }
+            } catch (e) {
+                console.warn("[ContentHub] local URL conversion failed")
+            }
+            var uri = String(itemUrl)
+            if (uri.indexOf("file://") !== 0)
+                return ""
+            var encodedPath = uri.substring(7)
+            if (encodedPath.indexOf("localhost/") === 0)
+                encodedPath = encodedPath.substring(9)
+            if (encodedPath.length === 0 || encodedPath.charAt(0) !== "/")
+                return ""
+            try { return decodeURIComponent(encodedPath) } catch (e2) { return "" }
+        }
+
+        function deliverContentHubImports() {
+            if (!root.pendingContentHubImports || root.pendingContentHubImports.length === 0)
+                return
+            var current = mainStack.currentPage
+            if (current && typeof current.importFiles === "function") {
+                var files = root.pendingContentHubImports.slice(0)
+                root.pendingContentHubImports = []
+                current.importFiles(files)
+            }
+        }
+
         x: 0
         y: 0
         width: appWindow.width
@@ -112,6 +150,57 @@ Window {
             }
         }
 
+        Connections {
+            target: ContentHub
+            function onImportRequested(transfer) {
+                if (!transfer || !transfer.items || transfer.items.length === 0) {
+                    console.warn("[ContentHub] import request contains no items")
+                    return
+                }
+
+                var sourcePaths = []
+                for (var i = 0; i < transfer.items.length; i++) {
+                    var path = root.localPathFromContentItem(transfer.items[i])
+                    if (path.length > 0)
+                        sourcePaths.push(path)
+                }
+                if (sourcePaths.length === 0) {
+                    console.warn("[ContentHub] no local files could be imported")
+                    try { transfer.state = ContentTransfer.Aborted; transfer.finalize() } catch (e) { }
+                    return
+                }
+
+                var staged = []
+                try {
+                    staged = JSON.parse(sendController.stage_imported_files(JSON.stringify(sourcePaths)))
+                } catch (e2) {
+                    console.warn("[ContentHub] staging imported files failed:", e2)
+                }
+                if (!staged || staged.length === 0) {
+                    console.warn("[ContentHub] no imported files could be staged")
+                    try { transfer.state = ContentTransfer.Aborted; transfer.finalize() } catch (e3) { }
+                    return
+                }
+
+                // Copying succeeded inside the app-private data directory, so
+                // the system transfer can now be collected and finalized.
+                try {
+                    transfer.state = ContentTransfer.Collected
+                    transfer.finalize()
+                } catch (e4) {
+                    console.warn("[ContentHub] import finalization failed:", e4)
+                }
+                root.pendingContentHubImports = root.pendingContentHubImports.concat(staged)
+                root.deliverContentHubImports()
+            }
+        }
+
+        Connections {
+            target: mainStack
+            function onCurrentPageChanged() {
+                root.deliverContentHubImports()
+            }
+        }
         // Incoming transfer dialog.
         Loader {
             id: incomingLoader
@@ -150,6 +239,8 @@ Window {
         // not take the whole app down.
         Loader {
             id: receiveExporterLoader
+            anchors.fill: parent
+            z: 5
             source: "components/ReceiveExporter.qml"
 
             onLoaded: {

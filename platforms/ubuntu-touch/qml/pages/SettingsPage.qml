@@ -281,15 +281,22 @@ Page {
                 SettingsButton {
                     appTheme: page.appTheme
                     label: translator.tr("settingsTab.receive.destination")
-                    // Show where files actually land, not just what was
-                    // configured: the backend probes the folder and falls back
-                    // to ~/Downloads/LocalSend (or the app folder) when the app
-                    // may not write there.
+                    // This is the app-private staging directory. Shared
+                    // folders such as Downloads are selected in File Manager
+                    // through Content Hub after a transfer completes.
                     buttonLabel: page.receiveDirectory
                     onTapped: {
                         destinationDialog.currentPath = page.receiveDirectory
                         destinationDialog.open()
                     }
+                }
+
+                Label {
+                    Layout.fillWidth: true
+                    text: translator.tr("receiveExport.destinationHint")
+                    wrapMode: Text.Wrap
+                    fontSize: "x-small"
+                    color: page.appTheme && page.appTheme.colors ? page.appTheme.colors.surfaceTextMuted : "#888888"
                 }
 
                 RowLayout {

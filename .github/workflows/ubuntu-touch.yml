@@ -1,7 +1,7 @@
 name: ubuntu-touch
 
 run-name: >-
-  ${{ startsWith(github.ref, 'refs/tags/v') && format('Release Â· {0}', github.ref_name) || format('CI Â· {0}', github.ref_name) }}
+  ${{ startsWith(github.ref, 'refs/tags/v') && format('Release · {0}', github.ref_name) || format('CI · {0}', github.ref_name) }}
 
 on:
   push:
@@ -53,7 +53,7 @@ jobs:
         run: cargo test -p localsend-ubuntu-touch --lib
 
   ubuntu_touch:
-    name: Click Â· ${{ matrix.arch }}
+    name: Click · ${{ matrix.arch }}
     runs-on: ubuntu-24.04
     timeout-minutes: 90
     strategy:
@@ -374,7 +374,6 @@ jobs:
           if-no-files-found: error
           retention-days: 30
 
-
   release:
     name: Publish GitHub Release
     needs: [ubuntu_touch]
@@ -428,7 +427,7 @@ jobs:
           fi
 
   publish_openstore:
-    name: Publish to OpenStore Â· ${{ matrix.arch }}
+    name: Publish to OpenStore · ${{ matrix.arch }}
     needs: [ubuntu_touch]
     if: startsWith(github.ref, 'refs/tags/v')
     runs-on: ubuntu-24.04

@@ -7,7 +7,7 @@
     "all": "All",
     "search": "Search packages",
     "scanning": "Searching the device…",
-    "empty": "No package files found. Copy .click or .apk files into Downloads or Documents, then refresh."
+    "empty": "No package files are stored in LocalSend's private area. Use Open to choose a .click or .apk through File Manager."
   },
   "folderPicker": {
     "title": "Select folder",
@@ -15,6 +15,21 @@
     "newFolder": "New folder",
     "folderName": "Folder name",
     "create": "Create",
-    "notWritable": "Files can not be saved in this folder"
+    "notWritable": "This folder cannot be used for direct saving",
+    "confinementHint": "This folder cannot be browsed directly by the confined app. Use File in Send to select files through Content Hub.",
+    "destinationViaContentHub": "Shared save folders are chosen in File Manager after receiving files. This setting can only use LocalSend's private storage.",
+    "receivedFiles": "LocalSend received files"
+  },
+  "receiveExport": {
+    "saveOne": "Save received file",
+    "saveMany": "Save {n} received files",
+    "saved": "The files were handed to the selected destination.",
+    "failed": "Could not export the files. They are still available to save again.",
+    "noDestination": "No compatible destination was available. Try File Manager.",
+    "destinationHint": "Files are first received in LocalSend's private storage. After a transfer, tap Save received files and choose Downloads/LocalSend in File Manager."
+  },
+  "contentHub": {
+    "importReady": "Added {n} file(s) from another app to the Send list.",
+    "importFailed": "Could not import the selected files. Please try again through File Manager."
   }
 }

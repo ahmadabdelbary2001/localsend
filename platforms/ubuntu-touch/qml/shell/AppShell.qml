@@ -1,4 +1,4 @@
-﻿import QtQuick 2.15
+import QtQuick 2.15
 import QtQuick.Layouts 1.15
 import QtQuick.Controls 2.15
 import Lomiri.Components 1.3
@@ -9,6 +9,10 @@ Page {
     id: shell
     property var appTheme
     property var navigationStack: null
+
+    function importFiles(paths) {
+        sendPage.importFiles(paths)
+    }
 
     // The system panel (clock, battery, camera cut-out) belongs to the shell
     // and is drawn outside the app window, so the app must not reserve a

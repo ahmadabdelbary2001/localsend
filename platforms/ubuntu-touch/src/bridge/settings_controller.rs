@@ -377,20 +377,18 @@ impl SettingsController {
         QString::from(path.to_string_lossy().to_string())
     }
 
-    /// True when the app itself may write into `path`.
-    ///
-    /// The AppArmor hook grants write access to `~/Downloads`, so its
-    /// subfolders pass the probe. Everything else is still rejected (only the
-    /// app's own XDG folders and the granted paths are writable), which keeps
-    /// the destination picker from offering a folder that would silently fall
-    /// back.
+    /// True when `path` is a writable directory inside the app-private data
+    /// tree. Shared folders are accessed through Content Hub instead of being
+    /// probed or written directly by this confined app.
     fn is_directory_writable(&self, path: QString) -> bool {
         let path = path.to_string();
         let trimmed = path.trim();
         if trimmed.is_empty() {
             return false;
         }
-        crate::platform::filesystem::ensure_writable_dir(std::path::Path::new(trimmed))
+        let target = std::path::Path::new(trimmed);
+        crate::platform::filesystem::is_app_private_candidate(target)
+            && crate::platform::filesystem::ensure_writable_dir(target)
     }
 
     fn set_create_checksums(&mut self, v: bool) {

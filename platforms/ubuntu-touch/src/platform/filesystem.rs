@@ -42,9 +42,53 @@ fn dirs_home() -> Option<PathBuf> {
     std::env::var_os("HOME").map(PathBuf::from)
 }
 
+fn canonical_app_data_dir() -> Option<PathBuf> {
+    app_data_dir().and_then(|path| std::fs::canonicalize(path).ok())
+}
+
+/// True only for an existing path resolved inside LocalSend's private data
+/// directory. Canonicalization prevents a symlink from escaping that directory.
+pub fn is_app_private_path(path: &Path) -> bool {
+    let Some(root) = canonical_app_data_dir() else { return false };
+    let Ok(candidate) = std::fs::canonicalize(path) else { return false };
+    candidate.starts_with(root)
+}
+
+/// True for an existing or not-yet-created path within app-private data.
+/// Parent-directory components and symlinks escaping the root are rejected.
+pub fn is_app_private_candidate(path: &Path) -> bool {
+    if path.components().any(|component| matches!(component, std::path::Component::ParentDir)) {
+        return false;
+    }
+    let Some(root) = canonical_app_data_dir() else { return false };
+    let mut ancestor = path;
+    loop {
+        if ancestor.exists() {
+            return std::fs::canonicalize(ancestor)
+                .map(|candidate| candidate.starts_with(&root))
+                .unwrap_or(false);
+        }
+        let Some(parent) = ancestor.parent() else { return false };
+        if parent == ancestor { return false; }
+        ancestor = parent;
+    }
+}
+
+/// True for a directory the app can create as a direct child of an existing
+/// app-private directory, or an existing private directory itself.
+pub fn is_app_private_child_path(path: &Path) -> bool {
+    if path.exists() {
+        return is_app_private_path(path);
+    }
+    if !is_app_private_candidate(path) {
+        return false;
+    }
+    path.parent().map(is_app_private_path).unwrap_or(false)
+}
+
 /// Ensure standard app-private dirs exist. Call once at startup.
 pub fn ensure_dirs() -> std::io::Result<()> {
-    for d in [app_config_dir(), app_data_dir(), app_cache_dir()]
+    for d in [app_config_dir(), app_data_dir(), app_cache_dir(), Some(private_receive_dir())]
         .into_iter()
         .flatten()
     {
@@ -93,8 +137,15 @@ pub fn ensure_writable_dir(dir: &Path) -> bool {
 /// Otherwise stage the file in the app-private `received` directory; the QML
 /// Content Hub exporter then hands it to the file manager for shared storage.
 pub fn resolve_receive_dir(configured: Option<&str>) -> PathBuf {
-
-    resolve_receive_dir_with(configured, Some(private_receive_dir()))
+    let configured = configured.map(str::trim).filter(|value| !value.is_empty());
+    let allowed = configured.filter(|value| is_app_private_candidate(Path::new(*value)));
+    if let Some(value) = configured.filter(|value| !is_app_private_candidate(Path::new(*value))) {
+        log::warn!(
+            "configured receive folder {} is outside app-private storage; files will be staged privately and exported through Content Hub",
+            value
+        );
+    }
+    resolve_receive_dir_with(allowed, Some(private_receive_dir()))
 }
 
 fn resolve_receive_dir_with(configured: Option<&str>, default: Option<PathBuf>) -> PathBuf {

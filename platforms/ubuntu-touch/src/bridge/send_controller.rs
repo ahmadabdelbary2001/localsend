@@ -91,6 +91,8 @@ pub struct SendController {
         )
     ),
     create_text_file: qt_method!(fn(&mut self, text: QString) -> QString),
+    /// Copies Content Hub-imported files into persistent app-private storage.
+    stage_imported_files: qt_method!(fn(&mut self, paths_json: QString) -> QString),
     collect_directory_files: qt_method!(fn(&mut self, dir_path: QString) -> QString),
     list_directory: qt_method!(fn(&mut self, dir_path: QString) -> QString),
     /// `kind` is "click" (default) or "apk".
@@ -107,6 +109,8 @@ pub struct SendController {
     home_directory: qt_method!(fn(&self) -> QString),
     /// True when `path` exists and is a directory.
     directory_exists: qt_method!(fn(&self, path: QString) -> bool),
+    /// True only if the directory can be read inside app-private storage.
+    can_read_directory: qt_method!(fn(&self, path: QString) -> bool),
     /// Creates a single folder (no parents). Returns the path or "" on error.
     create_directory: qt_method!(fn(&mut self, path: QString) -> QString),
     submit_pin: qt_method!(fn(&mut self, pin: QString)),
@@ -160,6 +164,7 @@ impl SendController {
             send_files: Default::default(),
             send_to_address: Default::default(),
             create_text_file: Default::default(),
+            stage_imported_files: Default::default(),
             collect_directory_files: Default::default(),
             list_directory: Default::default(),
             list_app_packages: Default::default(),
@@ -168,6 +173,7 @@ impl SendController {
             selection_items: Default::default(),
             home_directory: Default::default(),
             directory_exists: Default::default(),
+            can_read_directory: Default::default(),
             create_directory: Default::default(),
             submit_pin: Default::default(),
             cancel: Default::default(),
@@ -391,9 +397,13 @@ impl SendController {
         if content.trim().is_empty() {
             return QString::default();
         }
-        let cache_dir = std::env::temp_dir().join("localsend_text");
+        let Some(data_dir) = crate::platform::filesystem::app_data_dir() else {
+            log::warn!("[send_controller] app data directory is unavailable for clipboard text");
+            return QString::default();
+        };
+        let cache_dir = data_dir.join("outgoing_text");
         if let Err(e) = std::fs::create_dir_all(&cache_dir) {
-            log::warn!("[send_controller] failed to create text cache dir: {e}");
+            log::warn!("[send_controller] failed to create private text directory: {e}");
             return QString::default();
         }
         let file_path = cache_dir.join(format!("{}.txt", Uuid::new_v4()));
@@ -402,6 +412,104 @@ impl SendController {
             return QString::default();
         }
         QString::from(file_path.to_string_lossy().to_string())
+    }
+
+    /// Copies files delivered to the app through Content Hub into persistent
+    /// app-private storage before the Content Hub transfer is finalized.
+    pub fn stage_imported_files(&mut self, paths_json: QString) -> QString {
+        fn rollback(paths: &[String]) {
+            for path in paths {
+                let _ = std::fs::remove_file(path);
+            }
+        }
+
+        let raw = paths_json.to_string();
+        let sources: Vec<String> = match serde_json::from_str(&raw) {
+            Ok(paths) => paths,
+            Err(error) => {
+                log::warn!("[send_controller] invalid Content Hub paths: {error}");
+                return QString::from("[]");
+            }
+        };
+        if sources.is_empty() || sources.len() > 512 {
+            log::warn!("[send_controller] rejecting an empty or oversized Content Hub import batch");
+            return QString::from("[]");
+        }
+
+        let Some(data_dir) = crate::platform::filesystem::app_data_dir() else {
+            log::warn!("[send_controller] app data directory is unavailable");
+            return QString::from("[]");
+        };
+        let import_dir = data_dir.join("imports");
+        if let Err(error) = std::fs::create_dir_all(&import_dir) {
+            log::warn!("[send_controller] cannot create private import directory: {error}");
+            return QString::from("[]");
+        }
+
+        let mut staged: Vec<String> = Vec::new();
+        for source_text in sources {
+            let source = PathBuf::from(source_text);
+            let metadata = match std::fs::symlink_metadata(&source) {
+                Ok(metadata) if source.is_absolute() && metadata.file_type().is_file() => metadata,
+                Ok(_) => {
+                    rollback(&staged);
+                    return QString::from("[]");
+                }
+                Err(error) => {
+                    log::debug!("[send_controller] imported item is not readable: {error}");
+                    rollback(&staged);
+                    return QString::from("[]");
+                }
+            };
+            let _ = metadata;
+            let Some(name) = source.file_name().and_then(|name| name.to_str()) else {
+                rollback(&staged);
+                return QString::from("[]");
+            };
+            if name.is_empty() || name == "." || name == ".." {
+                rollback(&staged);
+                return QString::from("[]");
+            }
+
+            let mut destination = import_dir.join(name);
+            if destination.exists() {
+                let stem = source.file_stem().and_then(|s| s.to_str()).filter(|s| !s.is_empty()).unwrap_or("imported");
+                let ext = source.extension().and_then(|s| s.to_str()).filter(|s| !s.is_empty());
+                let mut index = 1u32;
+                loop {
+                    let candidate_name = match ext {
+                        Some(ext) => format!("{stem} ({index}).{ext}"),
+                        None => format!("{stem} ({index})"),
+                    };
+                    destination = import_dir.join(candidate_name);
+                    if !destination.exists() {
+                        break;
+                    }
+                    if index >= 10_000 {
+                        let unique = Uuid::new_v4();
+                        destination = match ext {
+                            Some(ext) => import_dir.join(format!("{stem}-{unique}.{ext}")),
+                            None => import_dir.join(format!("{stem}-{unique}")),
+                        };
+                        break;
+                    }
+                    index += 1;
+                }
+            }
+
+            match std::fs::copy(&source, &destination) {
+                Ok(_) => staged.push(destination.to_string_lossy().to_string()),
+                Err(error) => {
+                    log::warn!("[send_controller] failed to stage imported file: {error}");
+                    // std::fs::copy may leave a partial destination on failure.
+                    let _ = std::fs::remove_file(&destination);
+                    rollback(&staged);
+                    return QString::from("[]");
+                }
+            }
+        }
+
+        QString::from(serde_json::to_string(&staged).unwrap_or_else(|_| "[]".to_string()))
     }
 
     /// Recursively collects files below `dir_path`. Every entry carries the
@@ -415,7 +523,8 @@ impl SendController {
         }
 
         let dir = PathBuf::from(dir_path.to_string());
-        if !dir.is_dir() {
+        if !crate::platform::filesystem::is_app_private_path(&dir) || !dir.is_dir() {
+            log::debug!("[send_controller] refusing to scan a folder outside app-private storage");
             return QString::from("[]");
         }
         let folder_name = dir
@@ -438,8 +547,12 @@ impl SendController {
             let mut entries: Vec<_> = entries.flatten().collect();
             entries.sort_by_key(|entry| entry.file_name());
             for entry in entries {
+                let Ok(file_type) = entry.file_type() else { continue };
+                if file_type.is_symlink() {
+                    continue;
+                }
                 let path = entry.path();
-                if path.is_file() {
+                if file_type.is_file() {
                     let Some(full) = path.to_str() else { continue };
                     let relative = path
                         .strip_prefix(root)
@@ -516,6 +629,14 @@ impl SendController {
         )
     }
 
+    pub fn can_read_directory(&self, path: QString) -> bool {
+        let raw = path.to_string();
+        let dir = PathBuf::from(raw.trim());
+        !raw.trim().is_empty()
+            && crate::platform::filesystem::is_app_private_path(&dir)
+            && std::fs::read_dir(&dir).is_ok()
+    }
+
     pub fn list_directory(&mut self, dir_path: QString) -> QString {
         #[derive(serde::Serialize)]
         struct DirEntry {
@@ -533,9 +654,18 @@ impl SendController {
             PathBuf::from(p_str)
         };
 
+        if !crate::platform::filesystem::is_app_private_path(&target_dir) {
+            log::debug!("[send_controller] refusing directory listing outside app-private storage");
+            return QString::from("[]");
+        }
+
         let mut entries_list = Vec::new();
         if let Ok(entries) = std::fs::read_dir(&target_dir) {
             for entry in entries.flatten() {
+                let Ok(file_type) = entry.file_type() else { continue };
+                if file_type.is_symlink() {
+                    continue;
+                }
                 let p = entry.path();
                 let name = p.file_name().and_then(|n| n.to_str()).unwrap_or("").to_string();
                 if name.starts_with('.') {
@@ -710,12 +840,19 @@ impl SendController {
 
     pub fn directory_exists(&self, path: QString) -> bool {
         let p = path.to_string();
-        !p.trim().is_empty() && Path::new(&p).is_dir()
+        !p.trim().is_empty()
+            && crate::platform::filesystem::is_app_private_path(Path::new(&p))
+            && Path::new(&p).is_dir()
     }
 
     pub fn create_directory(&mut self, path: QString) -> QString {
         let p = path.to_string();
         if p.trim().is_empty() {
+            return QString::default();
+        }
+        let target = Path::new(&p);
+        if !crate::platform::filesystem::is_app_private_child_path(target) {
+            log::debug!("[send_controller] refusing to create a folder outside app-private storage");
             return QString::default();
         }
         match std::fs::create_dir(&p) {

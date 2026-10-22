@@ -1,195 +1,28 @@
 // SPDX-License-Identifier: Apache-2.0
 //
-// Exports received files through the content hub.
-//
-// Received data is staged in app-private storage and this component offers the
-// completed files to the file manager through Content Hub so the user can save
-// them in shared storage without broad path permissions.
-//
-// The files of one receive session are collected and exported as a single
-// transfer, so the save dialog shows up once per session instead of once per
-// file.
-//
-// The module is not available everywhere (e.g. on a desktop), so every call is
-// guarded: when the content hub is missing, the file simply stays in the
-// app-private folder and can still be opened from the history.
+// Exports received files through Content Hub. The app writes to its private
+// received directory; the user chooses the final destination in File Manager.
 
 import QtQuick 2.15
+import Lomiri.Components 1.3
 import Lomiri.Content 1.3
 
 Item {
     id: root
+    anchors.fill: parent
 
-    /// The received files model (see IncomingFilesModel).
     property var model: null
-
-    /// Folder the app writes received files into. Only files below this path
-    /// are exported; files that already landed in the user folder are not
-    /// copied a second time.
     property string privateDir: ""
-
-    /// Folder the files are exported to. Used to skip files that are already
-    /// there; the file manager asks for the final folder itself.
     property string targetDir: ""
-
-    /// Paths that were already handed over to the content hub.
     property var exported: []
-
-    /// Files waiting for the next export: [{ "path": ..., "name": ... }].
     property var pending: []
+    property var activeBatch: []
+    property var activeContentItems: []
+    property var activeTransfer: null
+    property bool pickerVisible: false
+    property bool finishing: false
+    property string lastMessage: ""
 
-    /// True when the content hub is usable.
-    readonly property bool available: {
-        try {
-            return typeof ContentTransfer !== "undefined" && typeof ContentItem !== "undefined"
-        } catch (e) {
-            return false
-        }
-    }
-
-    // Apps that can store the file: the file manager saves it in a folder of
-    // the user's choice (~/Downloads by default).
-    ContentPeerModel {
-        id: peerModel
-        handler: ContentHandler.Destination
-        contentType: ContentType.All
-    }
-
-    // Batches the files of one session: a transfer is only started when no
-    // further file finished for a moment.
-    Timer {
-        id: flushTimer
-        interval: 1200
-        repeat: false
-        onTriggered: root.exportPending()
-    }
-
-    Component {
-        id: transferComponent
-
-        ContentTransfer { }
-    }
-
-    Component {
-        id: itemComponent
-
-        ContentItem { }
-    }
-
-    /// Collects finished files and schedules the export.
-    function check() {
-        if (!root.available || !root.model)
-            return
-
-        var added = false
-        for (var i = 0; i < root.model.rowCount(); i++) {
-            var idx = root.model.index(i, 0)
-            var path = root.model.data(idx, 4)
-            var name = root.model.data(idx, 0)
-            var status = root.model.data(idx, 3)
-
-            // Only finished files, and only once.
-            if (!path || path.length === 0 || status !== "finished")
-                continue
-            if (root.exported.indexOf(path) !== -1)
-                continue
-
-            // Only files the app received itself are exported.
-            if (!root.isUnder(path, root.privateDir))
-                continue
-
-            root.exported.push(path)
-
-            // Already in the target folder: nothing to copy.
-            if (root.isUnder(path, root.targetDir))
-                continue
-
-            root.pending.push({ "path": path, "name": name })
-            added = true
-        }
-
-        if (added)
-            flushTimer.restart()
-    }
-
-    /// Exports everything that is pending as one transfer.
-    function exportPending() {
-        if (root.pending.length === 0)
-            return
-
-        var batch = root.pending
-        root.pending = []
-
-        var items = []
-        for (var i = 0; i < batch.length; i++) {
-            var item = itemComponent.createObject(root)
-            if (!item)
-                continue
-            item.url = root.fileUrl(batch[i].path)
-            item.name = batch[i].name
-            items.push(item)
-        }
-        if (items.length === 0)
-            return
-
-        var transfer = root.newTransfer()
-        if (!transfer) {
-            console.warn("[ContentHub] could not start an export transfer")
-            return
-        }
-        try {
-            transfer.items = items
-            transfer.start()
-        } catch (e) {
-            console.warn("[ContentHub] export failed:", e)
-        }
-    }
-
-    /// A transfer that exports to the file manager.
-    function newTransfer() {
-        var peer = root.destinationPeer()
-        if (!peer)
-            return null
-
-        // The documented way: the destination peer hands out a transfer.
-        try {
-            var requested = peer.request()
-            if (requested) {
-                requested.selectionType = ContentTransfer.MultipleTransfer
-                return requested
-            }
-        } catch (e) {
-            console.warn("[ContentHub] peer request failed:", e)
-        }
-
-        // Fallback for builds where the peer does not hand out a transfer.
-        try {
-            var transfer = transferComponent.createObject(root)
-            if (transfer) {
-                transfer.direction = ContentTransfer.ExportTransfer
-                transfer.destination = peer
-                transfer.contentType = ContentType.All
-                transfer.selectionType = ContentTransfer.MultipleTransfer
-                return transfer
-            }
-        } catch (e2) {
-            console.warn("[ContentHub] cannot create a transfer:", e2)
-        }
-        return null
-    }
-
-    /// The destination peer that saves the file (the file manager).
-    function destinationPeer() {
-        var peers = peerModel.peers
-        for (var i = 0; i < peers.length; i++) {
-            var appId = peers[i].appId ? peers[i].appId : ""
-            if (appId.indexOf("filemanager") !== -1)
-                return peers[i]
-        }
-        return peers.length > 0 ? peers[0] : null
-    }
-
-    /// True when `path` is `dir` itself or a file inside it.
     function isUnder(path, dir) {
         if (!path || !dir || dir.length === 0)
             return false
@@ -197,12 +30,240 @@ Item {
         return path === dir || path.indexOf(prefix) === 0
     }
 
-    /// `file://` URL of a path, with the segments percent-encoded so spaces
-    /// and non-ASCII names survive the transfer.
+    function containsPath(items, path) {
+        for (var i = 0; i < items.length; i++) {
+            if (items[i] && items[i].path === path)
+                return true
+        }
+        return false
+    }
+
+    function cleanupContentItems() {
+        var oldItems = root.activeContentItems
+        root.activeContentItems = []
+        for (var i = 0; i < oldItems.length; i++) {
+            if (oldItems[i]) {
+                try { oldItems[i].destroy() } catch (e) { }
+            }
+        }
+    }
+
+    function destroyItems(items) {
+        for (var i = 0; i < items.length; i++) {
+            if (items[i]) {
+                try { items[i].destroy() } catch (e) { }
+            }
+        }
+    }
+
+    function cancelTransfer(transfer) {
+        if (!transfer)
+            return
+        try {
+            transfer.state = ContentTransfer.Aborted
+            transfer.finalize()
+        } catch (e) {
+            console.warn("[ContentHub] transfer cleanup failed:", e)
+        }
+    }
+
+    function failActiveExport(message) {
+        root.finishing = true
+        var transfer = root.activeTransfer
+        root.activeTransfer = null
+        root.pickerVisible = false
+        root.activeBatch = []
+        root.cleanupContentItems()
+        if (transfer)
+            root.cancelTransfer(transfer)
+        root.lastMessage = message
+        root.finishing = false
+        // Keep root.pending unchanged so the user can retry.
+    }
+
     function fileUrl(path) {
         var parts = path.split("/")
         for (var i = 0; i < parts.length; i++)
             parts[i] = encodeURIComponent(parts[i])
         return "file://" + parts.join("/")
+    }
+
+    // Called by Main.qml's polling timer. Only completed files staged by this
+    // app are eligible for export; files are not marked exported until the
+    // Content Hub transfer reports that the receiver collected them.
+    function check() {
+        if (!root.model || !root.privateDir)
+            return
+        for (var i = 0; i < root.model.rowCount(); i++) {
+            var idx = root.model.index(i, 0)
+            var path = root.model.data(idx, 4)
+            var name = root.model.data(idx, 0)
+            var status = root.model.data(idx, 3)
+            if (!path || status !== "finished")
+                continue
+            if (!root.isUnder(path, root.privateDir))
+                continue
+            if (root.exported.indexOf(path) !== -1 || root.containsPath(root.pending, path))
+                continue
+            root.pending = root.pending.concat([{ "path": path, "name": name || path.split("/").pop() }])
+        }
+    }
+
+    function exportToPeer(peer) {
+        if (root.activeTransfer || !root.pending.length)
+            return
+
+        var batch = root.pending.slice(0)
+        var items = []
+        peer.selectionType = ContentTransfer.Multiple
+
+        var transfer = null
+        try {
+            transfer = peer.request()
+        } catch (e) {
+            console.warn("[ContentHub] destination request failed:", e)
+        }
+        if (!transfer) {
+            root.pickerVisible = false
+            root.lastMessage = translator.tr("receiveExport.noDestination")
+            return
+        }
+
+        // ContentPeer.request() returns the transfer for this export. Populate
+        // it and mark it Charged, without assuming an undocumented initial state.
+        for (var i = 0; i < batch.length; i++) {
+            var item = contentItemComponent.createObject(root)
+            if (!item) {
+                root.destroyItems(items)
+                root.cancelTransfer(transfer)
+                root.pickerVisible = false
+                root.lastMessage = translator.tr("receiveExport.failed")
+                return
+            }
+            item.url = root.fileUrl(batch[i].path)
+            // ContentItem exposes a URL; the exported filename comes from the URL.
+            items.push(item)
+        }
+
+        root.activeBatch = batch
+        root.activeContentItems = items
+        root.activeTransfer = transfer
+        root.lastMessage = ""
+        try {
+            transfer.items = items
+            transfer.state = ContentTransfer.Charged
+            root.pickerVisible = false
+        } catch (e2) {
+            console.warn("[ContentHub] could not charge export transfer:", e2)
+            root.failActiveExport(translator.tr("receiveExport.failed"))
+        }
+    }
+
+    Component {
+        id: contentItemComponent
+        ContentItem { }
+    }
+
+    Button {
+        anchors.right: parent.right
+        anchors.bottom: parent.bottom
+        anchors.rightMargin: units.gu(2)
+        anchors.bottomMargin: units.gu(10)
+        z: 1
+        visible: root.pending.length > 0 && !root.pickerVisible && !root.activeTransfer
+        text: root.pending.length === 1
+              ? translator.tr("receiveExport.saveOne")
+              : translator.tr_args("receiveExport.saveMany", JSON.stringify({ n: root.pending.length }))
+        onClicked: {
+            root.lastMessage = ""
+            root.pickerVisible = true
+        }
+    }
+
+    Label {
+        anchors.left: parent.left
+        anchors.right: parent.right
+        anchors.bottom: parent.bottom
+        anchors.leftMargin: units.gu(2)
+        anchors.rightMargin: units.gu(2)
+        anchors.bottomMargin: units.gu(15)
+        z: 1
+        visible: root.lastMessage.length > 0 && !root.pickerVisible
+        text: root.lastMessage
+        wrapMode: Text.Wrap
+        color: "#C0392B"
+    }
+
+    ContentPeerPicker {
+        id: destinationPicker
+        anchors.fill: parent
+        z: 2
+        visible: root.pickerVisible
+        showTitle: true
+        contentType: ContentType.All
+        handler: ContentHandler.Destination
+
+        onPeerSelected: {
+            root.exportToPeer(destinationPicker.peer)
+        }
+        onCancelPressed: {
+            root.pickerVisible = false
+        }
+    }
+
+    ContentTransferHint {
+        anchors.fill: parent
+        z: 3
+        visible: root.activeTransfer !== null
+        activeTransfer: root.activeTransfer
+    }
+
+    Connections {
+        target: root.activeTransfer
+
+        function onStateChanged() {
+            var transfer = root.activeTransfer
+            if (!transfer || root.finishing)
+                return
+
+            var state = transfer.state
+            if (state === ContentTransfer.Collected || state === ContentTransfer.Finalized) {
+                root.finishing = true
+                var completed = root.activeBatch.slice(0)
+                var completedPaths = []
+                for (var i = 0; i < completed.length; i++)
+                    completedPaths.push(completed[i].path)
+
+                var remaining = []
+                for (var j = 0; j < root.pending.length; j++) {
+                    if (completedPaths.indexOf(root.pending[j].path) === -1)
+                        remaining.push(root.pending[j])
+                }
+                root.pending = remaining
+                root.exported = root.exported.concat(completedPaths)
+
+                if (state === ContentTransfer.Collected) {
+                    try { transfer.finalize() } catch (e) {
+                        console.warn("[ContentHub] transfer finalization failed:", e)
+                    }
+                }
+                root.activeTransfer = null
+                root.activeBatch = []
+                root.cleanupContentItems()
+                root.pickerVisible = false
+                root.lastMessage = translator.tr("receiveExport.saved")
+                root.finishing = false
+            } else if (state === ContentTransfer.Aborted) {
+                root.finishing = true
+                try { transfer.finalize() } catch (e2) { }
+                root.activeTransfer = null
+                root.activeBatch = []
+                root.cleanupContentItems()
+                root.pickerVisible = false
+                root.lastMessage = translator.tr("receiveExport.failed")
+                root.finishing = false
+                // Do not remove the files from pending; retry remains available.
+            }
+        }
     }
 }
