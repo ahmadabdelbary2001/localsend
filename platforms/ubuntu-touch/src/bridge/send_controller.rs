@@ -109,6 +109,8 @@ pub struct SendController {
     home_directory: qt_method!(fn(&self) -> QString),
     /// True when `path` exists and is a directory.
     directory_exists: qt_method!(fn(&self, path: QString) -> bool),
+    /// True only for readable regular files inside LocalSend app-private data.
+    can_read_file: qt_method!(fn(&self, path: QString) -> bool),
     /// True only if the directory can be read inside app-private storage.
     can_read_directory: qt_method!(fn(&self, path: QString) -> bool),
     /// Creates a single folder (no parents). Returns the path or "" on error.
@@ -173,6 +175,7 @@ impl SendController {
             selection_items: Default::default(),
             home_directory: Default::default(),
             directory_exists: Default::default(),
+            can_read_file: Default::default(),
             can_read_directory: Default::default(),
             create_directory: Default::default(),
             submit_pin: Default::default(),
@@ -836,6 +839,23 @@ impl SendController {
             drop(state);
             scan_dirty.store(true, Ordering::Relaxed);
         });
+    }
+
+    /// Checks that a source file exists, is not a symlink, is readable, and
+    /// belongs to LocalSend's private data tree before exposing it to Content Hub.
+    pub fn can_read_file(&self, path: QString) -> bool {
+        let value = path.to_string();
+        let candidate = Path::new(value.trim());
+        if !crate::platform::filesystem::is_app_private_path(candidate) {
+            return false;
+        }
+        let Ok(metadata) = std::fs::symlink_metadata(candidate) else {
+            return false;
+        };
+        if !metadata.file_type().is_file() {
+            return false;
+        }
+        std::fs::File::open(candidate).is_ok()
     }
 
     pub fn directory_exists(&self, path: QString) -> bool {

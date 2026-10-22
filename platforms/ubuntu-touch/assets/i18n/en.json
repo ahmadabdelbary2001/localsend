@@ -7,7 +7,8 @@
     "all": "All",
     "search": "Search packages",
     "scanning": "Searching the device…",
-    "empty": "No package files are stored in LocalSend's private area. Use Open to choose a .click or .apk through File Manager."
+    "empty": "No package files are stored in LocalSend\u0027s private area. Use Open to choose a .click or .apk through File Manager.",
+    "packageOnly": "Choose a .click or .apk file to share an app package."
   },
   "folderPicker": {
     "title": "Select folder",
@@ -17,7 +18,7 @@
     "create": "Create",
     "notWritable": "This folder cannot be used for direct saving",
     "confinementHint": "This folder cannot be browsed directly by the confined app. Use File in Send to select files through Content Hub.",
-    "destinationViaContentHub": "Shared save folders are chosen in File Manager after receiving files. This setting can only use LocalSend's private storage.",
+    "destinationViaContentHub": "Shared save folders are chosen in File Manager after receiving files. This setting can only use LocalSend\u0027s private storage.",
     "receivedFiles": "LocalSend received files"
   },
   "receiveExport": {
@@ -26,7 +27,10 @@
     "saved": "The files were handed to the selected destination.",
     "failed": "Could not export the files. They are still available to save again.",
     "noDestination": "No compatible destination was available. Try File Manager.",
-    "destinationHint": "Files are first received in LocalSend's private storage. After a transfer, tap Save received files and choose Downloads/LocalSend in File Manager."
+    "destinationHint": "Files are first received in LocalSend\u0027s private storage. After a transfer, tap Save received files and choose Downloads/LocalSend in File Manager.",
+    "sourceMissing": "The received file is no longer readable in LocalSend storage. Receive it again before saving.",
+    "verifyResult": "Check the File Manager result. If it saved successfully, tap “Mark as saved”. If it failed, choose a new empty folder or remove any existing file with the same name, then retry.",
+    "markSaved": "Mark as saved"
   },
   "contentHub": {
     "importReady": "Added {n} file(s) from another app to the Send list.",

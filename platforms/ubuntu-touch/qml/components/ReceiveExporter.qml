@@ -17,6 +17,7 @@ Item {
     property var exported: []
     property var pending: []
     property var activeBatch: []
+    property var lastAttempt: []
     property var activeContentItems: []
     property var activeTransfer: null
     property bool pickerVisible: false
@@ -81,6 +82,29 @@ Item {
         // Keep root.pending unchanged so the user can retry.
     }
 
+    // Some File Manager versions report Aborted after showing the import result,
+    // regardless of whether its move succeeded. Never discard the original until
+    // the user confirms that the result dialog reported success.
+    function markAttemptSaved() {
+        if (!root.lastAttempt || root.lastAttempt.length === 0)
+            return
+        var donePaths = []
+        for (var i = 0; i < root.lastAttempt.length; i++) {
+            var path = root.lastAttempt[i].path
+            if (path && donePaths.indexOf(path) === -1)
+                donePaths.push(path)
+        }
+        root.pending = root.pending.filter(function(entry) {
+            return donePaths.indexOf(entry.path) === -1
+        })
+        for (var j = 0; j < donePaths.length; j++) {
+            if (root.exported.indexOf(donePaths[j]) === -1)
+                root.exported = root.exported.concat([donePaths[j]])
+        }
+        root.lastAttempt = []
+        root.lastMessage = ""
+    }
+
     function fileUrl(path) {
         var parts = path.split("/")
         for (var i = 0; i < parts.length; i++)
@@ -132,6 +156,16 @@ Item {
         // ContentPeer.request() returns the transfer for this export. Populate
         // it and mark it Charged, without assuming an undocumented initial state.
         for (var i = 0; i < batch.length; i++) {
+            var sourcePath = batch[i].path
+            if (!sourcePath || !sendController.can_read_file(sourcePath)) {
+                console.warn("[ContentHub] export source is missing or not readable in app-private storage:", sourcePath)
+                root.destroyItems(items)
+                root.cancelTransfer(transfer)
+                root.pickerVisible = false
+                root.lastMessage = translator.tr("receiveExport.sourceMissing")
+                return
+            }
+
             var item = contentItemComponent.createObject(root)
             if (!item) {
                 root.destroyItems(items)
@@ -140,11 +174,20 @@ Item {
                 root.lastMessage = translator.tr("receiveExport.failed")
                 return
             }
-            item.url = root.fileUrl(batch[i].path)
-            // ContentItem exposes a URL; the exported filename comes from the URL.
+            var url = root.fileUrl(sourcePath)
+            if (!url) {
+                root.destroyItems(items)
+                root.cancelTransfer(transfer)
+                root.pickerVisible = false
+                root.lastMessage = translator.tr("receiveExport.sourceMissing")
+                return
+            }
+            item.url = url
+            console.log("[ContentHub] prepared export item:", String(item.url))
             items.push(item)
         }
 
+        root.lastAttempt = []
         root.activeBatch = batch
         root.activeContentItems = items
         root.activeTransfer = transfer
@@ -178,6 +221,17 @@ Item {
             root.lastMessage = ""
             root.pickerVisible = true
         }
+    }
+
+    Button {
+        anchors.left: parent.left
+        anchors.bottom: parent.bottom
+        anchors.leftMargin: units.gu(2)
+        anchors.bottomMargin: units.gu(10)
+        z: 1
+        visible: root.lastAttempt.length > 0 && !root.pickerVisible && !root.activeTransfer
+        text: translator.tr("receiveExport.markSaved")
+        onClicked: root.markAttemptSaved()
     }
 
     Label {
@@ -227,42 +281,51 @@ Item {
                 return
 
             var state = transfer.state
-            if (state === ContentTransfer.Collected || state === ContentTransfer.Finalized) {
+            if (state === ContentTransfer.Collected) {
+                // Collected is the documented positive acknowledgement that the
+                // destination has collected the items.
                 root.finishing = true
                 var completed = root.activeBatch.slice(0)
                 var completedPaths = []
                 for (var i = 0; i < completed.length; i++)
                     completedPaths.push(completed[i].path)
 
-                var remaining = []
-                for (var j = 0; j < root.pending.length; j++) {
-                    if (completedPaths.indexOf(root.pending[j].path) === -1)
-                        remaining.push(root.pending[j])
+                root.pending = root.pending.filter(function(entry) {
+                    return completedPaths.indexOf(entry.path) === -1
+                })
+                for (var j = 0; j < completedPaths.length; j++) {
+                    if (root.exported.indexOf(completedPaths[j]) === -1)
+                        root.exported = root.exported.concat([completedPaths[j]])
                 }
-                root.pending = remaining
-                root.exported = root.exported.concat(completedPaths)
-
-                if (state === ContentTransfer.Collected) {
-                    try { transfer.finalize() } catch (e) {
-                        console.warn("[ContentHub] transfer finalization failed:", e)
+                try { transfer.finalize() } catch (e) {
+                    console.warn("[ContentHub] transfer finalization failed:", e)
+                }
+                root.activeTransfer = null
+                root.activeBatch = []
+                root.lastAttempt = []
+                root.cleanupContentItems()
+                root.pickerVisible = false
+                root.lastMessage = translator.tr("receiveExport.saved")
+                root.finishing = false
+            } else if (state === ContentTransfer.Aborted || state === ContentTransfer.Finalized) {
+                root.finishing = true
+                root.lastAttempt = root.activeBatch.slice(0)
+                if (state === ContentTransfer.Aborted) {
+                    try { transfer.finalize() } catch (e2) {
+                        console.warn("[ContentHub] transfer finalization after result failed:", e2)
                     }
                 }
                 root.activeTransfer = null
                 root.activeBatch = []
                 root.cleanupContentItems()
                 root.pickerVisible = false
-                root.lastMessage = translator.tr("receiveExport.saved")
+                root.lastMessage = root.lastAttempt.length > 0
+                                  ? translator.tr("receiveExport.verifyResult")
+                                  : translator.tr("receiveExport.failed")
                 root.finishing = false
-            } else if (state === ContentTransfer.Aborted) {
-                root.finishing = true
-                try { transfer.finalize() } catch (e2) { }
-                root.activeTransfer = null
-                root.activeBatch = []
-                root.cleanupContentItems()
-                root.pickerVisible = false
-                root.lastMessage = translator.tr("receiveExport.failed")
-                root.finishing = false
-                // Do not remove the files from pending; retry remains available.
+                // File Manager currently reports Aborted after its result dialog
+                // is closed, including successful imports. Keep items queued until
+                // the user confirms success, or let them retry after a failure.
             }
         }
     }

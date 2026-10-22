@@ -18,6 +18,7 @@ Page {
     property var pendingAddress: null // { ip: "", port: 53317, https: true }
     property var selectedPaths: []
     property string pickerType: "all" // "all" | "pictures"
+    property string pickerPurpose: "files" // "files" | "packages"
     property string lastError: ""
 
     // Favorites are shown in their own section above the nearby devices.
@@ -308,6 +309,22 @@ Page {
             item.filesPicked.connect(function(paths) {
                 // ContentHubPicker staged files before finalizing the transfer.
                 var stagedPaths = paths || []
+                if (page.pickerPurpose === "packages") {
+                    stagedPaths = stagedPaths.filter(function(path) {
+                        return /\.(click|apk)$/i.test(path || "")
+                    })
+                    if (stagedPaths.length === 0) {
+                        page.showToast(translator.tr("appPicker.packageOnly"))
+                        page.pendingFingerprint = ""
+                        page.pendingAddress = null
+                        page.pickerPurpose = "files"
+                        pickerLoader.active = false
+                        return
+                    }
+                    // The imported package now lives in app-private imports/ and
+                    // will be included in the app picker cache on its next refresh.
+                    sendController.refresh_app_packages()
+                }
                 if (stagedPaths.length > 0) {
                     page.selectedPaths = page.selectedPaths.concat(stagedPaths)
                 }
@@ -331,16 +348,19 @@ Page {
 
                 page.pendingFingerprint = ""
                 page.pendingAddress = null
+                page.pickerPurpose = "files"
                 pickerLoader.active = false
             })
             item.pickCancelled.connect(function() {
                 page.pendingFingerprint = ""
                 page.pendingAddress = null
+                page.pickerPurpose = "files"
                 pickerLoader.active = false
             })
             item.pickFailed.connect(function() {
                 page.pendingFingerprint = ""
                 page.pendingAddress = null
+                page.pickerPurpose = "files"
                 page.showToast(translator.tr("contentHub.importFailed"))
                 pickerLoader.active = false
             })
@@ -351,6 +371,7 @@ Page {
                 console.warn("[SendPage] ContentHubPicker unavailable")
                 page.pendingFingerprint = ""
                 page.pendingAddress = null
+                page.pickerPurpose = "files"
                 pickerLoader.active = false
             }
         }
@@ -1105,6 +1126,7 @@ Page {
             item.pickCustomFile.connect(function() {
                 appDialogLoader.active = false
                 page.pickerType = "all"
+                page.pickerPurpose = "packages"
                 pickerLoader.active = true
             })
             item.canceled.connect(function() {
