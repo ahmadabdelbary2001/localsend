@@ -27,6 +27,7 @@
     "saved": "The files were handed to the selected destination.",
     "failed": "Could not export the files. They are still available to save again.",
     "noDestination": "No compatible destination was available. Try File Manager.",
+    "noResponse": "The destination app did not accept the files. Open File Manager from the list and try again.",
     "destinationHint": "Files are first received in LocalSend\u0027s private storage. After a transfer, tap Save received files and choose Downloads/LocalSend in File Manager.",
     "sourceMissing": "The received file is no longer readable in LocalSend storage. Receive it again before saving.",
     "verifyResult": "Check the File Manager result. If it saved successfully, tap “Mark as saved”. If it failed, choose a new empty folder or remove any existing file with the same name, then retry.",

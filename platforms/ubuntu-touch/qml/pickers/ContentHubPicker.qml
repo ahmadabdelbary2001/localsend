@@ -56,12 +56,15 @@ Item {
             peer.selectionType = ContentTransfer.Multiple
             try {
                 var transfer = peer.request(appStore)
-                if (transfer) {
+                // A request that could not create a hub transfer reports
+                // Aborted while its internal transfer object is null; such an
+                // object must not be finalized (that would dereference null).
+                if (transfer && transfer.state !== ContentTransfer.Aborted) {
                     root.activeTransfer = transfer
                 } else {
-                    console.warn("[ContentHubPicker] Peer returned no transfer")
+                    console.warn("[ContentHubPicker] Peer returned no usable transfer")
                     root.close()
-                    root.pickCancelled()
+                    root.pickFailed()
                 }
             } catch (err) {
                 console.warn("[ContentHubPicker] Peer request failed: " + err)

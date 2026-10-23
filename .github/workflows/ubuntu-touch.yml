@@ -411,19 +411,21 @@ jobs:
             gh release create "$TAG" "${CLICKS[@]}" \
               --repo "$GITHUB_REPOSITORY" \
               --title "LocalSend for Ubuntu Touch $TAG" \
-              --notes "Native Ubuntu Touch build of LocalSend.
+              --notes "Unofficial Ubuntu Touch build of LocalSend (not affiliated with the LocalSend project).
 
           ### What's included
 
-          - **Receive**: automatic and manual accept; export received files through Content Hub to shared storage
-          - **Send**: pick files and send to nearby devices, app picker for `.click` / `.apk`
+          - **Receive**: automatic and manual accept; tap *Save received files* after a transfer and pick File Manager + \`Downloads/LocalSend\` in the Content Hub dialog
+          - **Send**: pick files through Content Hub and send to nearby devices; package picker for \`.click\` / \`.apk\`
           - **Discovery**: multicast + HTTP register
-          - **Content Hub**: received files are handed to the file manager, one save request per transfer
+          - **Confinement**: only common AppArmor policy groups, shared folders are reached through Content Hub
 
           ### Requirements
 
           - Ubuntu Touch 24.04 (framework 24.04-1.x)
-          - arm64, armhf, or amd64 device"
+          - arm64, armhf, or amd64 device
+
+          Report issues: https://github.com/ahmadabdelbary2001/localsend/issues"
           fi
 
   publish_openstore:
@@ -498,12 +500,18 @@ jobs:
 
           RESPONSE_FILE="$(mktemp)"
 
+          # The store shows this text as the release note. Do not mention the
+          # architecture (1.5.6 said "Release v1.5.6 (1.5.6, amd64)", which
+          # users read as a mistake); publish the version's changelog instead.
+          CHANGELOG_NOTE="$(python3 support/scripts/openstore_changelog.py \
+            "$VERSION" platforms/ubuntu-touch/assets/CHANGELOG.md)"
+
           HTTP_CODE="$(curl --silent --show-error \
             --output "$RESPONSE_FILE" \
             --write-out '%{http_code}' \
             --request POST \
             --form "file=@${CLICK}" \
-            --form "changelog=Release ${GITHUB_REF_NAME} (${VERSION}, ${{ matrix.arch }})" \
+            --form "changelog=${CHANGELOG_NOTE}" \
             "https://open-store.io/api/v3/manage/${APP_ID}/revision?${API_QUERY}")"
 
           if [[ ! "$HTTP_CODE" =~ ^2[0-9][0-9]$ ]]; then

@@ -2,6 +2,12 @@
 //
 // Exports received files through Content Hub. The app writes to its private
 // received directory; the user chooses the final destination in File Manager.
+//
+// The transfer lifecycle is dictated by the Content Hub: requesting an export
+// creates a transfer and starts it, which only reaches InProgress once the
+// destination app has accepted the request. ContentTransfer silently drops a
+// charge in any other state, so the items have to wait for InProgress instead
+// of being charged right after ContentPeer.request().
 
 import QtQuick 2.15
 import Lomiri.Components 1.3
@@ -22,7 +28,14 @@ Item {
     property var activeTransfer: null
     property bool pickerVisible: false
     property bool finishing: false
+    property bool chargeRequested: false
+    property bool itemsHandedOver: false
     property string lastMessage: ""
+
+    // The exporter is a window level overlay, so its actions are only offered
+    // while the receive tab is in front.
+    readonly property bool onReceiveTab: typeof homeController !== "undefined"
+                                         && homeController.current_tab === 0
 
     function isUnder(path, dir) {
         if (!path || !dir || dir.length === 0)
@@ -39,9 +52,16 @@ Item {
         return false
     }
 
+    // ContentTransfer takes the ContentItem objects into its own internal list
+    // when the transfer is charged and deletes them when the destination
+    // collects. Destroying them here as well would delete the same objects
+    // twice, so the objects are only destroyed while they never reached the
+    // hub.
     function cleanupContentItems() {
         var oldItems = root.activeContentItems
         root.activeContentItems = []
+        if (root.itemsHandedOver)
+            return
         for (var i = 0; i < oldItems.length; i++) {
             if (oldItems[i]) {
                 try { oldItems[i].destroy() } catch (e) { }
@@ -62,19 +82,33 @@ Item {
             return
         try {
             transfer.state = ContentTransfer.Aborted
-            transfer.finalize()
         } catch (e) {
-            console.warn("[ContentHub] transfer cleanup failed:", e)
+            console.warn("[ContentHub] transfer abort failed:", e)
+        }
+        try {
+            transfer.finalize()
+        } catch (e2) {
+            console.warn("[ContentHub] transfer cleanup failed:", e2)
         }
     }
 
+    function resetActiveTransfer() {
+        chargeTimer.stop()
+        root.activeTransfer = null
+        root.activeBatch = []
+        root.chargeRequested = false
+        root.pickerVisible = false
+        root.finishing = false
+        root.cleanupContentItems()
+        root.itemsHandedOver = false
+    }
+
     function failActiveExport(message) {
+        if (root.finishing)
+            return
         root.finishing = true
         var transfer = root.activeTransfer
-        root.activeTransfer = null
-        root.pickerVisible = false
-        root.activeBatch = []
-        root.cleanupContentItems()
+        root.resetActiveTransfer()
         if (transfer)
             root.cancelTransfer(transfer)
         root.lastMessage = message
@@ -133,6 +167,29 @@ Item {
         }
     }
 
+    // ContentTransfer only forwards a charge while the transfer is InProgress
+    // (the destination app accepted the request) or Downloaded. Charging right
+    // after ContentPeer.request() is silently ignored because the transfer is
+    // still Initiated, which is what made "Save" look like it did nothing.
+    function chargeTransfer() {
+        var transfer = root.activeTransfer
+        if (!transfer || root.chargeRequested)
+            return
+        if (!root.activeContentItems || root.activeContentItems.length === 0)
+            return
+
+        root.chargeRequested = true
+        chargeTimer.stop()
+        try {
+            transfer.items = root.activeContentItems
+            transfer.state = ContentTransfer.Charged
+            root.itemsHandedOver = true
+        } catch (e) {
+            console.warn("[ContentHub] could not charge export transfer:", e)
+            root.failActiveExport(translator.tr("receiveExport.failed"))
+        }
+    }
+
     function exportToPeer(peer) {
         if (root.activeTransfer || !root.pending.length)
             return
@@ -153,8 +210,16 @@ Item {
             return
         }
 
-        // ContentPeer.request() returns the transfer for this export. Populate
-        // it and mark it Charged, without assuming an undocumented initial state.
+        // A request that could not create a hub transfer reports Aborted while
+        // its internal transfer object is null; touching such an object (even
+        // finalize()) would dereference null and crash the app.
+        if (transfer.state === ContentTransfer.Aborted) {
+            console.warn("[ContentHub] destination returned an unusable transfer")
+            root.pickerVisible = false
+            root.lastMessage = translator.tr("receiveExport.noDestination")
+            return
+        }
+
         for (var i = 0; i < batch.length; i++) {
             var sourcePath = batch[i].path
             if (!sourcePath || !sendController.can_read_file(sourcePath)) {
@@ -191,14 +256,17 @@ Item {
         root.activeBatch = batch
         root.activeContentItems = items
         root.activeTransfer = transfer
+        root.chargeRequested = false
+        root.itemsHandedOver = false
         root.lastMessage = ""
-        try {
-            transfer.items = items
-            transfer.state = ContentTransfer.Charged
-            root.pickerVisible = false
-        } catch (e2) {
-            console.warn("[ContentHub] could not charge export transfer:", e2)
-            root.failActiveExport(translator.tr("receiveExport.failed"))
+        root.pickerVisible = false
+
+        if (transfer.state === ContentTransfer.InProgress
+                || transfer.state === ContentTransfer.Downloaded) {
+            root.chargeTransfer()
+        } else {
+            console.log("[ContentHub] waiting for the destination to accept the transfer:", transfer.state)
+            chargeTimer.restart()
         }
     }
 
@@ -207,13 +275,27 @@ Item {
         ContentItem { }
     }
 
+    // The destination app is started by the content hub. If it never reports
+    // that it handled the request, release the transfer instead of leaving the
+    // hint spinning forever.
+    Timer {
+        id: chargeTimer
+        interval: 30000
+        repeat: false
+        onTriggered: {
+            console.warn("[ContentHub] destination did not accept the export in time")
+            root.failActiveExport(translator.tr("receiveExport.noResponse"))
+        }
+    }
+
     Button {
         anchors.right: parent.right
         anchors.bottom: parent.bottom
         anchors.rightMargin: units.gu(2)
         anchors.bottomMargin: units.gu(10)
         z: 1
-        visible: root.pending.length > 0 && !root.pickerVisible && !root.activeTransfer
+        visible: root.onReceiveTab && root.pending.length > 0
+                 && !root.pickerVisible && !root.activeTransfer
         text: root.pending.length === 1
               ? translator.tr("receiveExport.saveOne")
               : translator.tr_args("receiveExport.saveMany", JSON.stringify({ n: root.pending.length }))
@@ -229,7 +311,8 @@ Item {
         anchors.leftMargin: units.gu(2)
         anchors.bottomMargin: units.gu(10)
         z: 1
-        visible: root.lastAttempt.length > 0 && !root.pickerVisible && !root.activeTransfer
+        visible: root.onReceiveTab && root.lastAttempt.length > 0
+                 && !root.pickerVisible && !root.activeTransfer
         text: translator.tr("receiveExport.markSaved")
         onClicked: root.markAttemptSaved()
     }
@@ -242,7 +325,7 @@ Item {
         anchors.rightMargin: units.gu(2)
         anchors.bottomMargin: units.gu(15)
         z: 1
-        visible: root.lastMessage.length > 0 && !root.pickerVisible
+        visible: root.onReceiveTab && root.lastMessage.length > 0 && !root.pickerVisible
         text: root.lastMessage
         wrapMode: Text.Wrap
         color: "#C0392B"
@@ -281,7 +364,11 @@ Item {
                 return
 
             var state = transfer.state
-            if (state === ContentTransfer.Collected) {
+            if (state === ContentTransfer.InProgress || state === ContentTransfer.Downloaded) {
+                // The destination accepted the request; now the items can be
+                // attached and charged.
+                root.chargeTransfer()
+            } else if (state === ContentTransfer.Collected) {
                 // Collected is the documented positive acknowledgement that the
                 // destination has collected the items.
                 root.finishing = true
@@ -300,26 +387,23 @@ Item {
                 try { transfer.finalize() } catch (e) {
                     console.warn("[ContentHub] transfer finalization failed:", e)
                 }
-                root.activeTransfer = null
-                root.activeBatch = []
-                root.lastAttempt = []
+                root.resetActiveTransfer()
                 root.cleanupContentItems()
-                root.pickerVisible = false
+                root.lastAttempt = []
                 root.lastMessage = translator.tr("receiveExport.saved")
                 root.finishing = false
             } else if (state === ContentTransfer.Aborted || state === ContentTransfer.Finalized) {
                 root.finishing = true
-                root.lastAttempt = root.activeBatch.slice(0)
+                var attempt = root.activeBatch.slice(0)
                 if (state === ContentTransfer.Aborted) {
                     try { transfer.finalize() } catch (e2) {
-                        console.warn("[ContentHub] transfer finalization after result failed:", e2)
+                        console.warn("[ContentHub] transfer finalization after abort failed:", e2)
                     }
                 }
-                root.activeTransfer = null
-                root.activeBatch = []
+                root.resetActiveTransfer()
                 root.cleanupContentItems()
-                root.pickerVisible = false
-                root.lastMessage = root.lastAttempt.length > 0
+                root.lastAttempt = attempt
+                root.lastMessage = attempt.length > 0
                                   ? translator.tr("receiveExport.verifyResult")
                                   : translator.tr("receiveExport.failed")
                 root.finishing = false

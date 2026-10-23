@@ -2,7 +2,7 @@
     "name": "localsend.ahmadabdelbary",
     "title": "LocalSend",
     "version": "1.5.6",
-    "description": "Native Ubuntu Touch frontend for LocalSend (QML + Rust).",
+    "description": "Unofficial LocalSend client for Ubuntu Touch (QML + Rust). Not affiliated with the LocalSend project.",
     "architecture": "@CLICK_ARCH@",
     "maintainer": "Ahmad Abdelbary <ahmadabdelbary2001@users.noreply.github.com>",
     "framework": "ubuntu-touch-24.04-1.x",
